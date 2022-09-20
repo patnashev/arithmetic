@@ -215,14 +215,14 @@ namespace arithmetic
             return;
         }
         
-        polymult(pmdata(), a.data(), sa, b.data(), sb, res.data(), res.size(), options | (a.monic() ? POLYMULT_INVEC1_MONIC : 0) | (b.monic() ? POLYMULT_INVEC2_MONIC : 0) | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0));
-        if (pmdata()->num_threads > 1)
+        polymult(pmdata(), a.data(), sa, b.data(), sb, res.data(), res.size(), options | (a.monic() ? POLYMULT_INVEC1_MONIC : 0) | (b.monic() ? POLYMULT_INVEC2_MONIC : 0)/* | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0)*/);
+        /*if (pmdata()->num_threads > 1)
         {
             if ((options & POLYMULT_NEXTFFT))
                 poly_unfft_fft_coefficients(pmdata(), res.data(), res.size());
             else
                 poly_unfft_coefficients(pmdata(), res.data(), res.size());
-        }
+        }*/
 
         res._monic = a.monic() && b.monic();
     }
@@ -283,14 +283,14 @@ namespace arithmetic
         }
         else
         {
-            polymult(pmdata(), res._poly.data(), sa, b._poly.data(), sb, res.data(), res.size(), options | (res.monic() ? POLYMULT_INVEC1_MONIC : 0) | (b.monic() ? POLYMULT_INVEC2_MONIC : 0) | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0));
-            if (pmdata()->num_threads > 1)
+            polymult(pmdata(), res._poly.data(), sa, b._poly.data(), sb, res.data(), res.size(), options | (res.monic() ? POLYMULT_INVEC1_MONIC : 0) | (b.monic() ? POLYMULT_INVEC2_MONIC : 0)/* | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0)*/);
+            /*if (pmdata()->num_threads > 1)
             {
                 if ((options & POLYMULT_NEXTFFT))
                     poly_unfft_fft_coefficients(pmdata(), res.data(), res.size());
                 else
                     poly_unfft_coefficients(pmdata(), res.data(), res.size());
-            }
+            }*/
         }
 
         if (!res.monic() && !b.monic() && b._freeable)
@@ -436,14 +436,14 @@ namespace arithmetic
         for (int i = 0; sa + i < res.size(); i++)
             res._poly[sa + i] = b._poly[i];
 
-        polymult(pmdata(), a._cache, sa, b._cache, sb, res.data(), res.size(), options | (res.monic() ? POLYMULT_INVEC1_MONIC : 0) | (b.monic() ? POLYMULT_INVEC2_MONIC : 0) | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0));
-        if (pmdata()->num_threads > 1)
+        polymult(pmdata(), a._cache, sa, b._cache, sb, res.data(), res.size(), options | (res.monic() ? POLYMULT_INVEC1_MONIC : 0) | (b.monic() ? POLYMULT_INVEC2_MONIC : 0)/* | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0)*/);
+        /*if (pmdata()->num_threads > 1)
         {
             if ((options & POLYMULT_NEXTFFT))
                 poly_unfft_fft_coefficients(pmdata(), res.data(), res.size());
             else
                 poly_unfft_coefficients(pmdata(), res.data(), res.size());
-        }
+        }*/
 
         if (!res.monic() && !b.monic() && b._freeable)
             gwfree(gw().gwdata(), b._poly[sb - 1]);
@@ -538,14 +538,14 @@ namespace arithmetic
         }
         else
         {
-            polymult2(pmdata(), a.data(), sa, b.data(), sb, tmp.data(), tmp.size(), nullptr, (full > circular ? circular : 0), offset, options | POLYMULT_MULMID | (full > circular ? POLYMULT_CIRCULAR : 0) | (a.monic() ? POLYMULT_INVEC1_MONIC : 0) | (b.monic() ? POLYMULT_INVEC2_MONIC : 0) | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0));
-            if (pmdata()->num_threads > 1)
+            polymult2(pmdata(), a.data(), sa, b.data(), sb, tmp.data(), tmp.size(), nullptr, (full > circular ? circular : 0), offset, options | POLYMULT_MULMID | (full > circular ? POLYMULT_CIRCULAR : 0) | (a.monic() ? POLYMULT_INVEC1_MONIC : 0) | (b.monic() ? POLYMULT_INVEC2_MONIC : 0)/* | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0)*/);
+            /*if (pmdata()->num_threads > 1)
             {
                 if ((options & POLYMULT_NEXTFFT))
                     poly_unfft_fft_coefficients(pmdata(), tmp.data(), tmp.size());
                 else
                     poly_unfft_coefficients(pmdata(), tmp.data(), tmp.size());
-            }
+            }*/
         }
 
         res._monic = a.monic() && b.monic() && full < offset + count;
@@ -619,8 +619,8 @@ namespace arithmetic
 
 #ifdef NO_POLYMULT_SEVERAL
         a._cache = polymult_preprocess(pmdata(), a.data(), sa, 2*half, 2*half, POLYMULT_CIRCULAR | POLYMULT_PRE_FFT | (a.monic() ? POLYMULT_INVEC1_MONIC : 0));
-        polymult2(pmdata(), a._cache, sa, b.data(), sb, res1.data(), res1.size(), nullptr, (full1 > 2*half ? 2*half : 0), 0, options | POLYMULT_MULHI | (full1 > 2*half ? POLYMULT_CIRCULAR : 0) | (a.monic() ? POLYMULT_INVEC1_MONIC : 0) | (b.monic() ? POLYMULT_INVEC2_MONIC : 0) | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0));
-        polymult2(pmdata(), a._cache, sa, c.data(), sc, res2.data(), res2.size(), nullptr, (full2 > 2*half ? 2*half : 0), 0, options | POLYMULT_MULHI | (full2 > 2*half ? POLYMULT_CIRCULAR : 0) | (a.monic() ? POLYMULT_INVEC1_MONIC : 0) | (c.monic() ? POLYMULT_INVEC2_MONIC : 0) | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0));
+        polymult2(pmdata(), a._cache, sa, b.data(), sb, res1.data(), res1.size(), nullptr, (full1 > 2*half ? 2*half : 0), 0, options | POLYMULT_MULHI | (full1 > 2*half ? POLYMULT_CIRCULAR : 0) | (a.monic() ? POLYMULT_INVEC1_MONIC : 0) | (b.monic() ? POLYMULT_INVEC2_MONIC : 0)/* | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0)*/);
+        polymult2(pmdata(), a._cache, sa, c.data(), sc, res2.data(), res2.size(), nullptr, (full2 > 2*half ? 2*half : 0), 0, options | POLYMULT_MULHI | (full2 > 2*half ? POLYMULT_CIRCULAR : 0) | (a.monic() ? POLYMULT_INVEC1_MONIC : 0) | (c.monic() ? POLYMULT_INVEC2_MONIC : 0)/* | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0)*/);
         gwfree_array(gw().gwdata(), a._cache);
         a._cache = nullptr;
 #endif
@@ -643,8 +643,8 @@ namespace arithmetic
         arg_c.circular_size = (full2 > 2*half ? 2*half : 0);
         arg_c.first_mulmid = 0;
         arg_c.options = (full2 > 2*half ? POLYMULT_CIRCULAR : 0) | (c.monic() ? POLYMULT_INVEC2_MONIC : 0);
-        polymult_several(pmdata(), a.data(), sa, args, 2, options | POLYMULT_MULHI | (a.monic() ? POLYMULT_INVEC1_MONIC : 0) | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0));
-        if (pmdata()->num_threads > 1)
+        polymult_several(pmdata(), a.data(), sa, args, 2, options | POLYMULT_MULHI | (a.monic() ? POLYMULT_INVEC1_MONIC : 0)/* | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0)*/);
+        /*if (pmdata()->num_threads > 1)
         {
             if ((options & POLYMULT_NEXTFFT))
                 poly_unfft_fft_coefficients(pmdata(), res1.data(), res1.size());
@@ -654,7 +654,7 @@ namespace arithmetic
                 poly_unfft_fft_coefficients(pmdata(), res2.data(), res2.size());
             else
                 poly_unfft_coefficients(pmdata(), res2.data(), res2.size());
-        }
+        }*/
 
         res1._monic = a.monic() && b.monic() && full1 < 2*half;
         res2._monic = a.monic() && c.monic() && full2 < 2*half;
@@ -752,8 +752,8 @@ namespace arithmetic
 
 #ifdef NO_POLYMULT_SEVERAL
         a._cache = polymult_preprocess(pmdata(), a.data(), sa, 2*half, 2*half, POLYMULT_CIRCULAR | POLYMULT_PRE_FFT | (a.monic() ? POLYMULT_INVEC1_MONIC : 0));
-        polymult2(pmdata(), a._cache, sa, b.data(), sb, res1.data(), res1.size(), nullptr, (full1 > 2*half ? 2*half : 0), 0, options | POLYMULT_MULHI | (full1 > 2*half ? POLYMULT_CIRCULAR : 0) | (a.monic() ? POLYMULT_INVEC1_MONIC : 0) | (b.monic() ? POLYMULT_INVEC2_MONIC : 0) | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0));
-        polymult2(pmdata(), a._cache, sa, c.data(), sc, res2.data(), res2.size(), nullptr, (full2 > 2*half ? 2*half : 0), 0, options | POLYMULT_MULHI | (full2 > 2*half ? POLYMULT_CIRCULAR : 0) | (a.monic() ? POLYMULT_INVEC1_MONIC : 0) | (c.monic() ? POLYMULT_INVEC2_MONIC : 0) | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0));
+        polymult2(pmdata(), a._cache, sa, b.data(), sb, res1.data(), res1.size(), nullptr, (full1 > 2*half ? 2*half : 0), 0, options | POLYMULT_MULHI | (full1 > 2*half ? POLYMULT_CIRCULAR : 0) | (a.monic() ? POLYMULT_INVEC1_MONIC : 0) | (b.monic() ? POLYMULT_INVEC2_MONIC : 0)/* | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0)*/);
+        polymult2(pmdata(), a._cache, sa, c.data(), sc, res2.data(), res2.size(), nullptr, (full2 > 2*half ? 2*half : 0), 0, options | POLYMULT_MULHI | (full2 > 2*half ? POLYMULT_CIRCULAR : 0) | (a.monic() ? POLYMULT_INVEC1_MONIC : 0) | (c.monic() ? POLYMULT_INVEC2_MONIC : 0)/* | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0)*/);
         gwfree_array(gw().gwdata(), a._cache);
         a._cache = nullptr;
 #else
@@ -776,8 +776,8 @@ namespace arithmetic
         arg_c.circular_size = (full2 > 2*half ? 2*half : 0);
         arg_c.first_mulmid = 0;
         arg_c.options = (full2 > 2*half ? POLYMULT_CIRCULAR : 0) | (c.monic() ? POLYMULT_INVEC2_MONIC : 0);
-        polymult_several(pmdata(), a.data(), sa, args, 2, options | POLYMULT_MULHI | (a.monic() ? POLYMULT_INVEC1_MONIC : 0) | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0));
-        if (pmdata()->num_threads > 1)
+        polymult_several(pmdata(), a.data(), sa, args, 2, options | POLYMULT_MULHI | (a.monic() ? POLYMULT_INVEC1_MONIC : 0)/* | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0)*/);
+        /*if (pmdata()->num_threads > 1)
         {
             if ((options & POLYMULT_NEXTFFT))
                 poly_unfft_fft_coefficients(pmdata(), res1.data(), res1.size());
@@ -787,7 +787,7 @@ namespace arithmetic
                 poly_unfft_fft_coefficients(pmdata(), res2.data(), res2.size());
             else
                 poly_unfft_coefficients(pmdata(), res2.data(), res2.size());
-        }
+        }*/
 
 #endif
 
@@ -883,14 +883,14 @@ namespace arithmetic
         int padding = offset + count - fma.size();
         if (padding > 0)
             fma._poly.insert(fma._poly.end(), padding, nullptr);
-        polymult2(pmdata(), a.data(), sa, b.data(), sb, tmp.data(), size, fma.data() + offset, (full > circular ? circular : 0), offset, options | POLYMULT_MULMID | (full > circular ? POLYMULT_CIRCULAR : 0) | (a.monic() ? POLYMULT_INVEC1_MONIC : 0) | (b.monic() ? POLYMULT_INVEC2_MONIC : 0) | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0));
-        if (pmdata()->num_threads > 1)
+        polymult2(pmdata(), a.data(), sa, b.data(), sb, tmp.data(), size, fma.data() + offset, (full > circular ? circular : 0), offset, options | POLYMULT_MULMID | (full > circular ? POLYMULT_CIRCULAR : 0) | (a.monic() ? POLYMULT_INVEC1_MONIC : 0) | (b.monic() ? POLYMULT_INVEC2_MONIC : 0)/* | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0)*/);
+        /*if (pmdata()->num_threads > 1)
         {
             if ((options & POLYMULT_NEXTFFT))
                 poly_unfft_fft_coefficients(pmdata(), tmp.data(), size);
             else
                 poly_unfft_coefficients(pmdata(), tmp.data(), size);
-        }
+        }*/
         if (padding > 0)
             fma._poly.erase(fma._poly.end() - padding, fma._poly.end());
 
@@ -933,18 +933,18 @@ namespace arithmetic
             {
                 for (j = 0; j < 2*i - 1; j++)
                     f[j] = (sa - 2*i + 1 + j) >= 0 ? a._poly[sa - 2*i + 1 + j] : nullptr;
-                polymult2(pmdata(), g, i - 1, f.data(), 2*i - 1, tmp, i, nullptr, 2*i, i - 1, POLYMULT_CIRCULAR | POLYMULT_MULMID | POLYMULT_INVEC1_MONIC | POLYMULT_NEXTFFT | (pmdata()->num_threads > 1 && pmdata()->num_threads*5 < i ? POLYMULT_NO_UNFFT : 0));
-                if (pmdata()->num_threads > 1 && pmdata()->num_threads*5 < i)
-                    poly_unfft_fft_coefficients(pmdata(), tmp, i);
+                polymult2(pmdata(), g, i - 1, f.data(), 2*i - 1, tmp, i, nullptr, 2*i, i - 1, POLYMULT_CIRCULAR | POLYMULT_MULMID | POLYMULT_INVEC1_MONIC | POLYMULT_NEXTFFT/* | (pmdata()->num_threads > 1 && pmdata()->num_threads*5 < i ? POLYMULT_NO_UNFFT : 0)*/);
+                /*if (pmdata()->num_threads > 1 && pmdata()->num_threads*5 < i)
+                    poly_unfft_fft_coefficients(pmdata(), tmp, i);*/
                 j = res.size() - 2*i + 1;
-                polymult2(pmdata(), g, i - 1, tmp, i, res.data() + (j >= 0 ? j : 0), i + (j < 0 ? j : 0), nullptr, 0, i - 1 - (j < 0 ? j : 0), POLYMULT_MULMID | POLYMULT_INVEC1_MONIC | POLYMULT_INVEC2_NEGATE | (2*i < d ? POLYMULT_NEXTFFT : options) | (pmdata()->num_threads > 1 && pmdata()->num_threads*5 < i ? POLYMULT_NO_UNFFT : 0));
-                if (pmdata()->num_threads > 1 && pmdata()->num_threads*5 < i)
+                polymult2(pmdata(), g, i - 1, tmp, i, res.data() + (j >= 0 ? j : 0), i + (j < 0 ? j : 0), nullptr, 0, i - 1 - (j < 0 ? j : 0), POLYMULT_MULMID | POLYMULT_INVEC1_MONIC | POLYMULT_INVEC2_NEGATE | (2*i < d ? POLYMULT_NEXTFFT : options)/* | (pmdata()->num_threads > 1 && pmdata()->num_threads*5 < i ? POLYMULT_NO_UNFFT : 0)*/);
+                /*if (pmdata()->num_threads > 1 && pmdata()->num_threads*5 < i)
                 {
                     if (2*i < d || (options & POLYMULT_NEXTFFT))
                         poly_unfft_fft_coefficients(pmdata(), res.data() + (j >= 0 ? j : 0), i + (j < 0 ? j : 0));
                     else
                         poly_unfft_coefficients(pmdata(), res.data() + (j >= 0 ? j : 0), i + (j < 0 ? j : 0));
-                }
+                }*/
             }
         }
         else
@@ -954,18 +954,18 @@ namespace arithmetic
             {
                 for (j = 0; j < 2*i - 1; j++)
                     f[j] = (sa - 2*i + j) >= 0 ? a._poly[sa - 2*i + j] : nullptr;
-                polymult2(pmdata(), g, i, f.data(), 2*i - 1, tmp, i, nullptr, 2*i, i - 1, POLYMULT_CIRCULAR | POLYMULT_MULMID | POLYMULT_NEXTFFT | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0));
-                if (pmdata()->num_threads > 1)
-                    poly_unfft_fft_coefficients(pmdata(), tmp, i);
+                polymult2(pmdata(), g, i, f.data(), 2*i - 1, tmp, i, nullptr, 2*i, i - 1, POLYMULT_CIRCULAR | POLYMULT_MULMID | POLYMULT_NEXTFFT/* | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0)*/);
+                /*if (pmdata()->num_threads > 1)
+                    poly_unfft_fft_coefficients(pmdata(), tmp, i);*/
                 j = res.size() - 2*i;
-                polymult2(pmdata(), g, i, tmp, i, res.data() + (j >= 0 ? j : 0), i + (j < 0 ? j : 0), nullptr, 0, i - 1 - (j < 0 ? j : 0), POLYMULT_MULMID | POLYMULT_INVEC2_NEGATE | (2*i < d ? POLYMULT_NEXTFFT : options) | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0));
-                if (pmdata()->num_threads > 1)
+                polymult2(pmdata(), g, i, tmp, i, res.data() + (j >= 0 ? j : 0), i + (j < 0 ? j : 0), nullptr, 0, i - 1 - (j < 0 ? j : 0), POLYMULT_MULMID | POLYMULT_INVEC2_NEGATE | (2*i < d ? POLYMULT_NEXTFFT : options)/* | (pmdata()->num_threads > 1 ? POLYMULT_NO_UNFFT : 0)*/);
+                /*if (pmdata()->num_threads > 1)
                 {
                     if (2*i < d || (options & POLYMULT_NEXTFFT))
                         poly_unfft_fft_coefficients(pmdata(), res.data() + (j >= 0 ? j : 0), i + (j < 0 ? j : 0));
                     else
                         poly_unfft_coefficients(pmdata(), res.data() + (j >= 0 ? j : 0), i + (j < 0 ? j : 0));
-                }
+                }*/
             }
         }
 

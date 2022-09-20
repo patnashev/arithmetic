@@ -19,7 +19,8 @@ public:
     void write(File& file);
     bool parse(const std::string& s);
     void setup(arithmetic::GWState& state);
-    bool to_base2(InputNum& k, InputNum& base2);
+    bool is_base2();
+    void to_base2(InputNum& k, InputNum& base2);
 
     static uint64_t parse_numeral(const std::string& s);
 
@@ -31,6 +32,7 @@ public:
     arithmetic::Giant& gk() { return _gk; }
     arithmetic::Giant& gb() { return _gb; }
     int gfn() { return _gfn; }
+    arithmetic::Giant value() { return _gk*power(_gb, _n) + _c; }
 
     const std::vector<std::pair<arithmetic::Giant, int>>& b_factors() { return _b_factors; }
     const std::unique_ptr<arithmetic::Giant>& b_cofactor() { return _b_cofactor; }

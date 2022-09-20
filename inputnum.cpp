@@ -375,12 +375,19 @@ void InputNum::setup(GWState& state)
     }
 }
 
-bool InputNum::to_base2(InputNum& k, InputNum& base2)
+bool InputNum::is_base2()
 {
     if (_b_factors.size() == 0 || _b_factors[0].first != 2)
         return false;
     if (_gb.bitlen() > _b_factors[0].second*2)
         return false;
+    return true;
+}
+
+void InputNum::to_base2(InputNum& k, InputNum& base2)
+{
+    if (!is_base2())
+        return;
     int num2 = _b_factors[0].second;
     int n2 = _n*num2;
     int c = _c;
@@ -391,7 +398,7 @@ bool InputNum::to_base2(InputNum& k, InputNum& base2)
     k._c = 0;
     k.process();
 
-    base2._gk = k._gk*power(k._gb, k._n);
+    base2._gk = k.value();
     base2._gb = 2;
     base2._n = n2;
     base2._c = c;
@@ -410,8 +417,6 @@ bool InputNum::to_base2(InputNum& k, InputNum& base2)
         base2._display_text.append(1, '-');
     if (c != 0)
         base2._display_text.append(std::to_string(abs(c)));
-
-    return true;
 }
 
 uint64_t InputNum::parse_numeral(const std::string& s)

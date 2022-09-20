@@ -103,10 +103,12 @@ void polymult2 (
 #define POLYMULT_INVEC2_MONIC	0x2	// Invec2 is a monic polynomial.  Leading coefficient of one is implied.
 #define POLYMULT_INVEC1_RLP	0x4	// Invec1 is an RLP (Reciprocal Laurent Polynomial).  Needs only half the storage.
 #define POLYMULT_INVEC2_RLP	0x8	// Invec2 is an RLP (Reciprocal Laurent Polynomial).  Needs only half the storage.
-#define POLYMULT_INVEC1_MONIC_RLP	(POLYMULT_INVEC1_MONIC | POLYMULT_INVEC1_RLP)		// A shorthand
-#define POLYMULT_INVEC2_MONIC_RLP	(POLYMULT_INVEC2_MONIC | POLYMULT_INVEC2_RLP)		// A shorthand
 #define POLYMULT_INVEC1_NEGATE	0x10	// Invec1 coefficients are negated.  The implied one of a monic polynomial is not negated.
 #define POLYMULT_INVEC2_NEGATE	0x20	// Invec2 coefficients are negated.  The implied one of a monic polynomial is not negated.
+#define POLYMULT_INVEC1_MONIC_RLP	(POLYMULT_INVEC1_MONIC | POLYMULT_INVEC1_RLP)		// A shorthand
+#define POLYMULT_INVEC2_MONIC_RLP	(POLYMULT_INVEC2_MONIC | POLYMULT_INVEC2_RLP)		// A shorthand
+#define POLYMULT_INVEC1_MONIC_NEGATE	(POLYMULT_INVEC1_MONIC | POLYMULT_INVEC1_NEGATE)	// A shorthand
+#define POLYMULT_INVEC2_MONIC_NEGATE	(POLYMULT_INVEC2_MONIC | POLYMULT_INVEC2_NEGATE)	// A shorthand
 #define POLYMULT_CIRCULAR	0x100	// Circular convolution based on outvec_size.  Multiplication result is modulo (X^outvec_size - 1).  If using the
 					// polymult_several interface, the result is modulo (X^circular_size - 1).
 #define POLYMULT_MULHI		0x200	// Return only the outvec_size higher degree coefficients.  Using both POLYMULT_CIRCULAR
@@ -114,7 +116,7 @@ void polymult2 (
 #define POLYMULT_MULLO		0x400	// Return only the outvec_size lower degree coefficients.  Using both POLYMULT_CIRCULAR
 					// and POLYMULT_MULLO is only allowed in the polymult_several interface.
 #define POLYMULT_MULMID		0x800	// Return outvec_size coefficients from middle of the polymult result.  Only allowed in the polymult_several interface.
-#define POLYMULT_NO_UNFFT	0x1000	// Do not perform the required unfft on output coefficients.  Caller might use this option to multithread this gwunfft
+#define POLYMULT_NO_UNFFT	0x1000	// Do not perform the required unfft on output coefficients.  Caller might use this option to multithread these gwunfft
 					// calls or do additional work after the gwunfft call while the gwnum is in the CPU caches.
 #define POLYMULT_STARTNEXTFFT	0x2000	// Similar to GWMUL_STARTNEXTFFT.  Applied to all output coefficients.
 #define	POLYMULT_NEXTFFT	0x4000	// Perform both the required unfft and a forward FFT on output coefficients.  Caller might use this option because
@@ -122,8 +124,9 @@ void polymult2 (
 #define POLYMULT_FMADD		0x8000	// Compute invec1 * invec2 + fmavec
 #define POLYMULT_FMSUB		0x10000	// Compute invec1 * invec2 - fmavec
 #define POLYMULT_FNMADD		0x20000	// Compute fmavec - invec1 * invec2
-//#define GWMUL_ADDINCONST	0x10000000		/* Addin the optional gwsetaddin value to the multiplication result */
-//#define GWMUL_MULBYCONST	0x20000000		/* Multiply the final result by the small mulbyconst */
+#define POLYMULT_UNFFT_TOP	0x40000	// When multiplying polynomials with a monic input the resulting top coefficient does not involve any multiplications.
+					// It should be safe to use this coefficient without a gwunfft operation.  The default behavior is to not call gwunfft
+					// on this coefficient.  This option forces the unfft of the top coefficient.
 // The following options only apply to polymult_preprocess
 #define	POLYMULT_PRE_FFT	0x40	// Compute the forward FFT while creating a preprocessed polynomial
 #define	POLYMULT_PRE_COMPRESS	0x80	// Compress each double while creating a preprocessed polynomial
@@ -140,10 +143,11 @@ void polymult2 (
 #define preprocessed_fft_size(p)	(intptr_t) (((preprocessed_poly_header *)((char *)(p)-sizeof(gwarray_header)))->fft_size)
 #define preprocessed_poly_size(p)	(preprocessed_num_elements(p) * preprocessed_element_size(p))
 #define preprocessed_monics_included(p)	(((preprocessed_poly_header *)((char *)(p)-sizeof(gwarray_header)))->monic_ones_included)
+#define preprocessed_top_unnorms(p)	(((preprocessed_poly_header *)((char *)(p)-sizeof(gwarray_header)))->top_unnorms)
 
-/* Preprocess a poly that will be used in multiple polymult calls.  Preprocessing can reduce memory consumption or reduce CPU time.  Returns a massaged poly. */
-/* Caller should then free the unmassaged poly.  The massaged poly cannot be used in any gwnum calls, it can only be used in future polymult calls with */
-/* poly sizes and options that match those passed to this routine. */
+/* Preprocess a poly that will be used in multiple future polymult calls.  Preprocessing can reduce memory consumption or reduce CPU time. */
+/* Returns a massaged poly.  Caller should then free the unmassaged poly.  The massaged poly cannot be used in any gwnum calls, it can only be used */
+/* in future polymult calls with poly sizes and options that match those passed to this routine. */
 /* The POLYMULT_PRE_FFT preprocessing option allows the forward FFT of invec1 to be used over and over again.  The downside to the POLYMULT_PRE_FFT option */
 /* is the preprocessed poly consumes more memory. */
 gwarray polymult_preprocess (		// Returns a plug-in replacement for the input poly
@@ -175,60 +179,25 @@ void polymult_several (		// Multiply one poly with several polys
 	int	num_other_polys,// Number of other polys to multiply with first input poly
 	int	options);	// Poly #1 options.  Options not associated with poly #1 are applied to all other polys.
 
-/* For optimal multithreading, Prime95 has the main thread and each helper thread calling these routines to construct the first polys longer than length one. */
+// Obscure macro to test if a polymult output coefficient must be unffted.  When using POLYMULT_NO_UNFFT this macro detects output coefficients that do not
+// require an unfft because of the optimization regarding top coefficients in monic polymults.
 
-// Special routine to multiply two monic length-1 polynomials more efficiently than a general polymult call.  
-void polymult2len1 (
-	gwhandle *gwdata,		// Handle for gwnum FFT library - can be a clone.
-	gwnum	poly1,			// Input poly #1's lone coefficient
-	gwnum	poly2,			// Input poly #2's lone coefficient
-	gwnum	outcoeff1,		// Least significant result coefficient
-	gwnum	outcoeff2,		// Most significant result coefficient
-	int	options);		// Set POLYMULT_INVEC1_NEGATE if *ALL* input poly coefficients should be negated
-					// Set POLYMULT_NEXTFFT if output polys are to be FFTed
-// Special routine to multiply three monic length-1 polynomials more efficiently than general polymult calls.
-void polymult3len1 (
-	gwhandle *gwdata,		// Handle for gwnum FFT library - can be a clone.
-	gwnum	poly1,			// Input poly #1's lone coefficient
-	gwnum	poly2,			// Input poly #2's lone coefficient
-	gwnum	poly3,			// Input poly #3's lone coefficient
-	gwnum	outcoeff1,		// Least significant result coefficient
-	gwnum	outcoeff2,		// Middle result coefficient
-	gwnum	outcoeff3,		// Most significant result coefficient
-	int	options);		// Set POLYMULT_INVEC1_NEGATE if *ALL* input poly coefficients should be negated
-					// Set POLYMULT_NEXTFFT if output polys are to be FFTed
-// Special routine to multiply four monic length-1 polynomials more efficiently than general polymult calls.
-void polymult4len1 (
-	gwhandle *gwdata,		// Handle for gwnum FFT library - can be a clone.
-	gwnum	poly1,			// Input poly #1's lone coefficient
-	gwnum	poly2,			// Input poly #2's lone coefficient
-	gwnum	poly3,			// Input poly #3's lone coefficient
-	gwnum	poly4,			// Input poly #4's lone coefficient
-	gwnum	outcoeff1,		// Least significant result coefficient
-	gwnum	outcoeff2,		// Middle result coefficient
-	gwnum	outcoeff3,		// Middle result coefficient
-	gwnum	outcoeff4,		// Most significant result coefficient
-	int	options);		// Set POLYMULT_INVEC1_NEGATE if *ALL* input poly coefficients should be negated
-					// Set POLYMULT_NEXTFFT if output polys are to be FFTed
-
+//GW: Relax EB check (see gwadd3o) to numadds_to_eb(c) + 1 or numadds_to_eb(c)????
+#define polymult_must_unfft(h,c) (FFT_state(c)==FFTed_FOR_FMA || (FFT_state(c)==FULLY_FFTed && EB_GWMUL_SAVINGS + numadds_to_eb(unnorms(c))*2.0f > (h)->EXTRA_BITS))
 
 /*------------------------------------------------------------------------------------------------
 |	Easy multithreading using polymult threads.   Complete with example code!!
 |	Study poly_helper_example in polymult.c so you can write your own helper function.
 +------------------------------------------------------------------------------------------------*/
 
-/* Underlying routines that allow the users of this library to use the polymult helper threads and locking mechanisms to craft their own multithreaded */
+/* Underlying routine that allows users of this library to use the polymult helper threads and locking mechanisms to craft their own multithreaded */
 /* helper routines.  The helper_callback and helper_callback_data fields must be set prior to launching the helpers.  Each helper is given its own clone */
 /* of gwdata to safely call gwnum operations -- cloning is necessary as independent threads cannot use use same gwdata structure. */
 
-/* This routine launches the polymult helper threads.  The polymult library uses this routine to do multithreading, you can too! */
+/* This routine launches the polymult helper threads.  Has the calling thread also help, then waits for the calling thread and all helper threads to finish. */
+/* The polymult library uses this routine to do multithreading, you can too! */
 void polymult_launch_helpers (
 	pmhandle *pmdata);		// Handle for polymult library
-
-/* This routine waits for the launched polymult helper threads to finish */
-void polymult_wait_on_helpers (
-	pmhandle *pmdata);		// Handle for polymult library
-
 
 // Example using polymult threads for faster execution of some simple poly utilities.  Study the code in polymult.c.
 void poly_helper_example (int helper_num, gwhandle *gwdata, void *info);
@@ -259,14 +228,13 @@ struct pmhandle_struct {
 	gwhandle *gwdata;		// Handle for gwnum FFT library
 	int	max_num_threads;	// Maximum number of threads that can be used to compute polymults
 	int	num_threads;		// Number of threads to use computing polymults (must not exceed max_num_threads)
+	int	num_lines;		// During polymult each gwnum is split into "lines".  Each thread works on one line at at a time.
 	gwevent work_to_do;		// Event (if not spin waiting) to signal polymult helper threads there is work to do
 	gwatomic alt_work_to_do;	// Atomic alternative to work to do mutex when spin waiting
 	gwevent	all_helpers_done;	// Event (if not spin waiting) to signal main thread that the auxiliary threads are done
 	gwatomic num_active_helpers;	// Number of active helpers (awakened from the work_to_do event).  Is also the alternative to all_helpers_done mutex.
 	gwmutex	poly_mutex;		// Mutex to make polymult thread safe when multi-threading
 	gwatomic next_thread_num;	// Lets us generate a unique id for each helper thread
-	gwatomic next_line;		// Next line for a helper thread to process
-	bool volatile helpers_must_exit; // Flag set to force all auxiliary threads to terminate
 	bool volatile all_work_assigned; // Flag indicating all helper thread work has been assigned (some helpers ma still be active)
 	gwthread *thread_ids;		// Thread ids for the spawned threads
 	int	twiddles_initialized;	// Size of the twiddle tables
@@ -300,7 +268,8 @@ struct pmhandle_struct {
 	// These items allow users of the polymult library to also use the polymult helper threads for whatever they see fit.
 	void	(*helper_callback)(int, gwhandle *, void *); // User-defined helper callback routine
 	void	*helper_callback_data;	// User-defined data to pass to the user-defined helper callback routine
-	bool volatile helpers_doing_polymult; // TRUE if helpers are doing polymult work, not user work
+	int volatile helper_opcode;	// Opcode if helpers are doing polymult work, zero if doing user work
+	gwatomic helper_counter;	// Used internally to increment through helper work.  User-defined helpers can use this too.
 	int	saved_gwdata_num_threads; // Used internally to restore gwdata's multithreading after a user defined callback
 	gwhandle *stats_gwdata;		// The cloned gwdata that is accumulating stats as each user-defined helper finshes up
 };
@@ -313,11 +282,11 @@ struct pmhandle_struct {
 typedef struct {
 	gwarray_header linkage;		// Used to put preprocessed polys on gwarray linked list.  Allows gwdone to free all preprocessed polys.
 	gwnum	*self_ptr;		// Ptr to itself.  A unique indicator that this is a preprocessed poly.
-	int	num_lines;		// Number of lines returned by read_line
 	int	element_size;		// Size of each invec in the array
 	int	padded_element_size;	// Size of each invec in the array rounded up to a multiple of 64 (not rounded when compressing)
 	int	options;		// Copy of options passed to polymult_line_preprocess
 	int	fft_size;		// If POLYMULT_PRE_FFT is set, this is the poly FFT size selected during preprocessing
+	float	top_unnorms;		// Number of unnormalized adds for the topmost poly coefficient
 	bool	monic_ones_included;	// TRUE if monic ones are included in pre-FFTed data
 } preprocessed_poly_header;
 

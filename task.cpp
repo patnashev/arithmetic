@@ -43,36 +43,40 @@ void Task::init(arithmetic::GWState* gwstate, File* file, TaskState* state, Logg
 void Task::run()
 {
     ReliableGWArithmetic* reliable;
-    std::unique_ptr<arithmetic::GWArithmetic> gw_setup(_error_check ? new ReliableGWArithmetic(*_gwstate) : new GWArithmetic(*_gwstate));
-    std::unique_ptr<arithmetic::GWArithmetic> gw_execute(_error_check ? new ReliableGWArithmetic(*_gwstate) : new GWArithmetic(*_gwstate));
+    std::unique_ptr<arithmetic::GWArithmetic> arithmetics[2];
 
+    int setup_restart_count = 0;
+    _restart_count = 0;
     _restart_op = 0;
-    int restart_count = 0;
+    int* restart_count[2] { &setup_restart_count, &_restart_count };
     while (true)
     {
-        _gw = gw_setup.get();
-        reliable = dynamic_cast<ReliableGWArithmetic*>(_gw);
-        if (reliable)
-            reliable->reset();
-        int setup_restart_count = 0;
-        bool setup_failed = false;
-        while (true)
+        int i;
+        for (i = 0; i < 2; )
         {
+            if (!arithmetics[i])
+                arithmetics[i].reset(_error_check ? new ReliableGWArithmetic(*_gwstate) : new GWArithmetic(*_gwstate));
+            _gw = arithmetics[i].get();
+            reliable = dynamic_cast<ReliableGWArithmetic*>(_gw);
             try
             {
-                setup();
-                break;
+                if (i == 0)
+                    setup();
+                if (i == 1)
+                    execute();
+                *restart_count[i] = 0;
+                i++;
+                continue;
             }
             catch (const TaskRestartException&)
             {
                 if (!reliable)
                 {
                     release();
+                    _gw = nullptr;
                     _error_check = true;
-                    gw_setup.reset(new ReliableGWArithmetic(*_gwstate));
-                    gw_execute.reset(new ReliableGWArithmetic(*_gwstate));
-                    _gw = gw_setup.get();
-                    reliable = dynamic_cast<ReliableGWArithmetic*>(_gw);
+                    arithmetics[0].reset();
+                    arithmetics[1].reset();
                 }
             }
             catch (const ArithmeticException& e)
@@ -88,76 +92,53 @@ void Task::run()
             _logging->error("Arithmetic error, restarting at %.1f%%.\n", state() ? 100.0*state()->iteration()/iterations() : 0.0);
             if (reliable && reliable->restart_flag() && !reliable->failure_flag())
             {
-                reliable->restart();
+                std::string ops = "pass " + std::to_string(i) + " suspicious ops:";
+                for (auto it = reliable->suspect_ops().begin(); it != reliable->suspect_ops().end(); it++)
+                    if (*it >= (i == 1 ? _restart_op : 0))
+                        ops += " " + std::to_string(*it);
+                ops += ".\n";
+                _logging->debug(ops.data());
+                reliable->restart(i == 1 ? _restart_op : 0);
+                i = 0;
                 continue;
             }
-            if ((!reliable || !reliable->failure_flag()) && setup_restart_count < 5)
+            if ((!reliable || !reliable->failure_flag()) && *restart_count[i] < 3)
             {
-                setup_restart_count++;
+                if (reliable)
+                    reliable->restart(i == 1 ? _restart_op : 0);
+                (*restart_count[i])++;
+                i = 0;
                 continue;
             }
-            setup_failed = true;
             break;
         }
+        if (i == 2)
+            break;
 
-        _gw = gw_execute.get();
-        reliable = dynamic_cast<ReliableGWArithmetic*>(_gw);
-
-        if (!setup_failed)
-        {
-            try
-            {
-                execute();
-                break;
-            }
-            catch (const TaskRestartException&)
-            {
-                if (!reliable)
-                {
-                    release();
-                    _error_check = true;
-                    gw_setup.reset(new ReliableGWArithmetic(*_gwstate));
-                    gw_execute.reset(new ReliableGWArithmetic(*_gwstate));
-                }
-            }
-            catch (const ArithmeticException& e)
-            {
-                _logging->error("ArithmeticException: %s\n", e.what());
-            }
-            catch (...)
-            {
-                release();
-                throw;
-            }
-            //GWASSERT(0);
-            _logging->error("Arithmetic error, restarting at %.1f%%.\n", state() ? 100.0*state()->iteration()/iterations() : 0.0);
-            if (reliable && reliable->restart_flag() && !reliable->failure_flag())
-            {
-                reliable->restart(_restart_op);
-                continue;
-            }
-            if ((!reliable || !reliable->failure_flag()) && restart_count < 5)
-            {
-                restart_count++;
-                continue;
-            }
-        }
-
-        release();
+        if (_gw != nullptr)
+            release();
+        _gw = nullptr;
         if (_gwstate->next_fft_count >= 5)
         {
             _logging->error("Maximum FFT increment reached.\n");
             throw TaskAbortException();
         }
+        if (*restart_count[i] >= 5)
+        {
+            _logging->error("Too many restarts, aborting.\n");
+            throw TaskAbortException();
+        }
+        (*restart_count[i])++;
+
         _gwstate->next_fft_count++;
         reinit_gwstate();
-        restart_count = 0;
         _restart_op = 0;
-        if (reliable)
-            reliable->reset();
+        arithmetics[0].reset();
+        arithmetics[1].reset();
     }
-    release();
     _tmp_state.reset();
+    if (_gw != nullptr)
+        release();
     _gw = nullptr;
 }
 
@@ -173,10 +154,12 @@ void Task::check()
 
 void Task::on_state()
 {
-    if (_file != nullptr && _state && (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - _last_write).count() >= DISK_WRITE_TIME || abort_flag()))
+    if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - _last_write).count() >= DISK_WRITE_TIME || abort_flag())
     {
-        _logging->progress().update(_state->iteration()/(double)iterations(), (int)_gwstate->handle.fft_count/2);
-        _file->write(*_state);
+        _logging->progress().update(_state ? _state->iteration()/(double)iterations() : 0.0, (int)_gwstate->handle.fft_count/2);
+        _logging->progress_save();
+        _logging->debug("saving state to disk.\n");
+        write_state();
         _last_write = std::chrono::system_clock::now();
     }
     if (abort_flag())
@@ -194,12 +177,23 @@ void Task::on_state()
     }
 }
 
+void Task::write_state()
+{
+    if (_file != nullptr)
+    {
+        if (_state && !_state->is_written())
+            _file->write(*_state);
+        if (!_state)
+            _file->clear();
+    }
+}
+
 void Task::commit_setup()
 {
     check();
     if (_error_check)
     {
         ReliableGWArithmetic* reliable = dynamic_cast<ReliableGWArithmetic*>(_gw);
-        _restart_op = reliable->op();
+        reliable->reset();
     }
 }

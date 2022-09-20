@@ -377,9 +377,7 @@ namespace arithmetic
 
     void CarefulGWArithmetic::mul(GWNum& a, GWNum& b, GWNum& res, int options)
     {
-        unfft(a, a);
-        unfft(b, b);
-        gwmul3_carefully(gwdata(), *a, *b, *res, options);
+        gwmul3_carefully(gwdata(), *a, *b, *res, options & (GWMUL_ADDINCONST | GWMUL_MULBYCONST));
     }
 
     void CarefulGWArithmetic::addsub(GWNum& a, GWNum& b, GWNum& res1, GWNum& res2, int options)

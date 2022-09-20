@@ -202,7 +202,7 @@ Writer* File::get_writer(char type, char version)
 {
     Writer* writer = get_writer();
     writer->write(MAGIC_NUM);
-    writer->write(appid + (0 << 8) + (type << 16) + (version << 24));
+    writer->write(appid + (0 << 8) + ((unsigned char)type << 16) + ((unsigned char)version << 24));
     if (_fingerprint != 0)
         writer->write(_fingerprint);
     return writer;
@@ -345,6 +345,7 @@ void File::write(TaskState& state)
     std::unique_ptr<Writer> writer(get_writer(state.type(), state.version()));
     state.write(*writer);
     commit_writer(*writer);
+    state.set_written();
 }
 
 void File::write_text(const std::string& value)

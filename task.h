@@ -23,19 +23,22 @@ public:
 class TaskState
 {
 public:
-    TaskState(char type) : _type(type), _iteration(0) { }
+    TaskState(char type) : _written(false), _type(type), _iteration(0) { }
     virtual ~TaskState() { }
     
-    void set(int iteration) { _iteration = iteration; }
+    void set(int iteration) { _written = false; _iteration = iteration; }
     virtual bool read(Reader& reader);
     virtual void write(Writer& writer);
+    void set_written() { _written = true; }
 
-    int iteration() { return _iteration; }
     char type() { return _type; }
     char version() { return 0; }
+    bool is_written() { return _written; }
+    int iteration() { return _iteration; }
 
 protected:
     char _type;
+    bool _written;
     int _iteration;
 };
 
@@ -89,7 +92,7 @@ protected:
     template<class TState, class... Args>
     void commit_execute(int iteration, Args&&... args)
     {
-        if (iteration%state_update_period() == 0 || iteration == iterations() || abort_flag())
+        if (iteration - (_state ? _state->iteration() : 0) > state_update_period() || iteration == iterations() || abort_flag())
         {
             check();
             set_state<TState>(iteration, std::forward<Args>(args)...);
@@ -98,7 +101,7 @@ protected:
     template<class TState, class... Args>
     void set_state(int iteration, Args&&... args)
     {
-        if (!_tmp_state)
+        if (!_tmp_state || dynamic_cast<TState*>(_tmp_state.get()) == nullptr)
             _tmp_state.reset(new TState());
         static_cast<TState*>(_tmp_state.get())->set(iteration, std::forward<Args>(args)...);
         _tmp_state.swap(_state);
@@ -111,6 +114,7 @@ protected:
         on_state();
     }
     void on_state();
+    virtual void write_state();
 
 protected:
     bool _error_check;
@@ -124,7 +128,8 @@ protected:
     std::chrono::system_clock::time_point _last_write;
     std::chrono::system_clock::time_point _last_progress;
     static bool _abort_flag;
-private:
+    int _restart_count = 0;
     int _restart_op = 0;
+private:
     std::unique_ptr<TaskState> _tmp_state;
 };

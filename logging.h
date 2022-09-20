@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 #include "inputnum.h"
+#include "file.h"
 
 class Progress
 {
@@ -11,6 +12,7 @@ public:
 
     void add_stage(double cost) { _total_cost += cost; _costs.push_back(cost); }
     void next_stage() { _cur_stage++; update(0, 0); }
+    void skip_stage() { _cur_stage++; }
     void update(double progress, int op_count);
     void time_init(double elapsed);
     void set_parent(Progress* parent) { _parent = parent; }
@@ -62,6 +64,9 @@ public:
     virtual void report_param(const std::string& name, int value) { }
     virtual void report_param(const std::string& name, const std::string& value) { }
 
+    virtual void progress_file(File* file_progress);
+    virtual void progress_save();
+
     int level() { return _level; }
     Progress& progress() { return _progress; }
     const std::string& prefix() { return _prefix; }
@@ -70,6 +75,7 @@ public:
 private:
     int _level;
     Progress _progress;
+    File* _file_progress = nullptr;
     std::string _prefix;
     bool _print_prefix = true;
 };

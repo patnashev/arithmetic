@@ -102,7 +102,7 @@ void Logging::report(const std::string& message, int level)
 void Logging::report_progress()
 {
     if (progress().num_stages() > 1 && progress().progress_stage() > 0 && progress().progress_stage() < 1)
-        info("%.1f%% stage / %.1f%% total, time per op: %.6f ms.\n", progress().progress_stage()*100, progress().progress_total()*100, progress().time_op()*1000);
+        info("%.1f%% stage / %.1f%% total, time per op: %.3f ms.\n", progress().progress_stage()*100, progress().progress_total()*100, progress().time_op()*1000);
     else if (progress().num_stages() > 0)
         info("%.1f%% done, time per op: %.3f ms.\n", progress().progress_total()*100, progress().time_op()*1000);
 }
@@ -129,4 +129,29 @@ void Logging::report_result(const std::string& message)
         fwrite(message.data(), 1, message.length(), fp);
         fclose(fp);
     }
+}
+
+void Logging::progress_file(File* file_progress)
+{
+    _file_progress = file_progress;
+    if (file_progress == nullptr)
+        return;
+    std::unique_ptr<Reader> reader(file_progress->get_reader());
+    if (!reader)
+        return;
+    if (reader->type() != -1)
+        return;
+    double time;
+    if (!reader->read(time))
+        return;
+    progress().time_init(time);
+}
+
+void Logging::progress_save()
+{
+    if (_file_progress == nullptr)
+        return;
+    std::unique_ptr<Writer> writer(_file_progress->get_writer(-1, 0));
+    writer->write(progress().time_total());
+    _file_progress->commit_writer(*writer);
 }

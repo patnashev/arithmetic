@@ -179,6 +179,7 @@ namespace arithmetic
         int op() { return _op; }
         bool restart_flag() { return _restart_flag; }
         bool failure_flag() { return _failure_flag; }
+        const std::unordered_set<int>& suspect_ops() { return _suspect_ops; }
 
     private:
         int _op = 0;

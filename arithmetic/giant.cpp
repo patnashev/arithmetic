@@ -217,7 +217,7 @@ namespace arithmetic
             copy(a, res);
         if (a._giant != b._giant)
         {
-            if ((abs(res._giant->sign) > 10000 && abs(res._giant->sign) > 4*abs(b._giant->sign)) || (abs(b._giant->sign) > 10000 && abs(b._giant->sign) > 4*abs(res._giant->sign)))
+            if ((abs(res._giant->sign) > 10000 && abs(b._giant->sign) > 10 && abs(res._giant->sign) > 4*abs(b._giant->sign)) || (abs(b._giant->sign) > 10000 && abs(res._giant->sign) > 10 && abs(b._giant->sign) > 4*abs(res._giant->sign)))
             {
                 setmulmode(FFT_MUL);
                 mulg(b._giant, res._giant);
@@ -279,6 +279,17 @@ namespace arithmetic
     int GiantsArithmetic::cmp(const Giant& a, const Giant& b)
     {
         return gcompg(a._giant, b._giant);
+    }
+
+    double GiantsArithmetic::log2(const Giant& a)
+    {
+        if (a._giant == nullptr || a._giant->sign == 0)
+            return 0;
+        if (abs(a._giant->sign) == 1)
+            return std::log2(a._giant->n[0]);
+        if (abs(a._giant->sign) == 2)
+            return std::log2(((uint64_t*)a._giant->n)[0]);
+        return ::bitlen(a._giant);
     }
 
     int GiantsArithmetic::cmp(const Giant& a, int32_t b)
