@@ -55,14 +55,15 @@ public:
     void info(const char* message...);
     void warning(const char* message...);
     void error(const char* message...);
-    void result(const char* message...);
+    void result(bool success, const char* message...);
 
     virtual void report(const std::string& message, int level);
     virtual void report_progress();
-    virtual void report_factor(InputNum& input, const arithmetic::Giant& f);
-    virtual void report_result(const std::string& message);
     virtual void report_param(const std::string& name, int value) { }
     virtual void report_param(const std::string& name, const std::string& value) { }
+    virtual void report_factor(InputNum& input, const arithmetic::Giant& f);
+
+    virtual void result_save(const std::string& message);
 
     virtual void progress_file(File* file_progress);
     virtual void progress_save();
@@ -86,10 +87,10 @@ public:
     SubLogging(Logging& parent, int level = LEVEL_WARNING) : Logging(level), _parent(parent) { progress().set_parent(&parent.progress()); }
 
     virtual void report(const std::string& message, int level) override { _parent.report(message, level); }
-    virtual void report_factor(InputNum& input, const arithmetic::Giant& f) override { _parent.report_factor(input, f); }
-    virtual void report_result(const std::string& message) override { }
     virtual void report_param(const std::string& name, int value) override { _parent.report_param(name, value); }
     virtual void report_param(const std::string& name, const std::string& value) override { _parent.report_param(name, value); }
+    virtual void report_factor(InputNum& input, const arithmetic::Giant& f) override { _parent.report_factor(input, f); }
+    virtual void result_save(const std::string& message) override { }
 
 private:
     Logging& _parent;

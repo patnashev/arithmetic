@@ -78,17 +78,19 @@ void Logging::error(const char* message...)
     vsnprintf(buf, 1000, message, args);
     va_end(args);
     report(buf, LEVEL_ERROR);
-    report_result(buf);
+    result_save(buf);
 }
 
-void Logging::result(const char* message...)
+void Logging::result(bool success, const char* message...)
 {
+    if (_level > (success ? LEVEL_WARNING : LEVEL_INFO))
+        return;
     char buf[1000];
     va_list args;
     va_start(args, message);
     vsnprintf(buf, 1000, message, args);
     va_end(args);
-    report_result(buf);
+    report(buf, LEVEL_RESULT);
 }
 
 void Logging::report(const std::string& message, int level)
@@ -110,8 +112,8 @@ void Logging::report_progress()
 void Logging::report_factor(InputNum& input, const arithmetic::Giant& f)
 {
     std::string str = f.to_string();
-    warning("found factor %s\n", str.data());
-    result("found factor %s, time: %.1f s.\n", str.data(), progress().time_total());
+    result(true, "found factor %s\n", str.data());
+    result_save(input.input_text() + " found factor " + str + ", time: " + std::to_string((int)progress().time_total()) + " s.\n");
     FILE *fp = fopen("factors.txt", "a");
     if (fp)
     {
@@ -120,7 +122,7 @@ void Logging::report_factor(InputNum& input, const arithmetic::Giant& f)
     }
 }
 
-void Logging::report_result(const std::string& message)
+void Logging::result_save(const std::string& message)
 {
     FILE *fp = fopen("result.txt", "a");
     if (fp)

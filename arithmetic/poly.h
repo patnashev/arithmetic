@@ -13,6 +13,9 @@ namespace arithmetic
     class PolyMult
     {
     public:
+        static int L3_CACHE_MB;
+
+    public:
         PolyMult(GWArithmetic& gw, int max_threads = 1);
         ~PolyMult();
 

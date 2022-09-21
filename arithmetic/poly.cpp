@@ -56,12 +56,15 @@ namespace arithmetic
         return res;
     }
 
+    int PolyMult::L3_CACHE_MB = 6;
+
     PolyMult::PolyMult(GWArithmetic& gw, int max_threads) : _gw(gw)
     {
         GWASSERT(gw.state().polymult);
         _max_output = gw.state().max_polymult_output();
         polymult_init(pmdata(), gw.gwdata());
         polymult_set_max_num_threads(pmdata(), max_threads);
+        pmdata()->L3_CACHE_SIZE = L3_CACHE_MB;
     }
 
     PolyMult::~PolyMult()
