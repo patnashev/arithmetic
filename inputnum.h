@@ -33,6 +33,7 @@ public:
     arithmetic::Giant& gb() { return _gb; }
     int gfn() { return _gfn; }
     arithmetic::Giant value() { return _gk*power(_gb, _n) + _c; }
+    uint32_t fingerprint();
 
     const std::vector<std::pair<arithmetic::Giant, int>>& b_factors() { return _b_factors; }
     const std::unique_ptr<arithmetic::Giant>& b_cofactor() { return _b_cofactor; }

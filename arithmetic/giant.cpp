@@ -385,6 +385,15 @@ namespace arithmetic
         ::power(res._giant, b);
     }
 
+    void GiantsArithmetic::powermod(Giant& a, Giant& b, Giant& n, Giant& res)
+    {
+        if (res._giant == nullptr || res._capacity < abs(n._giant->sign))
+            alloc(res, abs(n._giant->sign));
+        if (res._giant != a._giant)
+            copy(a, res);
+        ::powermodg(res._giant, b._giant, n._giant);
+    }
+
     extern "C"
     {
         struct mt_state {

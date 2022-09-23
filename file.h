@@ -4,10 +4,6 @@
 #include <vector>
 #include "arithmetic.h"
 
-#ifndef FILE_APPID
-#define FILE_APPID 1
-#endif // !FILE_APPID
-
 class Writer
 {
 public:
@@ -78,6 +74,7 @@ class File
 {
 public:
     static const uint32_t MAGIC_NUM = 0x9f2b3cd4;
+    static int FILE_APPID;
 
 public:
     File(const std::string& filename, uint32_t fingerprint) : _filename(filename), _fingerprint(fingerprint) { }
@@ -97,11 +94,13 @@ public:
 
     virtual void read_buffer();
     virtual void commit_writer(Writer& writer);
+    virtual void free_buffer();
     virtual void clear();
 
     static uint32_t unique_fingerprint(uint32_t fingerprint, const std::string& unique_id);
 
     std::string& filename() { return _filename; }
+    uint32_t fingerprint() { return _fingerprint; }
     std::vector<char>& buffer() { return _buffer; }
     bool hash = true;
     int appid = FILE_APPID;

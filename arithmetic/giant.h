@@ -49,6 +49,7 @@ namespace arithmetic
         virtual bool bit(const Giant& a, int b);
         virtual double log2(const Giant& a);
         virtual void power(Giant& a, int32_t b, Giant& res);
+        virtual void powermod(Giant& a, Giant& b, Giant& n, Giant& res);
         virtual void rnd_seed(Giant& a);
         virtual void rnd(Giant& res, int bits);
 

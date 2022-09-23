@@ -197,3 +197,23 @@ void Task::commit_setup()
         reliable->reset();
     }
 }
+
+void InputTask::init(InputNum* input, arithmetic::GWState* gwstate, File* file, TaskState* state, Logging* logging, int iterations)
+{
+    Task::init(gwstate, file, state, logging, iterations);
+    _input = input;
+}
+
+void InputTask::reinit_gwstate()
+{
+    double fft_count = _gwstate->handle.fft_count;
+    _gwstate->done();
+    _input->setup(*_gwstate);
+    _gwstate->handle.fft_count = fft_count;
+    std::string prefix = _logging->prefix();
+    _logging->set_prefix("");
+    _logging->error("Restarting using %s\n", _gwstate->fft_description.data());
+    _logging->set_prefix(prefix);
+    _logging->report_param("fft_desc", _gwstate->fft_description);
+    _logging->report_param("fft_len", _gwstate->fft_length);
+}

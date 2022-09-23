@@ -11,6 +11,8 @@
 #include "windows.h"
 #endif
 
+int File::FILE_APPID = 1;
+
 void Writer::write(int32_t value)
 {
     _buffer.insert(_buffer.end(), (char*)&value, 4 + (char*)&value);
@@ -320,6 +322,11 @@ void File::commit_writer(Writer& writer)
     }
 
     _buffer = std::move(writer.buffer());
+}
+
+void File::free_buffer()
+{
+    std::vector<char>().swap(_buffer);
 }
 
 void File::clear()

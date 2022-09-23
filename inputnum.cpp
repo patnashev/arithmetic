@@ -7,6 +7,7 @@
 #include "file.h"
 #include "edwards.h"
 #include "integer.h"
+#include "exception.h"
 
 using namespace arithmetic;
 
@@ -373,6 +374,8 @@ void InputNum::setup(GWState& state)
     {
         state.setup(_gk*power(_gb, _n) + _c);
     }
+    if (state.fingerprint != fingerprint())
+        throw ArithmeticException();
 }
 
 bool InputNum::is_base2()
@@ -444,4 +447,23 @@ uint64_t InputNum::parse_numeral(const std::string& s)
             break;
         }
     return val;
+}
+
+uint32_t InputNum::fingerprint()
+{
+    uint32_t b = _gb%3417905339UL;
+    if (_n == 0)
+        return b;
+    uint32_t result = 1;
+    int exp = _n;
+    while (exp > 0)
+    {
+        if (exp & 1)
+            result = ((uint64_t)result*b)%3417905339UL;
+        b = ((uint64_t)b*b)%3417905339UL;
+        exp >>= 1;
+    }
+    result = ((uint64_t)result*(_gk%3417905339UL))%3417905339UL;
+    result = (result + (uint32_t)_c)%3417905339UL;
+    return result;
 }

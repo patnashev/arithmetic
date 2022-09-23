@@ -66,7 +66,7 @@ public:
     static int PROGRESS_TIME;
 
 public:
-    Task(bool error_check) : _error_check(error_check){ }
+    Task() { }
     virtual ~Task() { }
 
     virtual void run();
@@ -92,7 +92,7 @@ protected:
     template<class TState, class... Args>
     void commit_execute(int iteration, Args&&... args)
     {
-        if (iteration - (_state ? _state->iteration() : 0) > state_update_period() || iteration == iterations() || abort_flag())
+        if (iteration - (_state ? _state->iteration() : 0) >= state_update_period() || iteration == iterations() || abort_flag())
         {
             check();
             set_state<TState>(iteration, std::forward<Args>(args)...);
@@ -117,7 +117,7 @@ protected:
     virtual void write_state();
 
 protected:
-    bool _error_check;
+    bool _error_check = false;
     arithmetic::GWState* _gwstate = nullptr;
     arithmetic::GWArithmetic* _gw = nullptr;
     std::unique_ptr<TaskState> _state;
@@ -132,4 +132,19 @@ protected:
     int _restart_op = 0;
 private:
     std::unique_ptr<TaskState> _tmp_state;
+};
+
+class InputTask : public Task
+{
+public:
+    InputTask() : Task()
+    {
+    }
+
+protected:
+    void init(InputNum* input, arithmetic::GWState* gwstate, File* file, TaskState* state, Logging* logging, int iterations);
+    void reinit_gwstate() override;
+
+protected:
+    InputNum* _input = nullptr;
 };
