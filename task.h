@@ -77,7 +77,7 @@ public:
     TaskState* state() { return _state.get(); }
     int iterations() { return _iterations; }
     int state_update_period() { return _state_update_period; }
-    bool is_last(int iteration) { return iteration + 1 == _iterations || (iteration + 1)%_state_update_period == 0; }
+    bool is_last(int iteration) { return iteration + 1 - (_state ? _state->iteration() : 0) >= _state_update_period || iteration + 1 == _iterations; }
     static bool abort_flag() { return _abort_flag; }
 
 protected:
