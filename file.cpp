@@ -344,7 +344,10 @@ bool File::read(TaskState& state)
         return false;
     if (reader->type() != state.type())
         return false;
-    return state.read(*reader);
+    if (!state.read(*reader))
+        return false;
+    state.set_written();
+    return true;
 }
 
 void File::write(TaskState& state)

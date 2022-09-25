@@ -69,16 +69,17 @@ public:
     Task() { }
     virtual ~Task() { }
 
-    virtual void run();
     static void abort() { _abort_flag = true; }
     static void abort_reset() { _abort_flag = false; }
+    static bool abort_flag() { return _abort_flag; }
+
+    virtual void run();
 
     arithmetic::GWArithmetic& gw() { return *_gw; }
     TaskState* state() { return _state.get(); }
     int iterations() { return _iterations; }
     int state_update_period() { return _state_update_period; }
     bool is_last(int iteration) { return iteration + 1 - (_state ? _state->iteration() : 0) >= _state_update_period || iteration + 1 == _iterations; }
-    static bool abort_flag() { return _abort_flag; }
 
 protected:
     virtual void init(arithmetic::GWState* gwstate, File* file, TaskState* state, Logging* logging, int iterations);

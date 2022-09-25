@@ -21,6 +21,8 @@ public:
     void setup(arithmetic::GWState& state);
     bool is_base2();
     void to_base2(InputNum& k, InputNum& base2);
+    bool is_factorized_half();
+    void add_factor(arithmetic::Giant& factor);
 
     static uint64_t parse_numeral(const std::string& s);
 
@@ -35,8 +37,8 @@ public:
     arithmetic::Giant value() { return _gk*power(_gb, _n) + _c; }
     uint32_t fingerprint();
 
-    const std::vector<std::pair<arithmetic::Giant, int>>& b_factors() { return _b_factors; }
-    const std::unique_ptr<arithmetic::Giant>& b_cofactor() { return _b_cofactor; }
+    std::vector<std::pair<arithmetic::Giant, int>>& b_factors() { return _b_factors; }
+    std::unique_ptr<arithmetic::Giant>& b_cofactor() { return _b_cofactor; }
     const std::string& input_text() { return _input_text; }
     const std::string& display_text() { return _display_text; }
 

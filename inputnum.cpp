@@ -114,6 +114,18 @@ void InputNum::add_factor(const Giant& factor, int power)
         _b_factors.emplace_back(factor, power);
 }
 
+void InputNum::add_factor(Giant& factor)
+{
+    auto it = _b_factors.begin();
+    for (; it != _b_factors.end() && it->first != factor; it++);
+    if (it != _b_factors.end())
+        it->second++;
+    else
+        _b_factors.emplace_back(factor, 1);
+    if (_b_cofactor)
+        *_b_cofactor /= factor;
+}
+
 void InputNum::process()
 {
     _b_factors.clear();
@@ -466,4 +478,15 @@ uint32_t InputNum::fingerprint()
     result = ((uint64_t)result*(_gk%3417905339UL))%3417905339UL;
     result = (result + (uint32_t)_c)%3417905339UL;
     return result;
+}
+
+bool InputNum::is_factorized_half()
+{
+    if (!_b_cofactor)
+        return true;
+    arithmetic::Giant factorized;
+    factorized = 1;
+    for (auto it = _b_factors.begin(); it != _b_factors.end(); it++)
+        factorized *= power(it->first, it->second);
+    return factorized > *_b_cofactor;
 }
