@@ -23,7 +23,7 @@ public:
 class TaskState
 {
 public:
-    TaskState(char type) : _written(false), _type(type), _iteration(0) { }
+    TaskState(char type) : _type(type), _written(false), _iteration(0) { }
     virtual ~TaskState() { }
     
     void set(int iteration) { _written = false; _iteration = iteration; }

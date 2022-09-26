@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <iterator>
+#include <memory>
 
 namespace arithmetic
 {
