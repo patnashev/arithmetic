@@ -39,6 +39,8 @@ public:
 
     std::vector<std::pair<arithmetic::Giant, int>>& b_factors() { return _b_factors; }
     std::unique_ptr<arithmetic::Giant>& b_cofactor() { return _b_cofactor; }
+    std::vector<int> factorize_minus1(int depth);
+
     const std::string& input_text() { return _input_text; }
     const std::string& display_text() { return _display_text; }
 

@@ -490,3 +490,67 @@ bool InputNum::is_factorized_half()
         factorized *= power(it->first, it->second);
     return factorized > *_b_cofactor;
 }
+
+inline int isFactor(Giant& _gk, Giant& _gb, uint32_t _n, uint32_t nbit, int _c, uint32_t p)
+{
+    uint32_t b = _gb%p;
+    uint64_t mult = b;
+    for (int i = nbit; i > 0; i >>= 1)
+    {
+        mult *= mult;
+        if (mult >= (1ULL << 32)) mult %= p;
+        if ((_n & i) != 0)
+        {
+            mult *= b;
+            if (mult >= (1ULL << 32)) mult %= p;
+        }
+    }
+    mult *= _gk%p;
+    mult %= p;
+    return ((int)mult + _c == 1);
+}
+
+std::vector<int> InputNum::factorize_minus1(int depth)
+{
+    uint32_t i;
+    uint64_t mult;
+    uint32_t nbit;
+    for (nbit = 1; nbit <= _n; nbit <<= 1);
+    nbit >>= 2;
+    std::vector<int> factors;
+    uint32_t s = (depth + 1)/2;
+    if (s%2 == 1)
+        s++;
+
+    std::vector<char> bitmap;
+    bitmap.resize((size_t)1 << (s - 1), 0);
+    std::vector<std::pair<int, int>> smallprimes;
+    for (i = 1; i < bitmap.size(); i++)
+        if (!bitmap[i])
+        {
+            smallprimes.emplace_back(i*2 + 1, (i*2 + 1)*(i*2 + 1)/2);
+            if (i < ((size_t)1 << (s/2 - 1)))
+                for (; smallprimes.back().second < bitmap.size(); smallprimes.back().second += smallprimes.back().first)
+                    bitmap[smallprimes.back().second] = 1;
+            if (isFactor(_gk, _gb, _n, nbit, _c, i*2 + 1))
+            {
+                factors.push_back(i*2 + 1);
+                mult = factors.back();
+                for (mult *= factors.back(); mult < (1ULL << 31) && isFactor(_gk, _gb, _n, nbit, _c, (uint32_t)mult); factors.back() = (int)mult, mult *= factors.back());
+            }
+        }
+
+    bitmap.resize((size_t)1 << (depth - 1), 0);
+    for (auto it = smallprimes.begin(); it != smallprimes.end(); it++)
+        for (; it->second < bitmap.size(); it->second += it->first)
+            bitmap[it->second] = 1;
+    for (i = 1 << (s - 1); i < bitmap.size(); i++)
+        if (!bitmap[i] && isFactor(_gk, _gb, _n, nbit, _c, i*2 + 1))
+        {
+            factors.push_back(i*2 + 1);
+            mult = factors.back();
+            for (mult *= factors.back(); mult < (1ULL << 31) && isFactor(_gk, _gb, _n, nbit, _c, (uint32_t)mult); factors.back() = (int)mult, mult *= factors.back());
+        }
+
+    return factors;
+}
