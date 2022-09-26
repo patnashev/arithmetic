@@ -81,6 +81,7 @@ public:
     virtual ~File() { }
 
     virtual File* add_child(const std::string& name, uint32_t fingerprint);
+    const std::vector<std::unique_ptr<File>>& children() { return _children; }
 
     bool read(TaskState& state);
     void write(TaskState& state);
