@@ -67,6 +67,7 @@ public:
 
     virtual void progress_file(File* file_progress);
     virtual void progress_save();
+    virtual void heartbeat() { }
 
     int level() { return _level; }
     Progress& progress() { return _progress; }
@@ -90,7 +91,7 @@ public:
     virtual void report_param(const std::string& name, int value) override { _parent.report_param(name, value); }
     virtual void report_param(const std::string& name, const std::string& value) override { _parent.report_param(name, value); }
     virtual void report_factor(InputNum& input, const arithmetic::Giant& f) override { _parent.report_factor(input, f); }
-    virtual void result_save(const std::string& message) override { }
+    virtual void heartbeat() override { _parent.heartbeat(); }
 
 private:
     Logging& _parent;

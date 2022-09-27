@@ -154,6 +154,7 @@ void Task::check()
 
 void Task::on_state()
 {
+    _logging->heartbeat();
     if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - _last_write).count() >= DISK_WRITE_TIME || abort_flag())
     {
         _logging->progress().update(_state ? _state->iteration()/(double)iterations() : 0.0, (int)_gwstate->handle.fft_count/2);

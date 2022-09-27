@@ -329,12 +329,16 @@ void File::free_buffer()
     std::vector<char>().swap(_buffer);
 }
 
-void File::clear()
+void File::clear(bool recursive)
 {
     remove(_filename.data());
     std::string md5_filename = _filename + ".md5";
     remove(md5_filename.data());
     std::vector<char>().swap(_buffer);
+
+    if (recursive)
+        for (auto it = _children.begin(); it != _children.end(); it++)
+            (*it)->clear(true);
 }
 
 bool File::read(TaskState& state)

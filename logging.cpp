@@ -19,10 +19,14 @@ void Progress::update(double progress, int op_count)
     if (_op_count < op_count)
         _time_op = elapsed/(op_count - _op_count);
     _op_count = op_count;
-    if (_parent != nullptr)
+    Progress* cur = this;
+    Progress* parent = _parent;
+    while (parent != nullptr)
     {
-        _parent->_cur_progress = progress_total();
-        _parent->_time_stage += elapsed;
+        parent->_cur_progress = cur->progress_total();
+        parent->_time_stage += elapsed;
+        cur = parent;
+        parent = cur->_parent;
     }
 }
 
@@ -104,9 +108,19 @@ void Logging::report(const std::string& message, int level)
 void Logging::report_progress()
 {
     if (progress().num_stages() > 1 && progress().progress_stage() > 0 && progress().progress_stage() < 1)
-        info("%.1f%% stage / %.1f%% total, time per op: %.3f ms.\n", progress().progress_stage()*100, progress().progress_total()*100, progress().time_op()*1000);
+    {
+        if (progress().time_op() > 0)
+            info("%.1f%% stage / %.1f%% total, time per op: %.3f ms.\n", progress().progress_stage()*100, progress().progress_total()*100, progress().time_op()*1000);
+        else
+            info("%.1f%% stage / %.1f%% total.\n", progress().progress_stage()*100, progress().progress_total()*100);
+    }
     else if (progress().num_stages() > 0)
-        info("%.1f%% done, time per op: %.3f ms.\n", progress().progress_total()*100, progress().time_op()*1000);
+    {
+        if (progress().time_op() > 0)
+            info("%.1f%% done, time per op: %.3f ms.\n", progress().progress_total()*100, progress().time_op()*1000);
+        else
+            info("%.1f%% done.\n", progress().progress_total()*100);
+    }
 }
 
 void Logging::report_factor(InputNum& input, const arithmetic::Giant& f)

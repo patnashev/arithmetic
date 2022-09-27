@@ -96,7 +96,7 @@ public:
     virtual void read_buffer();
     virtual void commit_writer(Writer& writer);
     virtual void free_buffer();
-    virtual void clear();
+    virtual void clear(bool recursive = false);
 
     static uint32_t unique_fingerprint(uint32_t fingerprint, const std::string& unique_id);
 
