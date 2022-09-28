@@ -305,6 +305,16 @@ namespace arithmetic
 
     void GiantsArithmetic::gcd(Giant& a, Giant& b, Giant& res)
     {
+        if (a == 0)
+        {
+            copy(b, res);
+            return;
+        }
+        if (b == 0)
+        {
+            copy(a, res);
+            return;
+        }
         if (res._giant == nullptr || res._capacity < abs(a._giant->sign))
             alloc(res, abs(a._giant->sign));
         if (res._giant != a._giant)
@@ -373,6 +383,11 @@ namespace arithmetic
 
     void GiantsArithmetic::power(Giant& a, int32_t b, Giant& res)
     {
+        if (b == 0)
+        {
+            init(1, res);
+            return;
+        }
         int capacity = abs(a._giant->sign);
         if (capacity == 1)
             capacity = (int)(std::log2(a._giant->n[0])*b/32) + 1;

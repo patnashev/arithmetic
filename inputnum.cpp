@@ -506,8 +506,10 @@ inline int isFactor(Giant& _gk, Giant& _gb, uint32_t _n, uint32_t nbit, int _c, 
         }
     }
     mult *= _gk%p;
+    mult += _c;
+    mult -= 1;
     mult %= p;
-    return ((int)mult + _c == 1);
+    return mult == 0;
 }
 
 std::vector<int> InputNum::factorize_minus1(int depth)
@@ -521,6 +523,12 @@ std::vector<int> InputNum::factorize_minus1(int depth)
     uint32_t s = (depth + 1)/2;
     if (s%2 == 1)
         s++;
+    if (isFactor(_gk, _gb, _n, nbit, _c, 2))
+    {
+        factors.push_back(2);
+        mult = factors.back();
+        for (mult *= factors.back(); mult < (1ULL << 31) && isFactor(_gk, _gb, _n, nbit, _c, (uint32_t)mult); factors.back() = (int)mult, mult *= factors.back());
+    }
 
     std::vector<char> bitmap;
     bitmap.resize((size_t)1 << (s - 1), 0);

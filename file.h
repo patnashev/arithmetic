@@ -79,6 +79,7 @@ public:
 public:
     File(const std::string& filename, uint32_t fingerprint) : _filename(filename), _fingerprint(fingerprint) { }
     virtual ~File() { }
+    File& operator = (File&&) = default;
 
     virtual File* add_child(const std::string& name, uint32_t fingerprint);
     const std::vector<std::unique_ptr<File>>& children() { return _children; }
