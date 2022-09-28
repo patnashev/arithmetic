@@ -81,7 +81,7 @@ void Task::run()
             }
             catch (const ArithmeticException& e)
             {
-                _logging->error("ArithmeticException: %s\n", e.what());
+                _logging->warning("ArithmeticException: %s\n", e.what());
             }
             catch (...)
             {
@@ -89,7 +89,7 @@ void Task::run()
                 throw;
             }
             //GWASSERT(0);
-            _logging->error("Arithmetic error, restarting at %.1f%%.\n", state() ? 100.0*state()->iteration()/iterations() : 0.0);
+            _logging->warning("Arithmetic error, restarting at %.1f%%.\n", state() ? 100.0*state()->iteration()/iterations() : 0.0);
             if (reliable && reliable->restart_flag() && !reliable->failure_flag())
             {
                 std::string ops = "pass " + std::to_string(i) + " suspicious ops:";
@@ -213,7 +213,7 @@ void InputTask::reinit_gwstate()
     _gwstate->handle.fft_count = fft_count;
     std::string prefix = _logging->prefix();
     _logging->set_prefix("");
-    _logging->error("Restarting using %s\n", _gwstate->fft_description.data());
+    _logging->warning("Restarting using %s\n", _gwstate->fft_description.data());
     _logging->set_prefix(prefix);
     _logging->report_param("fft_desc", _gwstate->fft_description);
     _logging->report_param("fft_len", _gwstate->fft_length);

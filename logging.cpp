@@ -70,6 +70,7 @@ void Logging::warning(const char* message...)
     vsnprintf(buf, 1000, message, args);
     va_end(args);
     report(buf, LEVEL_WARNING);
+    result_save(buf);
 }
 
 void Logging::error(const char* message...)
