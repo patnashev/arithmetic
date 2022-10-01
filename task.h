@@ -79,7 +79,7 @@ public:
     TaskState* state() { return _state.get(); }
     int iterations() { return _iterations; }
     int state_update_period() { return _state_update_period; }
-    bool is_last(int iteration) { return iteration + 1 - (_state ? _state->iteration() : 0) >= _state_update_period || iteration + 1 == _iterations; }
+    bool is_last(int iteration) { return iteration + 1 - (_state ? _state->iteration() : 0) >= _state_update_period || iteration + 1 == _iterations || abort_flag(); }
 
 protected:
     virtual void init(arithmetic::GWState* gwstate, File* file, TaskState* state, Logging* logging, int iterations);
@@ -122,6 +122,7 @@ protected:
     arithmetic::GWState* _gwstate = nullptr;
     arithmetic::GWArithmetic* _gw = nullptr;
     std::unique_ptr<TaskState> _state;
+    std::unique_ptr<TaskState> _tmp_state;
     int _iterations = 0;
     int _state_update_period = MULS_PER_STATE_UPDATE;
     File* _file;
@@ -131,8 +132,6 @@ protected:
     static bool _abort_flag;
     int _restart_count = 0;
     int _restart_op = 0;
-private:
-    std::unique_ptr<TaskState> _tmp_state;
 };
 
 class InputTask : public Task
