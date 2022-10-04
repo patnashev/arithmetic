@@ -34,7 +34,6 @@ namespace arithmetic
 
         gwhandle* gwdata() { return &handle; }
         Giant popg() { return Giant(giants); }
-        int max_polymult_output();
 
         int thread_count = 1;
         int next_fft_count = 0;

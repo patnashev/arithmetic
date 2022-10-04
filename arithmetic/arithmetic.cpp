@@ -2,7 +2,6 @@
 #include <vector>
 #include <stdlib.h>
 #include "gwnum.h"
-#include "polymult.h"
 #include "arithmetic.h"
 #include "exception.h"
 
@@ -126,13 +125,6 @@ namespace arithmetic
         fft_length = 0;
         gwdone(&handle);
         gwinit(&handle);
-    }
-
-    int GWState::max_polymult_output()
-    {
-        int max_output;
-        for (max_output = 2; max_output < (1 << 30) && gw_passes_safety_margin(gwdata(), polymult_safety_margin(max_output, max_output)); max_output <<= 1);
-        return max_output;
     }
 
     GWArithmetic::GWArithmetic(GWState& state) : _state(state)

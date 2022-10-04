@@ -50,6 +50,7 @@ namespace arithmetic
         GWArithmetic& gw() const { return _gw; }
         int max_output() const { return _max_output; }
         pmhandle* pmdata() { return &_pmdata; }
+        static int max_polymult_output(GWState& state);
 
     private:
         void poly_seize(Poly& a, Poly& res, Poly& to_free, int size);
