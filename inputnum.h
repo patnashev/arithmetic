@@ -10,11 +10,18 @@ class File;
 class InputNum
 {
 public:
+    static const int ZERO = 0;
+    static const int GENERIC = 1;
+    static const int KBNC = 2;
+    static const int FACTORIAL = 3;
+    static const int PRIMORIAL = 4;
+
+public:
     InputNum() { _gk = 0; _gb = 0; }
     InputNum(int k, int b, int n, int c) { init(k, b, n, c); }
 
     template<class TK, class TB>
-    void init(TK k, TB b, int n, int c) { _gk = k; _gb = b; _n = n; _c = c; process(); }
+    void init(TK k, TB b, int n, int c) { _type = KBNC; _gk = k; _gb = b; _n = n; _c = c; process(); }
     bool read(File& file);
     void write(File& file);
     bool parse(const std::string& s);
@@ -29,7 +36,7 @@ public:
     bool empty() const { return _gb == 0; }
     uint32_t k() { return _gk.size() == 1 ? *(_gk.data()) : 0; }
     uint32_t b() { return _gb.size() == 1 ? *(_gb.data()) : 0; }
-    uint32_t n() { return _n > 0 ? _n : 1; }
+    uint32_t n() { return _type == KBNC ? _n : 1; }
     int32_t c() { return _c; }
     arithmetic::Giant& gk() { return _gk; }
     arithmetic::Giant& gb() { return _gb; }
@@ -51,6 +58,7 @@ private:
     std::string build_text(int max_len = -1);
 
 private:
+    int _type = ZERO;
     arithmetic::Giant _gk;
     arithmetic::Giant _gb;
     uint32_t _n = 0;

@@ -20,6 +20,7 @@ bool InputNum::read(File& file)
         return false;
     if (!reader->read(_gb))
         return false;
+    _type = GENERIC;
     _gk = 1;
     _n = 0;
     _c = 0;
@@ -31,8 +32,8 @@ bool InputNum::read(File& file)
 void InputNum::write(File& file)
 {
     std::unique_ptr<Writer> writer(file.get_writer(0, 0));
-    if (_n == 0)
-        writer->write(_gb);
+    if (_type != KBNC)
+        writer->write(_gk*_gb + _c);
     else
         writer->write(_gk*power(_gb, _n) + _c);
     file.commit_writer(*writer);
@@ -42,6 +43,7 @@ bool InputNum::parse(const std::string& s)
 {
     std::string::const_iterator it, it_s;
 
+    _type = KBNC;
     for (it = s.begin(); it != s.end() && std::isspace(*it); it++);
     if (it != s.end() && *it == '\"')
         it++;
@@ -61,14 +63,40 @@ bool InputNum::parse(const std::string& s)
     {
         _gb = std::string(it_s, it);
     }
-    else
-        return false;
-    if (it != s.end() && *it == '^')
+    else if (*it == '!')
     {
-        for (it_s = ++it; it != s.end() && std::isdigit(*it); it++);
+        _type = FACTORIAL;
         if (it == it_s || it - it_s > 9)
             return false;
         _n = stoi(std::string(it_s, it));
+        _gb = 1;
+        for (uint32_t i = 2; i <= _n; i++)
+            _gb *= i;
+    }
+    else if (*it == '#')
+    {
+        _type = PRIMORIAL;
+        if (it == it_s || it - it_s > 9)
+            return false;
+        _n = stoi(std::string(it_s, it));
+        _gb = 1;
+        PrimeIterator primes = PrimeIterator::get();
+        for (uint32_t i = 0; i < _n; i++, primes++)
+            _gb *= *primes;
+    }
+    else
+        return false;
+    if (it != s.end())
+    {
+        if (*it == '^')
+        {
+            for (it_s = ++it; it != s.end() && std::isdigit(*it); it++);
+            if (it == it_s || it - it_s > 9)
+                return false;
+            _n = stoi(std::string(it_s, it));
+        }
+        else
+            it++;
         if (it == s.end())
             return false;
         else if (*it == '+')
@@ -132,52 +160,66 @@ void InputNum::process()
     _b_cofactor.reset();
 
     uint32_t i, j;
-    Giant tmp = _gb;
-    for (i = 0; !tmp.bit(i); i++);
-    if (i > 0)
+    if (_type != KBNC)
     {
-        add_factor(2, i);
-        tmp >>= i;
+        /*Giant tmp;
+        _b_factors.reserve(_n);
+        PrimeIterator primes = PrimeIterator::get();
+        for (i = 0; i < _n; i++, primes++)
+        {
+            tmp = *primes;
+            _b_factors.emplace_back(tmp, 1);
+        }*/
     }
-    uint32_t s = 10;
-    std::vector<char> bitmap;
-    if (tmp > 1)
+    else
     {
-        bitmap.resize((size_t)1 << (s - 1), 0);
-        std::vector<std::pair<int, int>> smallprimes;
-        for (i = 1; i < bitmap.size(); i++)
-            if (!bitmap[i])
-            {
-                smallprimes.emplace_back(i*2 + 1, (i*2 + 1)*(i*2 + 1)/2);
-                if (i < ((size_t)1 << (s/2 - 1)))
-                    for (; smallprimes.back().second < bitmap.size(); smallprimes.back().second += smallprimes.back().first)
-                        bitmap[smallprimes.back().second] = 1;
-                for (; tmp%(i*2 + 1) == 0; tmp /= i*2 + 1)
-                    add_factor(i*2 + 1);
-            }
-        if (tmp > 1 && tmp < (1 << (2*s)))
+        Giant tmp = _gb;
+        for (i = 0; !tmp.bit(i); i++);
+        if (i > 0)
         {
-            add_factor(tmp);
-            tmp = 1;
+            add_factor(2, i);
+            tmp >>= i;
         }
-        for (j = 0; j < s && tmp > 1; j += 5)
+        uint32_t s = 10;
+        std::vector<char> bitmap;
+        if (tmp > 1)
         {
-            bitmap.resize((size_t)1 << (s - 1 + j + 5), 0);
-            for (auto it = smallprimes.begin(); it != smallprimes.end(); it++)
-                for (; it->second < bitmap.size(); it->second += it->first)
-                    bitmap[it->second] = 1;
-            for (i = 1 << (s - 1 + j); i < bitmap.size(); i++)
-                for (; !bitmap[i] && tmp%(i*2 + 1) == 0; tmp /= i*2 + 1)
-                    add_factor(i*2 + 1);
-            if (tmp > 1 && (uint32_t)tmp.bitlen() <= 2*(s + j + 4))
+            bitmap.resize((size_t)1 << (s - 1), 0);
+            std::vector<std::pair<int, int>> smallprimes;
+            for (i = 1; i < bitmap.size(); i++)
+                if (!bitmap[i])
+                {
+                    smallprimes.emplace_back(i*2 + 1, (i*2 + 1)*(i*2 + 1)/2);
+                    if (i < ((size_t)1 << (s/2 - 1)))
+                        for (; smallprimes.back().second < bitmap.size(); smallprimes.back().second += smallprimes.back().first)
+                            bitmap[smallprimes.back().second] = 1;
+                    for (; tmp%(i*2 + 1) == 0; tmp /= i*2 + 1)
+                        add_factor(i*2 + 1);
+                }
+            if (tmp > 1 && tmp < (1 << (2*s)))
             {
                 add_factor(tmp);
                 tmp = 1;
             }
+            for (j = 0; j < s && tmp > 1; j += 5)
+            {
+                bitmap.resize((size_t)1 << (s - 1 + j + 5), 0);
+                for (auto it = smallprimes.begin(); it != smallprimes.end(); it++)
+                    for (; it->second < bitmap.size(); it->second += it->first)
+                        bitmap[it->second] = 1;
+                for (i = 1 << (s - 1 + j); i < bitmap.size(); i++)
+                    for (; !bitmap[i] && tmp%(i*2 + 1) == 0; tmp /= i*2 + 1)
+                        add_factor(i*2 + 1);
+                if (tmp > 1 && (uint32_t)tmp.bitlen() <= 2*(s + j + 4))
+                {
+                    add_factor(tmp);
+                    tmp = 1;
+                }
+            }
         }
+        if (tmp > 1)
+            _b_cofactor.reset(new Giant(tmp));
     }
-    if (tmp > 1)
-        _b_cofactor.reset(new Giant(tmp));
 
     _input_text = build_text();
 
@@ -294,7 +336,7 @@ void InputNum::process()
         }
     }*/
 
-    if (_gb != 1)
+    if (_type == KBNC && _gb != 1)
     {
         if (!_b_cofactor)
         {
@@ -319,7 +361,7 @@ void InputNum::process()
         }
     }
 
-    if (_gk == 1 && _c == 1 && _n > 1 && (_n & (_n - 1)) == 0)
+    if (_type == KBNC && _gk == 1 && _c == 1 && _n > 1 && (_n & (_n - 1)) == 0)
         for (_gfn = 1; (1UL << _gfn) < _n; _gfn++);
 
     _display_text = build_text(40);
@@ -343,7 +385,17 @@ std::string InputNum::build_text(int max_len)
         if (_gb != 1)
             res.append(1, '*');
     }
-    if (_gb != 1)
+    if (_type == FACTORIAL)
+    {
+        res.append(std::to_string(_n));
+        res.append(1, '!');
+    }
+    else if (_type == PRIMORIAL)
+    {
+        res.append(std::to_string(_n));
+        res.append(1, '#');
+    }
+    else if (_gb != 1)
     {
         std::string sb = _gb.to_string();
         if (sb.size() > max_len && max_len > 0)
@@ -374,9 +426,13 @@ std::string InputNum::build_text(int max_len)
 
 void InputNum::setup(GWState& state)
 {
-    if (_n == 0)
+    if (_type == GENERIC)
     {
         state.setup(_gb);
+    }
+    else if (_type != KBNC)
+    {
+        state.setup(_gk*_gb + _c);
     }
     else if (k() != 0 && b() != 0)
     {
@@ -464,16 +520,20 @@ uint64_t InputNum::parse_numeral(const std::string& s)
 uint32_t InputNum::fingerprint()
 {
     uint32_t b = _gb%3417905339UL;
-    if (_n == 0)
+    if (_type == GENERIC)
         return b;
-    uint32_t result = 1;
-    int exp = _n;
-    while (exp > 0)
+    uint32_t result = b;
+    if (_type == KBNC)
     {
-        if (exp & 1)
-            result = ((uint64_t)result*b)%3417905339UL;
-        b = ((uint64_t)b*b)%3417905339UL;
-        exp >>= 1;
+        result = 1;
+        int exp = _n;
+        while (exp > 0)
+        {
+            if (exp & 1)
+                result = ((uint64_t)result*b)%3417905339UL;
+            b = ((uint64_t)b*b)%3417905339UL;
+            exp >>= 1;
+        }
     }
     result = ((uint64_t)result*(_gk%3417905339UL))%3417905339UL;
     result = (result + (uint32_t)_c)%3417905339UL;
