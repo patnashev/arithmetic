@@ -47,6 +47,7 @@ namespace arithmetic
         virtual void shiftright(Giant& a, int b, Giant& res);
         virtual int bitlen(const Giant& a);
         virtual bool bit(const Giant& a, int b);
+        virtual void substr(const Giant& a, int offset, int count, Giant& res);
         virtual double log2(const Giant& a);
         virtual void power(Giant& a, int32_t b, Giant& res);
         virtual void powermod(Giant& a, Giant& b, Giant& n, Giant& res);
@@ -242,6 +243,12 @@ namespace arithmetic
         }
         int bitlen() const { return arithmetic().bitlen(*this); }
         bool bit(int b) const { return arithmetic().bit(*this, b); }
+        friend Giant substr(Giant& a, int offset, int count)
+        {
+            Giant res(a.arithmetic());
+            res.arithmetic().substr(a, offset, count, res);
+            return res;
+        }
         friend double log2(Giant& a)
         {
             return a.arithmetic().log2(a); 

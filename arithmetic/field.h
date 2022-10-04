@@ -154,6 +154,12 @@ namespace arithmetic
             return (Element&)*this;
         }
 
+        Element& operator += (Element&& a)
+        {
+            *this += a;
+            return (Element&)*this;
+        }
+
         friend Element operator + (Element& a, Element& b)
         {
             Element res(a.arithmetic());
@@ -217,6 +223,12 @@ namespace arithmetic
         Element& operator -= (Element& a)
         {
             arithmetic().sub((Element&)*this, a, (Element&)*this);
+            return (Element&)*this;
+        }
+
+        Element& operator -= (Element&& a)
+        {
+            *this -= a;
             return (Element&)*this;
         }
 

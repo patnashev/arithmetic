@@ -276,6 +276,21 @@ namespace arithmetic
         return bitval(a._giant, b) != 0;
     }
 
+    void GiantsArithmetic::substr(const Giant& a, int offset, int count, Giant& res)
+    {
+        int size = (count + 31 + offset%32)/32;
+        if (size > abs(a._giant->sign) - offset/32)
+            size = abs(a._giant->sign) - offset/32;
+        if (res._giant == nullptr || res._capacity < size)
+            alloc(res, size);
+        memcpy(res._giant->n, a._giant->n + offset/32, size*4);
+        if ((offset%32 + count)/32 == size - 1)
+            res._giant->n[size - 1] &= (1 << (offset + count)%32) - 1;
+        for (; size > 0 && res._giant->n[size - 1] == 0; size--);
+        res._giant->sign = size;
+        gshiftright(offset%32, res._giant);
+    }
+
     int GiantsArithmetic::cmp(const Giant& a, const Giant& b)
     {
         return gcompg(a._giant, b._giant);
