@@ -45,7 +45,7 @@ namespace arithmetic
     {
         /* Computes Jacobi (a, b) */
 
-        uint32_t  jdvs, jdvd, jq, jr;
+        uint32_t  jdvs, jdvd, jr;
         int resul; uint32_t s, t, u, v;
         jdvs = a;
         jdvd = b;
@@ -74,7 +74,6 @@ namespace arithmetic
                     u = (jdvs-1)>>1; 	/* (dvs-1)/2 */
                     if (s & u & 1)	/* resul *= (-1)**(dvd-1)*(dvs-1)/4; */
                         resul = -resul;
-                    jq = jdvd/jdvs;
                     jr = jdvd%jdvs;
                     jdvd = jdvs;
                     jdvs = jr;
@@ -89,7 +88,7 @@ namespace arithmetic
         /* Computes Kronecker (a, b) = (a/b) */
         /* Note : returns gcd (a, b) if a and b are not coprime. */
 
-        uint32_t  jdvs, jdvd, jq, jr, jmul;
+        uint32_t  jdvs, jdvd, jr, jmul;
         int resul; uint32_t s, t, u, v, amod8;
         jdvs = a;
         jdvd = b;
@@ -131,7 +130,6 @@ namespace arithmetic
                     u = (jdvs-1)>>1; 	/* (dvs-1)/2 */
                     if (s & u & 1)	/* resul *= (-1)**(dvd-1)*(dvs-1)/4; */
                         resul = -resul;
-                    jq = jdvd/jdvs;
                     jr = jdvd%jdvs;
                     jdvd = jdvs;
                     jdvs = jr;
