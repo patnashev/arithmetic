@@ -59,8 +59,8 @@ public:
 
     virtual void report(const std::string& message, int level);
     virtual void report_progress();
-    virtual void report_param(const std::string& name, int value) { }
-    virtual void report_param(const std::string& name, const std::string& value) { }
+    virtual void report_param(const std::string& /* name */, int /* value */) { }
+    virtual void report_param(const std::string& /* name */, const std::string& /* value */) { }
     virtual void report_factor(InputNum& input, const arithmetic::Giant& f);
 
     virtual void result_save(const std::string& message);
