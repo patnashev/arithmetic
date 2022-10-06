@@ -100,9 +100,18 @@ void Logging::result(bool success, const char* message...)
 
 void Logging::report(const std::string& message, int level)
 {
+    if (_overwrite_line)
+        std::cout << "\r                                                                      \r";
+    _overwrite_line = false;
     if (_print_prefix)
         std::cout << _prefix;
-    std::cout << message;
+    if (!message.empty() && message.back() == '\r')
+    {
+        std::cout.write(message.data(), message.size() - 1);
+        _overwrite_line = true;
+    }
+    else
+        std::cout << message;
     _print_prefix = !message.empty() && (message.back() == '\r' || message.back() == '\n');
 }
 
@@ -111,16 +120,16 @@ void Logging::report_progress()
     if (progress().num_stages() > 1 && progress().progress_stage() > 0 && progress().progress_stage() < 1)
     {
         if (progress().time_op() > 0)
-            info("%.1f%% stage / %.1f%% total, time per op: %.3f ms.   \r", progress().progress_stage()*100, progress().progress_total()*100, progress().time_op()*1000);
+            info("%.1f%% stage / %.1f%% total, time per op: %.3f ms. \r", progress().progress_stage()*100, progress().progress_total()*100, progress().time_op()*1000);
         else
-            info("%.1f%% stage / %.1f%% total.   \r", progress().progress_stage()*100, progress().progress_total()*100);
+            info("%.1f%% stage / %.1f%% total. \r", progress().progress_stage()*100, progress().progress_total()*100);
     }
     else if (progress().num_stages() > 0)
     {
         if (progress().time_op() > 0)
-            info("%.1f%% done, time per op: %.3f ms.   \r", progress().progress_total()*100, progress().time_op()*1000);
+            info("%.1f%% done, time per op: %.3f ms. \r", progress().progress_total()*100, progress().time_op()*1000);
         else
-            info("%.1f%% done.   \r", progress().progress_total()*100);
+            info("%.1f%% done. \r", progress().progress_total()*100);
     }
 }
 

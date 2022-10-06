@@ -80,6 +80,7 @@ private:
     File* _file_progress = nullptr;
     std::string _prefix;
     bool _print_prefix = true;
+    bool _overwrite_line = false;
 };
 
 class SubLogging : public Logging
