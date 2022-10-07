@@ -141,10 +141,19 @@ public:
     {
     }
 
+    void set_error_check(bool near, bool check);
+    double timer() { return _timer; }
+    int transforms() { return _transforms; }
+
 protected:
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, TaskState* state, Logging* logging, int iterations);
     void reinit_gwstate() override;
+    virtual void done();
 
 protected:
     InputNum* _input = nullptr;
+    double _timer = 0;
+    int _transforms = 0;
+    bool _error_check_near = true;
+    bool _error_check_forced = false;
 };

@@ -1,6 +1,7 @@
 
 #include <stdlib.h>
 #include "gwnum.h"
+#include "cpuid.h"
 #include "task.h"
 #include "exception.h"
 #include "file.h"
@@ -203,6 +204,9 @@ void InputTask::init(InputNum* input, arithmetic::GWState* gwstate, File* file, 
 {
     Task::init(gwstate, file, state, logging, iterations);
     _input = input;
+    _timer = getHighResTimer();
+    _transforms = -(int)gwstate->handle.fft_count;
+    _error_check = _error_check_near ? gwnear_fft_limit(gwstate->gwdata(), 1) == TRUE : _error_check_forced;
 }
 
 void InputTask::reinit_gwstate()
@@ -217,4 +221,20 @@ void InputTask::reinit_gwstate()
     _logging->set_prefix(prefix);
     _logging->report_param("fft_desc", _gwstate->fft_description);
     _logging->report_param("fft_len", _gwstate->fft_length);
+    _error_check = _error_check_near ? gwnear_fft_limit(_gwstate->gwdata(), 1) == TRUE : _error_check_forced;
+}
+
+void InputTask::done()
+{
+    _timer = (getHighResTimer() - _timer)/getHighResTimerFrequency();
+    _transforms += (int)_gwstate->handle.fft_count;
+    _logging->progress().update(1, (int)_gwstate->handle.fft_count/2);
+}
+
+void InputTask::set_error_check(bool near, bool check)
+{
+    _error_check_near = near;
+    _error_check_forced = check;
+    if (_gwstate != nullptr)
+        _error_check = _error_check_near ? gwnear_fft_limit(_gwstate->gwdata(), 1) == TRUE : _error_check_forced;
 }
