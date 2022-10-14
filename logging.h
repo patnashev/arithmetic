@@ -74,7 +74,7 @@ public:
     const std::string& prefix() { return _prefix; }
     void set_prefix(const std::string& prefix) { _prefix = prefix; }
 
-private:
+protected:
     int _level;
     Progress _progress;
     File* _file_progress = nullptr;
@@ -94,6 +94,6 @@ public:
     virtual void report_factor(InputNum& input, const arithmetic::Giant& f) override { _parent.report_factor(input, f); }
     virtual void heartbeat() override { _parent.heartbeat(); }
 
-private:
+protected:
     Logging& _parent;
 };
