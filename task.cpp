@@ -163,6 +163,7 @@ void Task::on_state()
         _logging->debug("saving state to disk.\n");
         write_state();
         _last_write = std::chrono::system_clock::now();
+        _logging->progress().update(_state ? _state->iteration()/(double)iterations() : 0.0, (int)_gwstate->handle.fft_count/2);
     }
     if (abort_flag())
         throw TaskAbortException();

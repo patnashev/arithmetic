@@ -113,3 +113,13 @@ protected:
     std::vector<char> _buffer;
     std::vector<std::unique_ptr<File>> _children;
 };
+
+class FileEmpty : public File
+{
+public:
+    FileEmpty() : File("", 0) { }
+
+    File* add_child(const std::string& name, uint32_t fingerprint) override { return _children.emplace_back(new FileEmpty()).get(); }
+    void read_buffer() override { }
+    void commit_writer(Writer& writer) override { }
+};
