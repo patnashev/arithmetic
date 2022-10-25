@@ -44,8 +44,8 @@ bool InputNum::parse(const std::string& s)
     std::string::const_iterator it, it_s;
     int type = KBNC;
     Giant gk, gb;
-    uint32_t n;
-    int32_t c;
+    uint32_t n = 0;
+    int32_t c = 0;
 
     for (it = s.begin(); it != s.end() && std::isspace(*it); it++);
     if (it != s.end() && *it == '\"')

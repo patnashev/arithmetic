@@ -119,7 +119,7 @@ class FileEmpty : public File
 public:
     FileEmpty() : File("", 0) { }
 
-    File* add_child(const std::string& name, uint32_t fingerprint) override { return _children.emplace_back(new FileEmpty()).get(); }
+    File* add_child(const std::string& /*name*/, uint32_t /*fingerprint*/) override { return _children.emplace_back(new FileEmpty()).get(); }
     void read_buffer() override { }
-    void commit_writer(Writer& writer) override { }
+    void commit_writer(Writer& /*writer*/) override { }
 };
