@@ -42,8 +42,11 @@ void InputNum::write(File& file)
 bool InputNum::parse(const std::string& s)
 {
     std::string::const_iterator it, it_s;
+    int type = KBNC;
+    Giant gk, gb;
+    uint32_t n;
+    int32_t c;
 
-    _type = KBNC;
     for (it = s.begin(); it != s.end() && std::isspace(*it); it++);
     if (it != s.end() && *it == '\"')
         it++;
@@ -52,37 +55,37 @@ bool InputNum::parse(const std::string& s)
         return false;
     if (it != s.end() && *it == '*')
     {
-        _gk = std::string(it_s, it);
+        gk = std::string(it_s, it);
         for (it_s = ++it; it != s.end() && std::isdigit(*it); it++);
         if (it == it_s)
             return false;
     }
     else
-        _gk = 1;
+        gk = 1;
     if (it == s.end() || *it == '^' || *it == '\"')
     {
-        _gb = std::string(it_s, it);
+        gb = std::string(it_s, it);
     }
     else if (*it == '!')
     {
-        _type = FACTORIAL;
+        type = FACTORIAL;
         if (it == it_s || it - it_s > 9)
             return false;
-        _n = stoi(std::string(it_s, it));
-        _gb = 1;
-        for (uint32_t i = 2; i <= _n; i++)
-            _gb *= i;
+        n = stoi(std::string(it_s, it));
+        gb = 1;
+        for (uint32_t i = 2; i <= n; i++)
+            gb *= i;
     }
     else if (*it == '#')
     {
-        _type = PRIMORIAL;
+        type = PRIMORIAL;
         if (it == it_s || it - it_s > 9)
             return false;
-        _n = stoi(std::string(it_s, it));
-        _gb = 1;
+        n = stoi(std::string(it_s, it));
+        gb = 1;
         PrimeIterator primes = PrimeIterator::get();
-        for (uint32_t i = 0; i < _n; i++, primes++)
-            _gb *= *primes;
+        for (uint32_t i = 0; i < n; i++, primes++)
+            gb *= *primes;
     }
     else
         return false;
@@ -93,27 +96,27 @@ bool InputNum::parse(const std::string& s)
             for (it_s = ++it; it != s.end() && std::isdigit(*it); it++);
             if (it == it_s || it - it_s > 9)
                 return false;
-            _n = stoi(std::string(it_s, it));
+            n = stoi(std::string(it_s, it));
         }
         else
             it++;
         if (it == s.end())
             return false;
         else if (*it == '+')
-            _c = 1;
+            c = 1;
         else if (*it == '-')
-            _c = -1;
+            c = -1;
         else
             return false;
         for (it_s = ++it; it != s.end() && std::isdigit(*it); it++);
         if (it == it_s || it - it_s > 9)
             return false;
-        _c *= stoi(std::string(it_s, it));
+        c *= stoi(std::string(it_s, it));
     }
     else
     {
-        _n = 1;
-        _c = 0;
+        n = 1;
+        c = 0;
     }
     if (it != s.end() && *it == '\"')
         it++;
@@ -121,6 +124,11 @@ bool InputNum::parse(const std::string& s)
     if (it != s.end())
         return false;
 
+    _type = type;
+    _gk = std::move(gk);
+    _gb = std::move(gb);
+    _n = n;
+    _c = c;
     process();
     return true;
 }

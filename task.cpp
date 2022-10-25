@@ -103,7 +103,7 @@ void Task::run()
                 i = 0;
                 continue;
             }
-            if ((!reliable || !reliable->failure_flag()) && *restart_count[i] < 3)
+            if ((!reliable || !reliable->failure_flag()) && *restart_count[i] < 2)
             {
                 if (reliable)
                     reliable->restart(i == 1 ? _restart_op : 0);
