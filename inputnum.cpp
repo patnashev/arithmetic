@@ -471,12 +471,14 @@ void InputNum::to_base2(InputNum& k, InputNum& base2)
     int n2 = _n*num2;
     int c = _c;
 
+    k._type = KBNC;
     k._gk = _gk;
     k._gb = _gb >> num2;
     k._n = _n;
     k._c = 0;
     k.process();
 
+    base2._type = KBNC;
     base2._gk = k.value();
     base2._gb = 2;
     base2._n = n2;
