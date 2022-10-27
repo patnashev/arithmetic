@@ -56,7 +56,7 @@ namespace arithmetic
         return res;
     }
 
-    int PolyMult::L3_CACHE_MB = 6;
+    int PolyMult::L3_CACHE_MB = 2500;
 
     int PolyMult::max_polymult_output(GWState& state)
     {
