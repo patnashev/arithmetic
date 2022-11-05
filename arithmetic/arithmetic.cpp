@@ -61,7 +61,7 @@ namespace arithmetic
         if (gwsetup_general_mod(gwdata(), g.data(), g.size()))
             throw ArithmeticException();
         bit_length = g.bitlen();
-        giants._capacity = (bit_length >> 5) + 10;
+        giants._capacity = (((int)gwdata()->bit_length/2) >> 5) + 10;
         if (N != nullptr)
             delete N;
         N = new Giant(giants);
