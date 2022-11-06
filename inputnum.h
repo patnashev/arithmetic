@@ -41,8 +41,9 @@ public:
     arithmetic::Giant& gk() { return _gk; }
     arithmetic::Giant& gb() { return _gb; }
     int gfn() { return _gfn; }
-    arithmetic::Giant value() { return _gk*power(_gb, _n) + _c; }
+    arithmetic::Giant value() { return _type == GENERIC ? _gb : _type != KBNC ? _gk*_gb + _c : _gk*power(_gb, _n) + _c; }
     uint32_t fingerprint();
+    int bitlen();
 
     std::vector<std::pair<arithmetic::Giant, int>>& b_factors() { return _b_factors; }
     std::unique_ptr<arithmetic::Giant>& b_cofactor() { return _b_cofactor; }

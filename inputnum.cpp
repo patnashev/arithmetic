@@ -454,6 +454,17 @@ void InputNum::setup(GWState& state)
         throw ArithmeticException();
 }
 
+int InputNum::bitlen()
+{
+    if (_type == GENERIC)
+        return _gb.bitlen();
+    else if (_type != KBNC)
+        return _gk.bitlen() + _gb.bitlen() - 1;
+    else if (b() == 2)
+        return _gk.bitlen() + _n;
+    return (int)std::ceil(log2(_gk) + log2(_gb)*_n);
+}
+
 bool InputNum::is_base2()
 {
     if (_b_factors.size() == 0 || _b_factors[0].first != 2)
