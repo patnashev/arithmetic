@@ -26,6 +26,7 @@ namespace arithmetic
             done();
         }
 
+        void init();
         void setup(int k, int b, int n, int c);
         void setup(const Giant& g);
         void setup(int bitlen);
@@ -44,6 +45,7 @@ namespace arithmetic
         bool force_general_mod = false;
         bool polymult = false;
         int spin_threads = 1;
+        std::string instructions;
         Giant known_factors;
 
         void copy(const GWState& a)
@@ -57,6 +59,7 @@ namespace arithmetic
             force_general_mod = a.force_general_mod;
             polymult = a.polymult;
             spin_threads = a.spin_threads;
+            instructions = a.instructions;
             known_factors = a.known_factors;
         }
 

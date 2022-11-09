@@ -2,12 +2,13 @@
 #include <vector>
 #include <stdlib.h>
 #include "gwnum.h"
+#include "cpuid.h"
 #include "arithmetic.h"
 #include "exception.h"
 
 namespace arithmetic
 {
-    void GWState::setup(int k, int b, int n, int c)
+    void GWState::init()
     {
         gwset_num_threads(gwdata(), thread_count);
         gwset_larger_fftlen_count(gwdata(), next_fft_count);
@@ -22,6 +23,30 @@ namespace arithmetic
         if (polymult)
             gwset_using_polymult(gwdata());
         gwset_use_spin_wait(gwdata(), spin_threads);
+        if (instructions == "SSE2")
+        {
+            gwdata()->cpu_flags &= ~(CPU_AVX | CPU_FMA3 | CPU_AVX512F);
+            gwdata()->cpu_flags |= CPU_SSE2;
+        }
+        else if (instructions == "AVX")
+        {
+            gwdata()->cpu_flags &= ~(CPU_FMA3 | CPU_AVX512F);
+            gwdata()->cpu_flags |= CPU_AVX;
+        }
+        else if (instructions == "FMA3")
+        {
+            gwdata()->cpu_flags &= ~(CPU_AVX512F);
+            gwdata()->cpu_flags |= CPU_AVX | CPU_FMA3;
+        }
+        else if (instructions == "AVX512F")
+        {
+            gwdata()->cpu_flags |= CPU_AVX512F;
+        }
+    }
+
+    void GWState::setup(int k, int b, int n, int c)
+    {
+        init();
         if (gwsetup(gwdata(), k, b, n, c))
             throw ArithmeticException();
         bit_length = (int)gwdata()->bit_length;
@@ -45,19 +70,7 @@ namespace arithmetic
 
     void GWState::setup(const Giant& g)
     {
-        gwset_num_threads(gwdata(), thread_count);
-        gwset_larger_fftlen_count(gwdata(), next_fft_count);
-        gwset_safety_margin(gwdata(), safety_margin);
-        gwset_maxmulbyconst(gwdata(), maxmulbyconst);
-        if (will_error_check)
-            gwset_will_error_check(gwdata());
-        if (large_pages)
-            gwset_use_large_pages(gwdata());
-        if (force_general_mod)
-            gwdata()->force_general_mod = 1;
-        if (polymult)
-            gwset_using_polymult(gwdata());
-        gwset_use_spin_wait(gwdata(), spin_threads);
+        init();
         if (gwsetup_general_mod(gwdata(), g.data(), g.size()))
             throw ArithmeticException();
         bit_length = g.bitlen();
@@ -79,17 +92,7 @@ namespace arithmetic
 
     void GWState::setup(int bitlen)
     {
-        gwset_num_threads(gwdata(), thread_count);
-        gwset_larger_fftlen_count(gwdata(), next_fft_count);
-        gwset_safety_margin(gwdata(), safety_margin);
-        gwset_maxmulbyconst(gwdata(), maxmulbyconst);
-        if (will_error_check)
-            gwset_will_error_check(gwdata());
-        if (large_pages)
-            gwset_use_large_pages(gwdata());
-        if (polymult)
-            gwset_using_polymult(gwdata());
-        gwset_use_spin_wait(gwdata(), spin_threads);
+        init();
         if (gwsetup_without_mod(gwdata(), bitlen))
             throw ArithmeticException();
         bit_length = (int)gwdata()->bit_length;;
