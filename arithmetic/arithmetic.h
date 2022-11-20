@@ -13,11 +13,11 @@ namespace arithmetic
     class GWState
     {
     public:
-        GWState() : giants(&handle)
+        GWState()
         {
             gwinit(&handle);
         }
-        GWState(GWState& state) : giants(&handle)
+        GWState(GWState& state)
         {
             clone(state);
         }
@@ -34,7 +34,6 @@ namespace arithmetic
         void done();
 
         gwhandle* gwdata() { return &handle; }
-        Giant popg() { return Giant(giants); }
 
         int thread_count = 1;
         int next_fft_count = 0;
@@ -64,8 +63,8 @@ namespace arithmetic
         }
 
         gwhandle handle;
-        GWGiantsArithmetic giants;
-        Giant *N = nullptr;
+        std::unique_ptr<GiantsArithmetic> giants;
+        std::unique_ptr<Giant> N;
         uint32_t fingerprint;
         std::string fft_description;
         int fft_length;
@@ -129,8 +128,8 @@ namespace arithmetic
 
         GWState& state() { return _state; }
         gwhandle* gwdata() { return &_state.handle; }
-        Giant popg() { return Giant(_state.giants); }
-        Giant& N() { GWASSERT(_state.N != nullptr); return *_state.N; }
+        Giant popg() { return Giant(*_state.giants); }
+        Giant& N() { GWASSERT(_state.N); return *_state.N; }
         CarefulGWArithmetic& carefully() { return *_careful; }
 
     protected:
@@ -250,7 +249,7 @@ namespace arithmetic
         virtual std::string to_string() const override;
         GWNum& operator = (const Giant& a)
         {
-            arithmetic().state().giants.to_GWNum(a, *this);
+            arithmetic().state().giants->to_GWNum(a, *this);
             return *this;
         }
 

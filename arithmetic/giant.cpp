@@ -8,39 +8,75 @@
 #include "giant.h"
 #include "arithmetic.h"
 #include "exception.h"
+#ifdef GMP
+#include <gmp.h>
+#ifdef _WIN32
+#include "windows.h"
+#include "tchar.h"
+#endif
+#endif
 
 namespace arithmetic
 {
-    GiantsArithmetic _defaultGiantsArithmetic;
+    GiantsArithmetic* _defaultGiantsArithmetic = nullptr;
+    void GiantsArithmetic::init_default_arithmetic()
+    {
+        if (_defaultGiantsArithmetic != nullptr)
+            return;
+#ifdef GMP
+#ifdef _WIN32
+        if (LoadLibrary(_T("libgmp-gw1.dll")) != NULL)
+#else
+        if (true)
+#endif
+            _defaultGiantsArithmetic = new GMPArithmetic();
+        else
+#endif
+            _defaultGiantsArithmetic = new GiantsArithmetic();
+    }
     GiantsArithmetic& GiantsArithmetic::default_arithmetic()
     {
-        return _defaultGiantsArithmetic;
+        if (_defaultGiantsArithmetic == nullptr)
+            init_default_arithmetic();
+        return *_defaultGiantsArithmetic;
     }
+    GiantsArithmetic* GiantsArithmetic::alloc_gwgiants(void* gwdata, int capacity)
+    {
+#ifdef GMP
+        if (_defaultGiantsArithmetic == nullptr || dynamic_cast<GMPArithmetic*>(_defaultGiantsArithmetic) != nullptr)
+            return new GWGMPArithmetic(gwdata, capacity);
+#endif
+        return new GWGiantsArithmetic(gwdata, capacity);
+    }
+
+#define giant(x) ((::giant)&(x)._field1)
+#define _capacity _field3
+#define _size _field1
 
     void GiantsArithmetic::alloc(Giant& a)
     {
         a._capacity = 0;
-        a._giant = nullptr;
+        a._size = 0;
+        a._data = nullptr;
+        alloc(a, 0);
     }
 
     void GiantsArithmetic::free(Giant& a)
     {
-        ::free(a._giant);
+        ::free(a._data);
         a._capacity = 0;
-        a._giant = nullptr;
+        a._size = 0;
+        a._data = nullptr;
     }
 
     void GiantsArithmetic::alloc(Giant& a, int capacity)
     {
-        giant tmp = allocgiant(capacity);
-        tmp->sign = 0;
-        if (a._giant != nullptr)
-        {
-            gtog(a._giant, tmp);
-            ::free(a._giant);
-        }
+        if (capacity < this->capacity())
+            capacity = this->capacity();
+        if (a._capacity >= capacity)
+            return;
         a._capacity = capacity;
-        a._giant = tmp;
+        a._data = realloc(a._data, capacity*sizeof(uint32_t));
     }
 
     void GiantsArithmetic::copy(const Giant& a, Giant& res)
@@ -50,45 +86,44 @@ namespace arithmetic
             free(res);
             return;
         }
-        if (a._giant->sign == 0)
+        if (a._size == 0)
         {
             init(0, res);
             return;
         }
-        if (res._giant == nullptr || res._capacity < abs(a._giant->sign))
-            alloc(res, abs(a._giant->sign));
-        gtog(a._giant, res._giant);
+        alloc(res, abs(a._size));
+        memcpy(res._data, a._data, abs(a._size)*sizeof(uint32_t));
+        res._size = a._size;
     }
 
     void GiantsArithmetic::move(Giant&& a, Giant& res)
     {
-        if (res._giant != nullptr)
+        if (!res.empty())
             free(res);
         res._capacity = a._capacity;
-        res._giant = a._giant;
+        res._size = a._size;
+        res._data = a._data;
         a._capacity = 0;
-        a._giant = nullptr;
+        a._size = 0;
+        a._data = nullptr;
     }
 
     void GiantsArithmetic::init(int32_t a, Giant& res)
     {
-        if (res._giant == nullptr || res._capacity < 1)
-            alloc(res, 1);
-        itog(a, res._giant);
+        alloc(res, 1);
+        itog(a, giant(res));
     }
 
     void GiantsArithmetic::init(uint32_t a, Giant& res)
     {
-        if (res._giant == nullptr || res._capacity < 1)
-            alloc(res, 1);
-        ultog(a, res._giant);
+        alloc(res, 1);
+        ultog(a, giant(res));
     }
 
     void GiantsArithmetic::init(const std::string& a, Giant& res)
     {
-        if (res._giant == nullptr || res._capacity < ((int)a.length() + 8)/9)
-            alloc(res, ((int)a.length() + 8)/9);
-        ctog(a.data(), res._giant);
+        alloc(res, ((int)a.length() + 8)/9);
+        ctog(a.data(), giant(res));
     }
 
     void GiantsArithmetic::init(uint32_t* data, int size, Giant& res)
@@ -98,51 +133,36 @@ namespace arithmetic
             init(0, res);
             return;
         }
-        if (res._giant == nullptr || res._capacity < size)
-            alloc(res, size);
-        memcpy(res._giant->n, data, size*4);
-        res._giant->sign = size;
-        while (res._giant->sign && !res._giant->n[res._giant->sign - 1])
-            res._giant->sign--;
+        alloc(res, size);
+        memcpy(res._data, data, size*sizeof(uint32_t));
+        res._size = size;
+        while (res._size && !res.data()[res._size - 1])
+            res._size--;
     }
 
     void GiantsArithmetic::init(const GWNum& a, Giant& res)
     {
-        int capacity = a.arithmetic().state().giants.capacity();
-        if (res._giant == nullptr || res._capacity < capacity)
-            res.arithmetic().alloc(res, capacity);
-        if (gwtogiant(a.arithmetic().gwdata(), *a, res._giant) < 0)
+        int capacity = a.arithmetic().state().giants->capacity();
+        res.arithmetic().alloc(res, capacity);
+        if (gwtogiant(a.arithmetic().gwdata(), *a, giant(res)) < 0)
             throw InvalidFFTDataException();
     }
 
-    void GiantsArithmetic::to_GWNum(const Giant& a, GWNum& res)
+    std::string GiantsArithmetic::to_string(const Giant& a)
     {
-        if (a._giant->sign >= 0)
-            gianttogw(res.arithmetic().gwdata(), a._giant, *res);
-        else
-        {
-            Giant tmp(*this);
-            add((Giant&)a, res.arithmetic().N(), tmp);
-            gianttogw(res.arithmetic().gwdata(), tmp._giant, *res);
-        }
-    }
-
-    std::string Giant::to_string() const
-    {
-        if (_giant == nullptr)
+        if (a.empty())
             return "";
-        std::vector<char> buffer(abs(_giant->sign)*10 + 10);
-        //std::iterator<char> x = buffer.begin();
-        if (_giant->sign ==  0)
+        std::vector<char> buffer(abs(a._size)*10 + 10);
+        if (a._size == 0)
             buffer[0] = '0';
-        else if (_giant->sign >  0)
-            gtoc(_giant, buffer.data(), (int)buffer.size());
+        else if (a._size > 0)
+            gtoc(giant(a), buffer.data(), (int)buffer.size());
         else
         {
-            _giant->sign = -_giant->sign;
+            ((Giant&)a)._size = -a._size;
             buffer[0] = '-';
-            gtoc(_giant, buffer.data() + 1, (int)buffer.size() - 1);
-            _giant->sign = -_giant->sign;
+            gtoc(giant(a), buffer.data() + 1, (int)buffer.size() - 1);
+            ((Giant&)a)._size = -a._size;
         }
         return std::string(buffer.data());
     }
@@ -157,165 +177,235 @@ namespace arithmetic
         return res;
     }
 
-    void GiantsArithmetic::add(Giant& a, Giant& b, Giant& res)
+    void GiantsArithmetic::to_GWNum(const Giant& a, GWNum& res)
     {
-        int size = abs(a._giant->sign) + 1;
-        if (size < abs(b._giant->sign) + 1)
-            size = abs(b._giant->sign) + 1;
-        if (res._giant == nullptr || res._capacity < size)
-            alloc(res, size);
-        if (res._giant != a._giant)
-            copy(a, res);
-        if (a._giant != b._giant)
-            addg(b._giant, res._giant);
+        if (a._size >= 0)
+            gianttogw(res.arithmetic().gwdata(), giant(a), *res);
         else
-            gshiftleft(1, res._giant);
-    }
-
-    void GiantsArithmetic::add(Giant& a, int32_t b, Giant& res)
-    {
-        if (res._giant == nullptr || res._capacity < abs(a._giant->sign) + 1)
-            alloc(res, abs(a._giant->sign) + 1);
-        if (res._giant != a._giant)
-            copy(a, res);
-        sladdg(b, res._giant);
-    }
-
-    void GiantsArithmetic::sub(Giant& a, Giant& b, Giant& res)
-    {
-        int capacity = abs(a._giant->sign) + 1;
-        if (capacity < abs(b._giant->sign) + 1)
-            capacity = abs(b._giant->sign) + 1;
-        if (res._giant == nullptr || res._capacity < capacity)
-            alloc(res, capacity);
-        if (res._giant != a._giant)
-            copy(a, res);
-        subg(b._giant, res._giant);
-    }
-
-    void GiantsArithmetic::sub(Giant& a, int32_t b, Giant& res)
-    {
-        if (res._giant == nullptr || res._capacity < abs(a._giant->sign) + 1)
-            alloc(res, abs(a._giant->sign) + 1);
-        if (res._giant != a._giant)
-            copy(a, res);
-        sladdg(-b, res._giant);
-    }
-
-    void GiantsArithmetic::neg(Giant& a, Giant& res)
-    {
-        if (res._giant != a._giant)
-            copy(a, res);
-        res._giant->sign = -res._giant->sign;
-    }
-
-    void GiantsArithmetic::mul(Giant& a, Giant& b, Giant& res)
-    {
-        if (res._giant == nullptr || res._capacity < abs(a._giant->sign) + abs(b._giant->sign))
-            alloc(res, abs(a._giant->sign) + abs(b._giant->sign));
-        if (res._giant != a._giant)
-            copy(a, res);
-        if (a._giant != b._giant)
         {
-            if ((abs(res._giant->sign) > 10000 && abs(b._giant->sign) > 10 && abs(res._giant->sign) > 4*abs(b._giant->sign)) || (abs(b._giant->sign) > 10000 && abs(res._giant->sign) > 10 && abs(b._giant->sign) > 4*abs(res._giant->sign)))
-            {
-                setmulmode(FFT_MUL);
-                mulg(b._giant, res._giant);
-                setmulmode(AUTO_MUL);
-            }
-            else
-                mulg(b._giant, res._giant);
+            Giant tmp(*this);
+            add((Giant&)a, res.arithmetic().N(), tmp);
+            gianttogw(res.arithmetic().gwdata(), giant(tmp), *res);
         }
-        else
-            squareg(res._giant);
     }
 
-    void GiantsArithmetic::mul(Giant& a, int32_t b, Giant& res)
+    int Giant::size() const
     {
-        if (res._giant == nullptr || res._capacity < abs(a._giant->sign) + 1)
-            alloc(res, abs(a._giant->sign) + 1);
-        if (res._giant != a._giant)
-            copy(a, res);
-        imulg(b, res._giant);
+#ifdef GMP
+        if (dynamic_cast<GMPArithmetic*>(&arithmetic()) != nullptr)
+        {
+            int size = abs(_field2)*GMP_NUMB_BITS/32;
+            while (size > 0 && data()[size - 1] == 0)
+                size--;
+            return size;
+        }
+#endif
+        return abs(_size);
     }
 
-    void GiantsArithmetic::mul(Giant& a, uint32_t b, Giant& res)
+    int Giant::capacity() const
     {
-        if (res._giant == nullptr || res._capacity < abs(a._giant->sign) + 1)
-            alloc(res, abs(a._giant->sign) + 1);
-        if (res._giant != a._giant)
-            copy(a, res);
-        ulmulg(b, res._giant);
+#ifdef GMP
+        if (dynamic_cast<GMPArithmetic*>(&arithmetic()) != nullptr)
+            return _field1*GMP_NUMB_BITS/32;
+#endif
+        return _capacity;
+    }
+
+    int GiantsArithmetic::cmp(const Giant& a, const Giant& b)
+    {
+        return gcompg(giant(a), giant(b));
+    }
+
+    int GiantsArithmetic::cmp(const Giant& a, int32_t b)
+    {
+        if (a._size > 1 || (a._size == 1 && ::bitlen(giant(a)) == 32))
+            return 1;
+        if (a._size < -1 || (a._size == -1 && ::bitlen(giant(a)) == 32))
+            return -1;
+        if (a._size == 0)
+            return 0 > b ? 1 : 0 < b ? -1 : 0;
+        int32_t val = (a._size == -1 ? -1 : 1)*(int32_t)a.data()[0];
+        return val > b ? 1 : val < b ? -1 : 0;
     }
 
     void GiantsArithmetic::shiftleft(Giant& a, int b, Giant& res)
     {
-        if (res._giant == nullptr || res._capacity < abs(a._giant->sign) + (b + 31)/32)
-            alloc(res, abs(a._giant->sign) + (b + 31)/32);
-        if (res._giant != a._giant)
+        alloc(res, abs(a._size) + (b + 31)/32);
+        if (res._data != a._data)
             copy(a, res);
-        gshiftleft(b, res._giant);
+        gshiftleft(b, giant(res));
     }
 
     void GiantsArithmetic::shiftright(Giant& a, int b, Giant& res)
     {
-        if (res._giant == nullptr || res._capacity < abs(a._giant->sign) - b/32)
-            alloc(res, abs(a._giant->sign) - b/32);
-        if (res._giant != a._giant)
+        alloc(res, abs(a._size) - b/32);
+        if (res._data != a._data)
             copy(a, res);
-        gshiftright(b, res._giant);
+        gshiftright(b, giant(res));
     }
 
     int GiantsArithmetic::bitlen(const Giant& a)
     {
-        return ::bitlen(a._giant);
+        return ::bitlen(giant(a));
     }
 
     bool GiantsArithmetic::bit(const Giant& a, int b)
     {
-        return bitval(a._giant, b) != 0;
+        return bitval(giant(a), b) != 0;
     }
 
     void GiantsArithmetic::substr(const Giant& a, int offset, int count, Giant& res)
     {
         int size = (count + 31 + offset%32)/32;
-        if (size > abs(a._giant->sign) - offset/32)
-            size = abs(a._giant->sign) - offset/32;
-        if (res._giant == nullptr || res._capacity < size)
-            alloc(res, size);
-        memcpy(res._giant->n, a._giant->n + offset/32, size*4);
+        if (size > abs(a._size) - offset/32)
+            size = abs(a._size) - offset/32;
+        alloc(res, size);
+        memcpy(res.data(), a.data() + offset/32, size*4);
         if ((offset%32 + count)/32 == size - 1)
-            res._giant->n[size - 1] &= (1 << (offset + count)%32) - 1;
-        for (; size > 0 && res._giant->n[size - 1] == 0; size--);
-        res._giant->sign = size;
-        gshiftright(offset%32, res._giant);
-    }
-
-    int GiantsArithmetic::cmp(const Giant& a, const Giant& b)
-    {
-        return gcompg(a._giant, b._giant);
+            res.data()[size - 1] &= (1 << (offset + count)%32) - 1;
+        for (; size > 0 && res.data()[size - 1] == 0; size--);
+        res._size = size;
+        gshiftright(offset%32, giant(res));
     }
 
     double GiantsArithmetic::log2(const Giant& a)
     {
-        if (a._giant == nullptr || a._giant->sign == 0)
+        if (a._size == 0)
             return 0;
-        if (abs(a._giant->sign) == 1)
-            return std::log2(a._giant->n[0]);
-        if (abs(a._giant->sign) == 2)
-            return std::log2(((uint64_t*)a._giant->n)[0]);
-        return ::bitlen(a._giant);
+        if (a.size() == 1)
+            return std::log2(a.data()[0]);
+        if (a.size() == 2)
+            return std::log2(((uint64_t*)a._data)[0]);
+        return bitlen(a);
     }
 
-    int GiantsArithmetic::cmp(const Giant& a, int32_t b)
+    void GiantsArithmetic::add(Giant& a, Giant& b, Giant& res)
     {
-        if (a._giant->sign > 1 || (a._giant->sign == 1 && ::bitlen(a._giant) == 32))
-            return 1;
-        if (a._giant->sign < -1 || (a._giant->sign == -1 && ::bitlen(a._giant) == 32))
-            return -1;
-        if (a._giant->sign == 0)
-            return 0 > b ? 1 : 0 < b ? -1 : 0;
-        return ((int)a._giant->n[0]) > b ? 1 : ((int)a._giant->n[0]) < b ? -1 : 0;
+        int size = abs(a._size) + 1;
+        if (size < abs(b._size) + 1)
+            size = abs(b._size) + 1;
+        alloc(res, size);
+        if (res._data != a._data)
+            copy(a, res);
+        if (a._data != b._data)
+            addg(giant(b), giant(res));
+        else
+            gshiftleft(1, giant(res));
+    }
+
+    void GiantsArithmetic::add(Giant& a, int32_t b, Giant& res)
+    {
+        alloc(res, abs(a._size) + 1);
+        if (res._data != a._data)
+            copy(a, res);
+        sladdg(b, giant(res));
+    }
+
+    void GiantsArithmetic::sub(Giant& a, Giant& b, Giant& res)
+    {
+        int capacity = abs(a._size) + 1;
+        if (capacity < abs(b._size) + 1)
+            capacity = abs(b._size) + 1;
+        alloc(res, capacity);
+        if (res._data != a._data)
+            copy(a, res);
+        subg(giant(b), giant(res));
+    }
+
+    void GiantsArithmetic::sub(Giant& a, int32_t b, Giant& res)
+    {
+        alloc(res, abs(a._size) + 1);
+        if (res._data != a._data)
+            copy(a, res);
+        sladdg(-b, giant(res));
+    }
+
+    void GiantsArithmetic::neg(Giant& a, Giant& res)
+    {
+        if (res._data != a._data)
+            copy(a, res);
+        res._size = -res._size;
+    }
+
+    void GiantsArithmetic::mul(Giant& a, Giant& b, Giant& res)
+    {
+        alloc(res, abs(a._size) + abs(b._size));
+        if (res._data != a._data)
+            copy(a, res);
+        if (a._data != b._data)
+        {
+            if ((abs(res._size) > 10000 && abs(b._size) > 10 && abs(res._size) > 4*abs(b._size)) || (abs(b._size) > 10000 && abs(res._size) > 10 && abs(b._size) > 4*abs(res._size)))
+            {
+                setmulmode(FFT_MUL);
+                mulg(giant(b), giant(res));
+                setmulmode(AUTO_MUL);
+            }
+            else
+                mulg(giant(b), giant(res));
+        }
+        else
+            squareg(giant(res));
+    }
+
+    void GiantsArithmetic::mul(Giant& a, int32_t b, Giant& res)
+    {
+        alloc(res, abs(a._size) + 1);
+        if (res._data != a._data)
+            copy(a, res);
+        imulg(b, giant(res));
+    }
+
+    void GiantsArithmetic::mul(Giant& a, uint32_t b, Giant& res)
+    {
+        alloc(res, abs(a._size) + 1);
+        if (res._data != a._data)
+            copy(a, res);
+        ulmulg(b, giant(res));
+    }
+
+    void GiantsArithmetic::div(Giant& a, Giant& b, Giant& res)
+    {
+        alloc(res, abs(a._size));
+        if (res._data != a._data)
+            copy(a, res);
+        divg(giant(b), giant(res));
+    }
+
+    void GiantsArithmetic::div(Giant& a, int32_t b, Giant& res)
+    {
+        alloc(res, abs(a._size));
+        if (res._data != a._data)
+            copy(a, res);
+        dbldivg(b, giant(res));
+    }
+
+    void GiantsArithmetic::div(Giant& a, uint32_t b, Giant& res)
+    {
+        alloc(res, abs(a._size));
+        if (res._data != a._data)
+            copy(a, res);
+        dbldivg(b, giant(res));
+    }
+
+    void GiantsArithmetic::mod(Giant& a, Giant& b, Giant& res)
+    {
+        alloc(res, abs(a._size));
+        if (res._data != a._data)
+            copy(a, res);
+        modg(giant(b), giant(res));
+    }
+
+    void GiantsArithmetic::mod(Giant& a, uint32_t b, uint32_t& res)
+    {
+        uint64_t res64 = 0;
+        for (int i = abs(a._size) - 1; i >= 0; i--)
+        {
+            res64 <<= 32;
+            res64 += a.data()[i];
+            res64 %= b;
+        }
+        res = (uint32_t)res64;
     }
 
     void GiantsArithmetic::gcd(Giant& a, Giant& b, Giant& res)
@@ -330,70 +420,22 @@ namespace arithmetic
             copy(a, res);
             return;
         }
-        if (res._giant == nullptr || res._capacity < abs(a._giant->sign))
-            alloc(res, abs(a._giant->sign));
-        if (res._giant != a._giant)
+        alloc(res, abs(a._size));
+        if (res._data != a._data)
             copy(a, res);
-        gcdg(b._giant, res._giant);
+        gcdg(giant(b), giant(res));
     }
 
     void GiantsArithmetic::inv(Giant& a, Giant& n, Giant& res)
     {
-        if (res._giant == nullptr || res._capacity < abs(n._giant->sign))
-            alloc(res, abs(n._giant->sign));
-        if (res._giant != a._giant)
+        alloc(res, abs(n._size));
+        if (res._data != a._data)
             copy(a, res);
-        invg(n._giant, res._giant);
-        if (res._giant->sign < 0)
+        if (res == 0)
             throw NoInverseException(res);
-    }
-
-    void GiantsArithmetic::div(Giant& a, Giant& b, Giant& res)
-    {
-        if (res._giant == nullptr || res._capacity < abs(a._giant->sign))
-            alloc(res, abs(a._giant->sign));
-        if (res._giant != a._giant)
-            copy(a, res);
-        divg(b._giant, res._giant);
-    }
-
-    void GiantsArithmetic::div(Giant& a, int32_t b, Giant& res)
-    {
-        if (res._giant == nullptr || res._capacity < abs(a._giant->sign))
-            alloc(res, abs(a._giant->sign));
-        if (res._giant != a._giant)
-            copy(a, res);
-        dbldivg(b, res._giant);
-    }
-
-    void GiantsArithmetic::div(Giant& a, uint32_t b, Giant& res)
-    {
-        if (res._giant == nullptr || res._capacity < abs(a._giant->sign))
-            alloc(res, abs(a._giant->sign));
-        if (res._giant != a._giant)
-            copy(a, res);
-        dbldivg(b, res._giant);
-    }
-
-    void GiantsArithmetic::mod(Giant& a, Giant& b, Giant& res)
-    {
-        if (res._giant == nullptr || res._capacity < abs(a._giant->sign))
-            alloc(res, abs(a._giant->sign));
-        if (res._giant != a._giant)
-            copy(a, res);
-        modg(b._giant, res._giant);
-    }
-
-    void GiantsArithmetic::mod(Giant& a, uint32_t b, uint32_t& res)
-    {
-        uint64_t res64 = 0;
-        for (int i = abs(a._giant->sign) - 1; i >= 0; i--)
-        {
-            res64 <<= 32;
-            res64 += a._giant->n[i];
-            res64 %= b;
-        }
-        res = (uint32_t)res64;
+        invg(giant(n), giant(res));
+        if (res._size < 0)
+            throw NoInverseException(res);
     }
 
     void GiantsArithmetic::power(Giant& a, int32_t b, Giant& res)
@@ -403,25 +445,23 @@ namespace arithmetic
             init(1, res);
             return;
         }
-        int capacity = abs(a._giant->sign);
+        int capacity = abs(a._size);
         if (capacity == 1)
-            capacity = (int)(std::log2(a._giant->n[0])*b/32) + 1;
+            capacity = (int)(std::log2(a.data()[0])*b/32) + 1;
         else
             capacity *= b;
-        if (res._giant == nullptr || res._capacity < capacity)
-            alloc(res, capacity);
-        if (res._giant != a._giant)
+        alloc(res, capacity);
+        if (res._data != a._data)
             copy(a, res);
-        ::power(res._giant, b);
+        ::power(giant(res), b);
     }
 
     void GiantsArithmetic::powermod(Giant& a, Giant& b, Giant& n, Giant& res)
     {
-        if (res._giant == nullptr || res._capacity < abs(n._giant->sign))
-            alloc(res, abs(n._giant->sign));
-        if (res._giant != a._giant)
+        alloc(res, abs(n._size));
+        if (res._data != a._data)
             copy(a, res);
-        ::powermodg(res._giant, b._giant, n._giant);
+        ::powermodg(giant(res), giant(b), giant(n));
     }
 
     extern "C"
@@ -479,73 +519,455 @@ namespace arithmetic
 
     void GiantsArithmetic::rnd(Giant& res, int bits)
     {
+        struct mt_state *state = (struct mt_state *)_rnd_state;
         if (_rnd_state == nullptr)
         {
-            Giant tmp(*this, 2);
-            *(double*)tmp._giant->n = getHighResTimer();
-            tmp._giant->sign = 2;
-            rnd_seed(tmp);
+            _rnd_state = state = new struct mt_state;
+            double seed = getHighResTimer();
+            init_by_array(state, (uint32_t*)&seed, 2);
         }
-        struct mt_state *state = (struct mt_state *)_rnd_state;
-        if (res._giant == nullptr || res._capacity < (bits + 31)/32)
-            alloc(res, (bits + 31)/32);
+        alloc(res, (bits + 31)/32);
         int i;
         for (i = 0; i < (bits + 31)/32; i++)
-            res._giant->n[i] = genrand_int32(state);
+            res.data()[i] = genrand_int32(state);
         if ((bits & 31) != 0)
-            res._giant->n[i - 1] &= (1 << (bits & 31)) - 1;
-        while (i > 0 && res._giant->n[i - 1] == 0)
+            res.data()[i - 1] &= (1 << (bits & 31)) - 1;
+        while (i > 0 && res.data()[i - 1] == 0)
             i--;
-        res._giant->sign = i;
+        res._size = i;
     }
 
     void GWGiantsArithmetic::alloc(Giant& a)
     {
-        a._capacity = _capacity;
-        a._giant = popg(&((gwhandle*)_gwdata)->gdata, a._capacity);
+        a._capacity = capacity();
+        a._size = 0;
+        a._data = popg(&((gwhandle*)_gwdata)->gdata, capacity())->n;
     }
 
     void GWGiantsArithmetic::free(Giant& a)
     {
         pushg(&((gwhandle*)_gwdata)->gdata, 1);
-        a._giant = nullptr;
+        a._capacity = 0;
+        a._size = 0;
+        a._data = nullptr;
     }
 
     void GWGiantsArithmetic::alloc(Giant& a, int capacity)
     {
-        if (a._giant != nullptr)
+        if (!a.empty())
             return;
         alloc(a);
     }
 
     void GWGiantsArithmetic::init(const GWNum& a, Giant& res)
     {
-        if (res._giant == nullptr || res._capacity < capacity())
-            res.arithmetic().alloc(res, capacity());
-        if (gwtogiant((gwhandle*)_gwdata, *a, res._giant) < 0)
+        res.arithmetic().alloc(res, capacity());
+        if (gwtogiant((gwhandle*)_gwdata, *a, giant(res)) < 0)
             throw InvalidFFTDataException();
     }
 
     void GWGiantsArithmetic::to_GWNum(const Giant& a, GWNum& res)
     {
-        if (a._giant->sign >= 0)
-            gianttogw((gwhandle*)_gwdata, a._giant, *res);
+        if (a._size >= 0)
+            gianttogw((gwhandle*)_gwdata, giant(a), *res);
         else
         {
             Giant tmp(*this);
             add((Giant&)a, res.arithmetic().N(), tmp);
-            gianttogw((gwhandle*)_gwdata, tmp._giant, *res);
+            gianttogw((gwhandle*)_gwdata, giant(tmp), *res);
         }
     }
 
     void GWGiantsArithmetic::inv(Giant& a, Giant& n, Giant& res)
     {
-        if (res._giant == nullptr || res._capacity < abs(n._giant->sign))
-            alloc(res, abs(n._giant->sign));
-        if (res._giant != a._giant)
+        alloc(res, abs(n._size));
+        if (res._data != a._data)
             copy(a, res);
-        invgi(&((gwhandle*)_gwdata)->gdata, 0, n._giant, res._giant);
-        if (res._giant->sign < 0)
+        if (res == 0)
+            throw NoInverseException(res);
+        invgi(&((gwhandle*)_gwdata)->gdata, 0, giant(n), giant(res));
+        if (res._size < 0)
             throw NoInverseException(res);
     }
+
+#ifdef GMP
+#define mpz(x) ((mpz_ptr)&(x)._field1)
+#define _capacity _field1
+#define _size _field2
+
+    void* realloc_func(void* block, size_t old_size, size_t size) { return realloc(block, size); }
+    void free_func(void* block, size_t) { free(block); }
+    GMPArithmetic::GMPArithmetic()
+    {
+        mp_set_memory_functions(malloc, realloc_func, free_func);
+    }
+
+    std::string GMPArithmetic::version()
+    {
+        return std::to_string(__GNU_MP_VERSION) + "." + std::to_string(__GNU_MP_VERSION_MINOR) + "." + std::to_string(__GNU_MP_VERSION_PATCHLEVEL);
+    }
+
+    void GMPArithmetic::alloc(Giant& a)
+    {
+        a._capacity = 0;
+        a._size = 0;
+        a._data = nullptr;
+        alloc(a, 0);
+    }
+
+    void GMPArithmetic::free(Giant& a)
+    {
+        ::free(a._data);
+        a._capacity = 0;
+        a._size = 0;
+        a._data = nullptr;
+    }
+
+    void GMPArithmetic::alloc(Giant& a, int capacity)
+    {
+        if (capacity < this->capacity())
+            capacity = this->capacity();
+        capacity = (capacity*32 + GMP_NUMB_BITS - 1)/GMP_NUMB_BITS;
+        if (a._capacity >= capacity)
+            return;
+        a._capacity = capacity;
+        a._data = realloc(a._data, capacity*GMP_NUMB_BITS/8);
+    }
+
+    void GMPArithmetic::copy(const Giant& a, Giant& res)
+    {
+        if (a.empty())
+        {
+            free(res);
+            return;
+        }
+        if (a._size == 0)
+        {
+            init(0, res);
+            return;
+        }
+        int size = a.size();
+        alloc(res, size);
+        memcpy(res._data, a._data, size*4);
+        if (GMP_NUMB_BITS == 64 && (size & 1))
+            res.data()[size] = 0;
+        res._size = (size*32 + GMP_NUMB_BITS - 1)/GMP_NUMB_BITS;
+    }
+
+    void GMPArithmetic::move(Giant&& a, Giant& res)
+    {
+        if (!res.empty())
+            free(res);
+        res._capacity = a._capacity;
+        res._size = a._size;
+        res._data = a._data;
+        a._capacity = 0;
+        a._size = 0;
+        a._data = nullptr;
+    }
+
+    void GMPArithmetic::init(int32_t a, Giant& res)
+    {
+        alloc(res, 1);
+        mpz_set_si(mpz(res), a);
+    }
+
+    void GMPArithmetic::init(uint32_t a, Giant& res)
+    {
+        alloc(res, 1);
+        mpz_set_ui(mpz(res), a);
+    }
+
+    void GMPArithmetic::init(const std::string& a, Giant& res)
+    {
+        alloc(res, ((int)a.length() + 8)/9 + 1);
+        mpz_set_str(mpz(res), a.data(), 10);
+    }
+
+    void GMPArithmetic::init(uint32_t* data, int size, Giant& res)
+    {
+        if (size == 0)
+        {
+            init(0, res);
+            return;
+        }
+        alloc(res, size);
+        mpz_import(mpz(res), size, -1, 4, 0, 0, data);
+    }
+
+    void GMPArithmetic::init(const GWNum& a, Giant& res)
+    {
+        int capacity = a.arithmetic().state().giants->capacity();
+        res.arithmetic().alloc(res, capacity);
+        capacity = res._capacity;
+        res._field3 = capacity*(GMP_NUMB_BITS/32);
+        if (gwtogiant(a.arithmetic().gwdata(), *a, giant(res)) < 0)
+            throw InvalidFFTDataException();
+        if (GMP_NUMB_BITS == 64 && (giant(res)->sign & 1))
+            res.data()[giant(res)->sign] = 0;
+        res._size = (giant(res)->sign*32 + GMP_NUMB_BITS - 1)/GMP_NUMB_BITS;
+        res._capacity = capacity;
+    }
+
+    std::string GMPArithmetic::to_string(const Giant& a)
+    {
+        if (a.empty())
+            return "";
+        std::vector<char> buffer(a.size()*10 + 10);
+        if (a._size == 0)
+            buffer[0] = '0';
+        else
+            mpz_get_str(buffer.data(), 10, mpz(a));
+        return std::string(buffer.data());
+    }
+
+    void GMPArithmetic::to_GWNum(const Giant& a, GWNum& res)
+    {
+        giantstruct g;
+        if (a._size >= 0)
+        {
+            g.n = (uint32_t*)a._data;
+            g.sign = a.size();
+            gianttogw(res.arithmetic().gwdata(), &g, *res);
+        }
+        else
+        {
+            Giant tmp(*this);
+            add((Giant&)a, res.arithmetic().N(), tmp);
+            g.n = tmp.data();
+            g.sign = tmp.size();
+            gianttogw(res.arithmetic().gwdata(), &g, *res);
+        }
+    }
+
+    int GMPArithmetic::cmp(const Giant& a, const Giant& b)
+    {
+        return mpz_cmp(mpz(a), mpz(b));
+    }
+
+    int GMPArithmetic::cmp(const Giant& a, int32_t b)
+    {
+        if (a._size == 0)
+            return 0 > b ? 1 : 0 < b ? -1 : 0;
+        if (b == 0)
+            return a._size > 0 ? 1 : a._size < 0 ? -1 : 0;
+        return mpz_cmp_si(mpz(a), b);
+    }
+
+    void GMPArithmetic::shiftleft(Giant& a, int b, Giant& res)
+    {
+        mpz_mul_2exp(mpz(res), mpz(a), b);
+    }
+
+    void GMPArithmetic::shiftright(Giant& a, int b, Giant& res)
+    {
+        mpz_fdiv_q_2exp(mpz(res), mpz(a), b);
+    }
+
+    int GMPArithmetic::bitlen(const Giant& a)
+    {
+        return mpz_sizeinbase(mpz(a), 2);
+    }
+
+    bool GMPArithmetic::bit(const Giant& a, int b)
+    {
+        return mpz_tstbit(mpz(a), b) != 0;
+    }
+
+    void GMPArithmetic::substr(const Giant& a, int offset, int count, Giant& res)
+    {
+        int size = (count + GMP_NUMB_BITS - 1 + offset%GMP_NUMB_BITS)/GMP_NUMB_BITS;
+        if (size > abs(a._size) - offset/GMP_NUMB_BITS)
+            size = abs(a._size) - offset/GMP_NUMB_BITS;
+        alloc(res, size*(GMP_NUMB_BITS/32));
+        memcpy(res._data, (char*)a._data + offset/GMP_NUMB_BITS*(GMP_NUMB_BITS/8), size*(GMP_NUMB_BITS/8));
+        if (GMP_NUMB_BITS == 32 && (offset%GMP_NUMB_BITS + count)/GMP_NUMB_BITS == size - 1)
+            ((uint32_t*)res._data)[size - 1] &= (1 << (offset + count)%GMP_NUMB_BITS) - 1;
+        if (GMP_NUMB_BITS == 64 && (offset%GMP_NUMB_BITS + count)/GMP_NUMB_BITS == size - 1)
+            ((uint64_t*)res._data)[size - 1] &= (1ULL << (offset + count)%GMP_NUMB_BITS) - 1;
+        res._size = size;
+        res._size = (res.size()*32 + GMP_NUMB_BITS - 1)/GMP_NUMB_BITS;
+        mpz_fdiv_q_2exp(mpz(res), mpz(res), offset%GMP_NUMB_BITS);
+    }
+
+    void GMPArithmetic::add(Giant& a, Giant& b, Giant& res)
+    {
+        mpz_add(mpz(res), mpz(a), mpz(b));
+    }
+
+    void GMPArithmetic::add(Giant& a, int32_t b, Giant& res)
+    {
+        if (b >= 0)
+            mpz_add_ui(mpz(res), mpz(a), b);
+        else
+            mpz_sub_ui(mpz(res), mpz(a), -b);
+    }
+
+    void GMPArithmetic::sub(Giant& a, Giant& b, Giant& res)
+    {
+        mpz_sub(mpz(res), mpz(a), mpz(b));
+    }
+
+    void GMPArithmetic::sub(Giant& a, int32_t b, Giant& res)
+    {
+        if (b <= 0)
+            mpz_add_ui(mpz(res), mpz(a), -b);
+        else
+            mpz_sub_ui(mpz(res), mpz(a), b);
+    }
+
+    void GMPArithmetic::neg(Giant& a, Giant& res)
+    {
+        if (res._data != a._data)
+            copy(a, res);
+        res._size = -res._size;
+    }
+
+    void GMPArithmetic::mul(Giant& a, Giant& b, Giant& res)
+    {
+        mpz_mul(mpz(res), mpz(a), mpz(b));
+    }
+
+    void GMPArithmetic::mul(Giant& a, int32_t b, Giant& res)
+    {
+        mpz_mul_si(mpz(res), mpz(a), b);
+    }
+
+    void GMPArithmetic::mul(Giant& a, uint32_t b, Giant& res)
+    {
+        mpz_mul_ui(mpz(res), mpz(a), b);
+    }
+
+    void GMPArithmetic::div(Giant& a, Giant& b, Giant& res)
+    {
+        mpz_fdiv_q(mpz(res), mpz(a), mpz(b));
+    }
+
+    void GMPArithmetic::div(Giant& a, int32_t b, Giant& res)
+    {
+        mpz_fdiv_q_ui(mpz(res), mpz(a), abs(b));
+        if (b < 0)
+            res._size = -res._size;
+    }
+
+    void GMPArithmetic::div(Giant& a, uint32_t b, Giant& res)
+    {
+        mpz_fdiv_q_ui(mpz(res), mpz(a), b);
+    }
+
+    void GMPArithmetic::mod(Giant& a, Giant& b, Giant& res)
+    {
+        mpz_fdiv_r(mpz(res), mpz(a), mpz(b));
+    }
+
+    void GMPArithmetic::mod(Giant& a, uint32_t b, uint32_t& res)
+    {
+        res = mpz_fdiv_ui(mpz(a), b);
+    }
+
+    void GMPArithmetic::gcd(Giant& a, Giant& b, Giant& res)
+    {
+        if (a == 0)
+        {
+            copy(b, res);
+            return;
+        }
+        if (b == 0)
+        {
+            copy(a, res);
+            return;
+        }
+        mpz_gcd(mpz(res), mpz(a), mpz(b));
+    }
+
+    void GMPArithmetic::inv(Giant& a, Giant& n, Giant& res)
+    {
+        Giant factor(*this);
+        mpz_gcdext(mpz(factor), mpz(res), NULL, mpz(a), mpz(n));
+        if (factor != 1)
+            throw NoInverseException(factor);
+        if (res < 0)
+            res += n;
+    }
+
+    void GMPArithmetic::power(Giant& a, int32_t b, Giant& res)
+    {
+        if (b == 0)
+        {
+            init(1, res);
+            return;
+        }
+        mpz_pow_ui(mpz(res), mpz(a), b);
+    }
+
+    void GMPArithmetic::powermod(Giant& a, Giant& b, Giant& n, Giant& res)
+    {
+        mpz_powm(mpz(res), mpz(a), mpz(b), mpz(n));
+    }
+
+    void GMPArithmetic::rnd(Giant& res, int bits)
+    {
+        alloc(res, (bits + 31)/32);
+        int capacity = res._capacity;
+        GiantsArithmetic::rnd(res, bits);
+        if (GMP_NUMB_BITS == 64 && (giant(res)->sign & 1))
+            res.data()[giant(res)->sign] = 0;
+        res._size = (giant(res)->sign*32 + GMP_NUMB_BITS - 1)/GMP_NUMB_BITS;
+        res._capacity = capacity;
+    }
+
+    void GWGMPArithmetic::alloc(Giant& a)
+    {
+        a._capacity = (capacity()*32 + GMP_NUMB_BITS - 1)/GMP_NUMB_BITS;
+        a._size = 0;
+        a._data = popg(&((gwhandle*)_gwdata)->gdata, a._capacity*(GMP_NUMB_BITS/32))->n;
+    }
+
+    void GWGMPArithmetic::free(Giant& a)
+    {
+        pushg(&((gwhandle*)_gwdata)->gdata, 1);
+        a._capacity = 0;
+        a._size = 0;
+        a._data = nullptr;
+    }
+
+    void GWGMPArithmetic::alloc(Giant& a, int capacity)
+    {
+        if (!a.empty())
+            return;
+        alloc(a);
+    }
+
+    void GWGMPArithmetic::init(const GWNum& a, Giant& res)
+    {
+        res.arithmetic().alloc(res, capacity());
+        int capacity = res._capacity;
+        res._field3 = capacity*(GMP_NUMB_BITS/32);
+        if (gwtogiant((gwhandle*)_gwdata, *a, giant(res)) < 0)
+            throw InvalidFFTDataException();
+        if (GMP_NUMB_BITS == 64 && (giant(res)->sign & 1))
+            res.data()[giant(res)->sign] = 0;
+        res._size = (giant(res)->sign*32 + GMP_NUMB_BITS - 1)/GMP_NUMB_BITS;
+        res._capacity = capacity;
+    }
+
+    void GWGMPArithmetic::to_GWNum(const Giant& a, GWNum& res)
+    {
+        giantstruct g;
+        if (a._size >= 0)
+        {
+            g.n = (uint32_t*)a._data;
+            g.sign = a.size();
+            gianttogw((gwhandle*)_gwdata, &g, *res);
+        }
+        else
+        {
+            Giant tmp(*this);
+            add((Giant&)a, res.arithmetic().N(), tmp);
+            g.n = tmp.data();
+            g.sign = tmp.size();
+            gianttogw((gwhandle*)_gwdata, &g, *res);
+        }
+    }
+#endif
 }

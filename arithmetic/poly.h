@@ -71,6 +71,8 @@ namespace arithmetic
         }
         Poly(PolyMult& pm, int size, bool monic) : _pm(pm), _cache(nullptr), _cache_size(0), _monic(monic)
         {
+            if (size == 0)
+                _poly.reserve(1);
             pm.alloc(*this, size);
         }
         virtual ~Poly()

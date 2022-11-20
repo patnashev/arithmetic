@@ -50,10 +50,10 @@ namespace arithmetic
         if (gwsetup(gwdata(), k, b, n, c))
             throw ArithmeticException();
         bit_length = (int)gwdata()->bit_length;
-        giants._capacity = (bit_length >> 5) + 10;
-        if (N != nullptr)
-            delete N;
-        N = new Giant(giants);
+        if (gwdata()->GENERAL_MOD)
+            bit_length /= 2;
+        giants.reset(GiantsArithmetic::alloc_gwgiants(gwdata(), (bit_length >> 5) + 10));
+        N.reset(new Giant());
         *N = k*power(std::move(*N = b), n) + c;
         if (gwdata()->GENERAL_MOD)
             bit_length = N->bitlen();
@@ -73,12 +73,14 @@ namespace arithmetic
         init();
         if (gwsetup_general_mod(gwdata(), g.data(), g.size()))
             throw ArithmeticException();
-        bit_length = g.bitlen();
-        giants._capacity = (((int)gwdata()->bit_length/2) >> 5) + 10;
-        if (N != nullptr)
-            delete N;
-        N = new Giant(giants);
+        bit_length = (int)gwdata()->bit_length;
+        if (gwdata()->GENERAL_MOD)
+            bit_length /= 2;
+        giants.reset(GiantsArithmetic::alloc_gwgiants(gwdata(), (bit_length >> 5) + 10));
+        N.reset(new Giant());
         *N = g;
+        if (gwdata()->GENERAL_MOD)
+            bit_length = N->bitlen();
         fingerprint = *N%3417905339UL;
         if (!known_factors.empty() && known_factors > 1 && *N%known_factors != 0)
             throw ArithmeticException();
@@ -95,10 +97,9 @@ namespace arithmetic
         init();
         if (gwsetup_without_mod(gwdata(), bitlen))
             throw ArithmeticException();
-        bit_length = (int)gwdata()->bit_length;;
-        giants._capacity = (bit_length >> 5) + 10;
-        if (N != nullptr)
-            delete N;
+        bit_length = (int)gwdata()->bit_length;
+        giants.reset(GiantsArithmetic::alloc_gwgiants(gwdata(), (bit_length >> 5) + 10));
+        N.reset();
         fingerprint = 0;
         char buf[200];
         gwfft_description(gwdata(), buf);
@@ -111,8 +112,8 @@ namespace arithmetic
         copy(state);
         gwclone(&handle, &state.handle);
         bit_length = state.bit_length;
-        giants._capacity = state.giants._capacity;
-        N = new Giant(giants);
+        giants.reset(GiantsArithmetic::alloc_gwgiants(gwdata(), state.giants->capacity()));
+        N.reset(new Giant());
         *N = *state.N;
         fingerprint = state.fingerprint;
         fft_description = state.fft_description;
@@ -121,9 +122,8 @@ namespace arithmetic
 
     void GWState::done()
     {
-        if (N != nullptr)
-            delete N;
-        N = nullptr;
+        N.reset();
+        giants.reset();
         fft_description.clear();
         fft_length = 0;
         gwdone(&handle);
@@ -182,20 +182,20 @@ namespace arithmetic
 
     int GWArithmetic::cmp(const GWNum& a, const GWNum& b)
     {
-        return _state.giants.cmp(popg() = a, popg() = b);
+        return _state.giants->cmp(popg() = a, popg() = b);
     }
 
     int GWArithmetic::cmp(const GWNum& a, int32_t b)
     {
         if (b >= 0)
-            return _state.giants.cmp(popg() = a, b);
+            return _state.giants->cmp(popg() = a, b);
         else
-            return _state.giants.cmp(popg() = a, N() + b);
+            return _state.giants->cmp(popg() = a, N() + b);
     }
 
     int GWArithmetic::cmp(const GWNum& a, const Giant& b)
     {
-        return _state.giants.cmp(popg() = a, b);
+        return _state.giants->cmp(popg() = a, b);
     }
 
     void GWArithmetic::add(GWNum& a, GWNum& b, GWNum& res)

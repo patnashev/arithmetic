@@ -25,9 +25,16 @@ namespace arithmetic
         virtual void init(const std::string& a, Giant& res) override;
         virtual void init(uint32_t* data, int size, Giant& res);
         virtual void init(const GWNum& a, Giant& res);
+        virtual std::string to_string(const Giant& a);
         virtual void to_GWNum(const Giant& a, GWNum& res);
         virtual int cmp(const Giant& a, const Giant& b) override;
         virtual int cmp(const Giant& a, int32_t b) override;
+        virtual void shiftleft(Giant& a, int b, Giant& res);
+        virtual void shiftright(Giant& a, int b, Giant& res);
+        virtual int bitlen(const Giant& a);
+        virtual bool bit(const Giant& a, int b);
+        virtual void substr(const Giant& a, int offset, int count, Giant& res);
+        virtual double log2(const Giant& a);
         virtual void add(Giant& a, Giant& b, Giant& res) override;
         virtual void add(Giant& a, int32_t b, Giant& res) override;
         virtual void sub(Giant& a, Giant& b, Giant& res) override;
@@ -39,34 +46,30 @@ namespace arithmetic
         virtual void div(Giant& a, Giant& b, Giant& res) override;
         virtual void div(Giant& a, int32_t b, Giant& res) override;
         virtual void div(Giant& a, uint32_t b, Giant& res);
-        virtual void gcd(Giant& a, Giant& b, Giant& res) override;
-        virtual void inv(Giant& a, Giant& n, Giant& res) override;
         virtual void mod(Giant& a, Giant& b, Giant& res) override;
         virtual void mod(Giant& a, uint32_t b, uint32_t& res);
-        virtual void shiftleft(Giant& a, int b, Giant& res);
-        virtual void shiftright(Giant& a, int b, Giant& res);
-        virtual int bitlen(const Giant& a);
-        virtual bool bit(const Giant& a, int b);
-        virtual void substr(const Giant& a, int offset, int count, Giant& res);
-        virtual double log2(const Giant& a);
+        virtual void gcd(Giant& a, Giant& b, Giant& res) override;
+        virtual void inv(Giant& a, Giant& n, Giant& res) override;
         virtual void power(Giant& a, int32_t b, Giant& res);
         virtual void powermod(Giant& a, Giant& b, Giant& n, Giant& res);
         virtual void rnd_seed(Giant& a);
         virtual void rnd(Giant& res, int bits);
 
+        static void init_default_arithmetic();
         static GiantsArithmetic& default_arithmetic();
+        static GiantsArithmetic* alloc_gwgiants(void* gwdata, int capacity);
 
-    private:
+        int capacity() const { return _capacity; }
+
+    protected:
         void* _rnd_state = nullptr;
+        int _capacity = 0;
     };
 
     class GWGiantsArithmetic : public GiantsArithmetic
     {
-        friend class GWState;
-
     public:
-        GWGiantsArithmetic(void *gwdata) : _gwdata(gwdata) { }
-        virtual ~GWGiantsArithmetic() { }
+        GWGiantsArithmetic(void *gwdata, int capacity) : _gwdata(gwdata) { _capacity = capacity; }
 
         virtual void alloc(Giant& a) override;
         virtual void alloc(Giant& a, int capacity) override;
@@ -75,17 +78,91 @@ namespace arithmetic
         virtual void to_GWNum(const Giant& a, GWNum& res);
         virtual void inv(Giant& a, Giant& n, Giant& res) override;
 
-        int capacity() const { return _capacity; }
+    private:
+        void* _gwdata;
+    };
+
+#ifdef GMP
+    class GMPArithmetic : public GiantsArithmetic
+    {
+    public:
+        GMPArithmetic();
+
+        virtual void alloc(Giant& a) override;
+        virtual void alloc(Giant& a, int capacity) override;
+        virtual void free(Giant& a) override;
+        virtual void copy(const Giant& a, Giant& res) override;
+        virtual void move(Giant&& a, Giant& res) override;
+        virtual void init(int32_t a, Giant& res) override;
+        virtual void init(uint32_t a, Giant& res) override;
+        virtual void init(const std::string& a, Giant& res) override;
+        virtual void init(uint32_t* data, int size, Giant& res) override;
+        virtual void init(const GWNum& a, Giant& res) override;
+        virtual std::string to_string(const Giant& a) override;
+        virtual void to_GWNum(const Giant& a, GWNum& res) override;
+        virtual int cmp(const Giant& a, const Giant& b) override;
+        virtual int cmp(const Giant& a, int32_t b) override;
+        virtual void shiftleft(Giant& a, int b, Giant& res) override;
+        virtual void shiftright(Giant& a, int b, Giant& res) override;
+        virtual int bitlen(const Giant& a) override;
+        virtual bool bit(const Giant& a, int b) override;
+        virtual void substr(const Giant& a, int offset, int count, Giant& res) override;
+        virtual void add(Giant& a, Giant& b, Giant& res) override;
+        virtual void add(Giant& a, int32_t b, Giant& res) override;
+        virtual void sub(Giant& a, Giant& b, Giant& res) override;
+        virtual void sub(Giant& a, int32_t b, Giant& res) override;
+        virtual void neg(Giant& a, Giant& res) override;
+        virtual void mul(Giant& a, Giant& b, Giant& res) override;
+        virtual void mul(Giant& a, int32_t b, Giant& res) override;
+        virtual void mul(Giant& a, uint32_t b, Giant& res) override;
+        virtual void div(Giant& a, Giant& b, Giant& res) override;
+        virtual void div(Giant& a, int32_t b, Giant& res) override;
+        virtual void div(Giant& a, uint32_t b, Giant& res) override;
+        virtual void mod(Giant& a, Giant& b, Giant& res) override;
+        virtual void mod(Giant& a, uint32_t b, uint32_t& res) override;
+        virtual void gcd(Giant& a, Giant& b, Giant& res) override;
+        virtual void inv(Giant& a, Giant& n, Giant& res) override;
+        virtual void power(Giant& a, int32_t b, Giant& res) override;
+        virtual void powermod(Giant& a, Giant& b, Giant& n, Giant& res) override;
+        virtual void rnd(Giant& res, int bits) override;
+
+        std::string version();
+    };
+
+    class GWGMPArithmetic : public GMPArithmetic
+    {
+    public:
+        GWGMPArithmetic(void *gwdata, int capacity) : _gwdata(gwdata) { _capacity = capacity; }
+
+        virtual void alloc(Giant& a) override;
+        virtual void alloc(Giant& a, int capacity) override;
+        virtual void free(Giant& a) override;
+        virtual void init(const GWNum& a, Giant& res);
+        virtual void to_GWNum(const Giant& a, GWNum& res);
 
     private:
         void* _gwdata;
-        int _capacity = 0;
+    };
+#endif
+
+    struct giant_struct
+    {
+        //int _capacity = 0;
+        //int _size = 0;
+        int _field1 = 0;
+        int _field2 = 0;
+        void* _data = nullptr;
+        int _field3 = 0;
     };
 
-    class Giant : public FieldElement<GiantsArithmetic, Giant>
+    class Giant : public FieldElement<GiantsArithmetic, Giant>, protected giant_struct
     {
         friend class GiantsArithmetic;
         friend class GWGiantsArithmetic;
+#ifdef GMP
+        friend class GMPArithmetic;
+        friend class GWGMPArithmetic;
+#endif
 
     public:
         Giant() : FieldElement<GiantsArithmetic, Giant>(GiantsArithmetic::default_arithmetic())
@@ -102,7 +179,7 @@ namespace arithmetic
         }
         virtual ~Giant()
         {
-            if (_giant != nullptr)
+            if (!empty())
                 arithmetic().free(*this);
         }
         Giant(const Giant& a) : FieldElement<GiantsArithmetic, Giant>(a.arithmetic())
@@ -131,15 +208,15 @@ namespace arithmetic
             return *this;
         };
 
-        virtual std::string to_string() const override;
+        virtual std::string to_string() const override { return arithmetic().to_string(*this); };
         virtual std::string to_res64() const;
         virtual void to_GWNum(GWNum& res) const { arithmetic().to_GWNum(*this, res); };
 
-        uint32_t* data() { return _giant->n; }
-        const uint32_t* data() const { return _giant->n; }
-        int size() const { return abs(_giant->sign); }
-        int capacity() const { return _capacity; }
-        bool empty() const { return _giant == nullptr; }
+        uint32_t* data() { return (uint32_t*)_data; }
+        const uint32_t* data() const { return (uint32_t*)_data; }
+        int size() const;
+        int capacity() const;
+        bool empty() const { return _data == nullptr; }
 
         Giant& operator = (uint32_t a)
         {
@@ -276,9 +353,5 @@ namespace arithmetic
             res.arithmetic().rnd(res, bits);
             return res;
         }
-
-    private:
-        giant _giant = nullptr;
-        int _capacity = 0;
     };
 }
