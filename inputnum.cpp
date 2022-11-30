@@ -1,5 +1,6 @@
 
 #include <cctype>
+#include <cmath>
 #include <stdlib.h>
 #include "gwnum.h"
 #include "cpuid.h"
