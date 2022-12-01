@@ -9,8 +9,6 @@
 
 namespace arithmetic
 {
-    class GWNum;
-
     class GWState
     {
     public:
@@ -72,6 +70,8 @@ namespace arithmetic
         int bit_length;
     };
 
+    class GWNum;
+    class GWNumWrapper;
     class CarefulGWArithmetic;
     class ReliableGWArithmetic;
 
@@ -132,6 +132,7 @@ namespace arithmetic
         Giant popg() { return Giant(*_state.giants); }
         Giant& N() { GWASSERT(_state.N); return *_state.N; }
         CarefulGWArithmetic& carefully() { return *_careful; }
+        const GWNumWrapper wrap(gwnum a);
 
     protected:
         GWState& _state;

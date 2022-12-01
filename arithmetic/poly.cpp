@@ -959,7 +959,7 @@ namespace arithmetic
         }
         else
         {
-            gw().inv((GWNum&)GWNumWrapper(gw(), a._poly[sa - 1]), (GWNum&)GWNumWrapper(gw(), *g));
+            gw().inv((GWNum&)gw().wrap(a._poly[sa - 1]), (GWNum&)gw().wrap(*g));
             for (i = 1; i < d; g -= i, i <<= 1)
             {
                 for (j = 0; j < 2*i - 1; j++)

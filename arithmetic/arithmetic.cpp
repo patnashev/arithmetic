@@ -335,6 +335,11 @@ namespace arithmetic
         ((popg() = a)%(popg() = b)).to_GWNum(res);
     }
 
+    const GWNumWrapper GWArithmetic::wrap(gwnum a)
+    {
+        return GWNumWrapper(*this, a);
+    }
+
     std::string GWNum::to_string() const
     {
         return (arithmetic().popg() = *this).to_string();
