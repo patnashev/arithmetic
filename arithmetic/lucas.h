@@ -39,19 +39,23 @@ namespace arithmetic
         using Arithmetic = LucasVArithmetic;
 
     public:
-        LucasV(LucasVArithmetic& arithmetic) : DifferentialGroupElement<LucasVArithmetic, LucasV>(arithmetic), _V(arithmetic.gw())
+        LucasV(LucasVArithmetic& arithmetic) : DifferentialGroupElement<LucasVArithmetic, LucasV>(arithmetic), _V(new GWNum(arithmetic.gw()))
         {
             arithmetic.init(*this);
         }
-        LucasV(LucasVArithmetic& arithmetic, const GWNum& P) : DifferentialGroupElement<LucasVArithmetic, LucasV>(arithmetic), _V(arithmetic.gw())
+        LucasV(LucasVArithmetic& arithmetic, const GWNum& P) : DifferentialGroupElement<LucasVArithmetic, LucasV>(arithmetic), _V(new GWNum(arithmetic.gw()))
         {
             arithmetic.init(P, *this);
+        }
+        LucasV(LucasVArithmetic& arithmetic, gwnum a) : DifferentialGroupElement<LucasVArithmetic, LucasV>(arithmetic), _V(new GWNumWrapper(arithmetic.gw(), a))
+        {
         }
         ~LucasV()
         {
         }
-        LucasV(const LucasV& a) : DifferentialGroupElement<LucasVArithmetic, LucasV>(a.arithmetic()), _V(a._V)
+        LucasV(const LucasV& a) : DifferentialGroupElement<LucasVArithmetic, LucasV>(a.arithmetic()), _V(new GWNum(a.arithmetic().gw()))
         {
+            arithmetic().init(a.V(), *this);
         }
         LucasV(LucasV&& a) noexcept : DifferentialGroupElement<LucasVArithmetic, LucasV>(a.arithmetic()), _V(std::move(a._V))
         {
@@ -82,10 +86,10 @@ namespace arithmetic
             return a.V() != b.V();
         }
 
-        GWNum& V() { return _V; }
-        const GWNum& V() const { return _V; }
+        GWNum& V() { return *_V; }
+        const GWNum& V() const { return *_V; }
 
     private:
-        GWNum _V;
+        std::unique_ptr<GWNum> _V;
     };
 }

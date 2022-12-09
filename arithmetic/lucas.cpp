@@ -7,7 +7,7 @@ namespace arithmetic
 {
     void LucasVArithmetic::copy(const LucasV& a, LucasV& res)
     {
-        res._V = a._V;
+        res.V() = a.V();
     }
 
     void LucasVArithmetic::move(LucasV&& a, LucasV& res)
@@ -17,28 +17,28 @@ namespace arithmetic
 
     void LucasVArithmetic::init(LucasV& res)
     {
-        res._V = 2;
+        res.V() = 2;
     }
 
     void LucasVArithmetic::init(const GWNum& a, LucasV& res)
     {
-        res._V = a;
+        res.V() = a;
     }
 
     void LucasVArithmetic::add(LucasV& a, LucasV& b, LucasV& a_minus_b, LucasV& res)
     {
-        gw().mulsub(a._V, b._V, a_minus_b._V, res._V, GWMUL_FFT_S1 | GWMUL_FFT_S2 | GWMUL_FFT_S3 | GWMUL_STARTNEXTFFT);
+        gw().mulsub(a.V(), b.V(), a_minus_b.V(), res.V(), GWMUL_FFT_S1 | GWMUL_FFT_S2 | GWMUL_FFT_S3 | GWMUL_STARTNEXTFFT);
     }
 
     void LucasVArithmetic::dbl(LucasV& a, LucasV& res)
     {
         gw().setaddin(-2);
-        gw().mul(a._V, a._V, res._V, GWMUL_FFT_S1 | GWMUL_ADDINCONST | GWMUL_STARTNEXTFFT);
+        gw().mul(a.V(), a.V(), res.V(), GWMUL_FFT_S1 | GWMUL_ADDINCONST | GWMUL_STARTNEXTFFT);
         gw().setaddin(0);
     }
 
     void LucasVArithmetic::optimize(LucasV& a)
     {
-        gwfft_for_fma(gw().gwdata(), *a._V, *a._V);
+        gwfft_for_fma(gw().gwdata(), *a.V(), *a.V());
     }
 }

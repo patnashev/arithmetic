@@ -192,20 +192,6 @@ namespace arithmetic
         double _max_roundoff = 0.4;
     };
 
-    class ThreadSafeGWArithmetic : public GWArithmetic
-    {
-    public:
-        ThreadSafeGWArithmetic(GWState& state) : GWArithmetic(state) { }
-        virtual ~ThreadSafeGWArithmetic() { }
-
-        virtual void alloc(GWNum& a) override;
-        virtual void free(GWNum& a) override;
-
-    private:
-        std::mutex _mutex;
-    };
-
-
     class GWNum : public FieldElement<GWArithmetic, GWNum>
     {
         friend class GWArithmetic;

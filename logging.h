@@ -92,6 +92,7 @@ public:
     virtual void report_param(const std::string& name, int value) override { _parent.report_param(name, value); }
     virtual void report_param(const std::string& name, const std::string& value) override { _parent.report_param(name, value); }
     virtual void report_factor(InputNum& input, const arithmetic::Giant& f) override { _parent.report_factor(input, f); }
+    virtual void progress_save() override { Logging::progress_save(); _parent.progress_save(); }
     virtual void heartbeat() override { _parent.heartbeat(); }
 
 protected:
