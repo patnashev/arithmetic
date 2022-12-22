@@ -42,6 +42,8 @@ namespace arithmetic
         {
             gwdata()->cpu_flags |= CPU_AVX512F;
         }
+        if (information_only)
+            gwset_information_only(gwdata());
     }
 
     void GWState::setup(int k, int b, int n, int c)

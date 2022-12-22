@@ -44,6 +44,7 @@ namespace arithmetic
         bool polymult = false;
         int spin_threads = 1;
         std::string instructions;
+        bool information_only = false;
         Giant known_factors;
 
         void copy(const GWState& a)
