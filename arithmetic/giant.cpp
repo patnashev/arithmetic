@@ -49,9 +49,7 @@ namespace arithmetic
         return new GWGiantsArithmetic(gwdata, capacity);
     }
 
-#define giant(x) ((::giant)&(x)._field1)
-#define _capacity _field3
-#define _size _field1
+#define giant(x) ((::giant)&(x)._capacity)
 
     void GiantsArithmetic::alloc(Giant& a)
     {
@@ -194,7 +192,7 @@ namespace arithmetic
 #ifdef GMP
         if (dynamic_cast<GMPArithmetic*>(&arithmetic()) != nullptr)
         {
-            int size = abs(_field2)*GMP_NUMB_BITS/32;
+            int size = abs(_size)*GMP_NUMB_BITS/32;
             while (size > 0 && data()[size - 1] == 0)
                 size--;
             return size;
@@ -207,7 +205,7 @@ namespace arithmetic
     {
 #ifdef GMP
         if (dynamic_cast<GMPArithmetic*>(&arithmetic()) != nullptr)
-            return _field1*GMP_NUMB_BITS/32;
+            return _capacity*GMP_NUMB_BITS/32;
 #endif
         return _capacity;
     }
@@ -526,7 +524,7 @@ namespace arithmetic
             double seed = getHighResTimer();
             init_by_array(state, (uint32_t*)&seed, 2);
         }
-        alloc(res, (bits + 31)/32);
+        res.arithmetic().alloc(res, (bits + 31)/32);
         int i;
         for (i = 0; i < (bits + 31)/32; i++)
             res.data()[i] = genrand_int32(state);
@@ -591,9 +589,7 @@ namespace arithmetic
     }
 
 #ifdef GMP
-#define mpz(x) ((mpz_ptr)&(x)._field1)
-#define _capacity _field1
-#define _size _field2
+#define mpz(x) ((mpz_ptr)&(x)._capacity)
 
     void* realloc_func(void* block, size_t old_size, size_t size) { return realloc(block, size); }
     void free_func(void* block, size_t) { free(block); }
@@ -647,7 +643,7 @@ namespace arithmetic
             return;
         }
         int size = a.size();
-        alloc(res, size);
+        res.arithmetic().alloc(res, size);
         memcpy(res._data, a._data, size*4);
         if (GMP_NUMB_BITS == 64 && (size & 1))
             res.data()[size] = 0;
@@ -700,12 +696,12 @@ namespace arithmetic
         int capacity = a.arithmetic().state().giants->capacity();
         res.arithmetic().alloc(res, capacity);
         capacity = res._capacity;
-        res._field3 = capacity*(GMP_NUMB_BITS/32);
+        res._capacity = res.capacity();
         if (gwtogiant(a.arithmetic().gwdata(), *a, giant(res)) < 0)
             throw InvalidFFTDataException();
-        if (GMP_NUMB_BITS == 64 && (giant(res)->sign & 1))
-            res.data()[giant(res)->sign] = 0;
-        res._size = (giant(res)->sign*32 + GMP_NUMB_BITS - 1)/GMP_NUMB_BITS;
+        if (GMP_NUMB_BITS == 64 && (res._size & 1))
+            res.data()[res._size] = 0;
+        res._size = (res._size*32 + GMP_NUMB_BITS - 1)/GMP_NUMB_BITS;
         res._capacity = capacity;
     }
 
@@ -785,7 +781,7 @@ namespace arithmetic
             ((uint32_t*)res._data)[size - 1] &= (1 << (offset + count)%GMP_NUMB_BITS) - 1;
         if (GMP_NUMB_BITS == 64 && (offset%GMP_NUMB_BITS + count)/GMP_NUMB_BITS == size - 1)
             ((uint64_t*)res._data)[size - 1] &= (1ULL << (offset + count)%GMP_NUMB_BITS) - 1;
-        res._size = size;
+        res._size = size; // with leading zeroes
         res._size = (res.size()*32 + GMP_NUMB_BITS - 1)/GMP_NUMB_BITS;
         mpz_fdiv_q_2exp(mpz(res), mpz(res), offset%GMP_NUMB_BITS);
     }
@@ -907,13 +903,10 @@ namespace arithmetic
 
     void GMPArithmetic::rnd(Giant& res, int bits)
     {
-        alloc(res, (bits + 31)/32);
-        int capacity = res._capacity;
         GiantsArithmetic::rnd(res, bits);
-        if (GMP_NUMB_BITS == 64 && (giant(res)->sign & 1))
-            res.data()[giant(res)->sign] = 0;
-        res._size = (giant(res)->sign*32 + GMP_NUMB_BITS - 1)/GMP_NUMB_BITS;
-        res._capacity = capacity;
+        if (GMP_NUMB_BITS == 64 && (res._size & 1))
+            res.data()[res._size] = 0;
+        res._size = (res._size*32 + GMP_NUMB_BITS - 1)/GMP_NUMB_BITS;
     }
 
     void GWGMPArithmetic::alloc(Giant& a)
@@ -942,12 +935,12 @@ namespace arithmetic
     {
         res.arithmetic().alloc(res, capacity());
         int capacity = res._capacity;
-        res._field3 = capacity*(GMP_NUMB_BITS/32);
+        res._capacity = res.capacity();
         if (gwtogiant((gwhandle*)_gwdata, *a, giant(res)) < 0)
             throw InvalidFFTDataException();
-        if (GMP_NUMB_BITS == 64 && (giant(res)->sign & 1))
-            res.data()[giant(res)->sign] = 0;
-        res._size = (giant(res)->sign*32 + GMP_NUMB_BITS - 1)/GMP_NUMB_BITS;
+        if (GMP_NUMB_BITS == 64 && (res._size & 1))
+            res.data()[res._size] = 0;
+        res._size = (res._size*32 + GMP_NUMB_BITS - 1)/GMP_NUMB_BITS;
         res._capacity = capacity;
     }
 

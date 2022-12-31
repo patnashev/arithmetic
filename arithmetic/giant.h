@@ -147,12 +147,9 @@ namespace arithmetic
 
     struct giant_struct
     {
-        //int _capacity = 0;
-        //int _size = 0;
-        int _field1 = 0;
-        int _field2 = 0;
+        int _capacity = 0;
+        int _size = 0;
         void* _data = nullptr;
-        int _field3 = 0;
     };
 
     class Giant : public FieldElement<GiantsArithmetic, Giant>, protected giant_struct
