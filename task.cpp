@@ -155,15 +155,16 @@ void Task::check()
 
 void Task::on_state()
 {
-    _logging->heartbeat();
-    if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - _last_write).count() >= DISK_WRITE_TIME || abort_flag())
+    bool state_save_flag = _logging->state_save_flag();
+    if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - _last_write).count() >= DISK_WRITE_TIME || abort_flag() || state_save_flag)
     {
-        _logging->progress().update(_state ? _state->iteration()/(double)iterations() : 0.0, (int)_gwstate->handle.fft_count/2);
-        _logging->progress_save();
         _logging->debug("saving state to disk.\n");
+        _logging->progress().update(_state ? _state->iteration()/(double)iterations() : 0.0, (int)_gwstate->handle.fft_count/2);
+        _logging->state_save();
         write_state();
         _last_write = std::chrono::system_clock::now();
         _logging->progress().update(_state ? _state->iteration()/(double)iterations() : 0.0, (int)_gwstate->handle.fft_count/2);
+        _logging->progress_save();
     }
     if (abort_flag())
         throw TaskAbortException();
@@ -178,6 +179,7 @@ void Task::on_state()
         ReliableGWArithmetic* reliable = dynamic_cast<ReliableGWArithmetic*>(_gw);
         _restart_op = reliable->op();
     }
+    _logging->heartbeat();
 }
 
 void Task::write_state()

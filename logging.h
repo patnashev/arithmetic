@@ -65,6 +65,8 @@ public:
 
     virtual void result_save(const std::string& message);
 
+    virtual bool state_save_flag() { return false; }
+    virtual void state_save() { }
     virtual void progress_file(File* file_progress);
     virtual void progress_save();
     virtual void heartbeat() { }

@@ -762,7 +762,7 @@ namespace arithmetic
 
     int GMPArithmetic::bitlen(const Giant& a)
     {
-        return mpz_sizeinbase(mpz(a), 2);
+        return (int)mpz_sizeinbase(mpz(a), 2);
     }
 
     bool GMPArithmetic::bit(const Giant& a, int b)
