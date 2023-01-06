@@ -79,7 +79,7 @@ public:
     TaskState* state() { return _state.get(); }
     int iterations() { return _iterations; }
     int state_update_period() { return _state_update_period; }
-    bool is_last(int iteration) { return iteration + 1 - (_state ? _state->iteration() : 0) >= _state_update_period || iteration + 1 == _iterations || abort_flag(); }
+    bool is_last(int iteration) { return iteration + 1 - (_state ? _state->iteration() : 0) >= _state_update_period || iteration + 1 == _iterations || abort_flag() || _logging->state_save_flag(); }
 
 protected:
     virtual void init(arithmetic::GWState* gwstate, File* file, TaskState* state, Logging* logging, int iterations);
@@ -93,7 +93,7 @@ protected:
     template<class TState, class... Args>
     void commit_execute(int iteration, Args&&... args)
     {
-        if (iteration - (_state ? _state->iteration() : 0) >= state_update_period() || iteration == iterations() || abort_flag())
+        if (iteration - (_state ? _state->iteration() : 0) >= state_update_period() || iteration == iterations() || abort_flag() || _logging->state_save_flag())
         {
             check();
             set_state<TState>(iteration, std::forward<Args>(args)...);
