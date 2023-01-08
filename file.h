@@ -77,7 +77,7 @@ public:
     static int FILE_APPID;
 
 public:
-    File(const std::string& filename, uint32_t fingerprint) : _filename(filename), _fingerprint(fingerprint), _hash_filename(filename + ".md5") { }
+    File(const std::string& filename, uint32_t fingerprint) : _filename(filename), _hash_filename(filename + ".md5"), _fingerprint(fingerprint) { }
     virtual ~File() { }
     File& operator = (File&&) = default;
 
