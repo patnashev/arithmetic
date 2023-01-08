@@ -77,7 +77,7 @@ public:
     static int FILE_APPID;
 
 public:
-    File(const std::string& filename, uint32_t fingerprint) : _filename(filename), _fingerprint(fingerprint) { }
+    File(const std::string& filename, uint32_t fingerprint) : _filename(filename), _fingerprint(fingerprint), _hash_filename(filename + ".md5") { }
     virtual ~File() { }
     File& operator = (File&&) = default;
 
@@ -101,6 +101,7 @@ public:
 
     static uint32_t unique_fingerprint(uint32_t fingerprint, const std::string& unique_id);
 
+    void set_filename(std::string& filename, std::string& hash_filename) { _filename = filename; _hash_filename = hash_filename; }
     std::string& filename() { return _filename; }
     uint32_t fingerprint() { return _fingerprint; }
     std::vector<char>& buffer() { return _buffer; }
@@ -109,6 +110,7 @@ public:
 
 protected:
     std::string _filename;
+    std::string _hash_filename;
     uint32_t _fingerprint;
     std::vector<char> _buffer;
     std::vector<std::unique_ptr<File>> _children;

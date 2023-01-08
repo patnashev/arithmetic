@@ -316,9 +316,8 @@ void File::commit_writer(Writer& writer)
 
     if (hash)
     {
-        new_filename = _filename + ".md5";
         std::string hash = writer.hash_str();
-        writeThrough(new_filename.data(), hash.data(), 32);
+        writeThrough(_hash_filename.data(), hash.data(), 32);
     }
 
     _buffer = std::move(writer.buffer());
