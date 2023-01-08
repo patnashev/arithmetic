@@ -47,6 +47,7 @@ bool InputNum::parse(const std::string& s)
     Giant gk, gb;
     uint32_t n = 0;
     int32_t c = 0;
+    Giant tmp;
 
     for (it = s.begin(); it != s.end() && std::isspace(*it); it++);
     if (it != s.end() && *it == '\"')
@@ -74,8 +75,16 @@ bool InputNum::parse(const std::string& s)
             return false;
         n = stoi(std::string(it_s, it));
         gb = 1;
+        tmp = 1;
         for (uint32_t i = 2; i <= n; i++)
-            gb *= i;
+        {
+            tmp *= i;
+            if (tmp.size() > 8192 || i == n)
+            {
+                gb *= tmp;
+                tmp = 1;
+            }
+        }
     }
     else if (*it == '#')
     {
@@ -84,9 +93,17 @@ bool InputNum::parse(const std::string& s)
             return false;
         n = stoi(std::string(it_s, it));
         gb = 1;
+        tmp = 1;
         PrimeIterator primes = PrimeIterator::get();
         for (uint32_t i = 0; i < n; i++, primes++)
-            gb *= *primes;
+        {
+            tmp *= *primes;
+            if (tmp.size() > 8192 || i == n - 1)
+            {
+                gb *= tmp;
+                tmp = 1;
+            }
+        }
     }
     else
         return false;
