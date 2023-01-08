@@ -101,7 +101,7 @@ public:
 
     static uint32_t unique_fingerprint(uint32_t fingerprint, const std::string& unique_id);
 
-    void set_filename(std::string& filename, std::string& hash_filename) { _filename = filename; _hash_filename = hash_filename; }
+    void set_filename(const std::string& filename, const std::string& hash_filename) { _filename = filename; _hash_filename = hash_filename; }
     std::string& filename() { return _filename; }
     uint32_t fingerprint() { return _fingerprint; }
     std::vector<char>& buffer() { return _buffer; }
