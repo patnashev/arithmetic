@@ -24,6 +24,7 @@ public:
     double time_op() { return _time_op; }
     int op_count() { return _op_count; }
     int num_stages() { return (int)_costs.size(); }
+    int cur_stage() { return _cur_stage; }
 
 private:
     std::vector<double> _costs;
