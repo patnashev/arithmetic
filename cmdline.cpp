@@ -1,8 +1,8 @@
 
 #include <cctype>
 #include <cmath>
-#include <charconv>
 #include <stdlib.h>
+#include <string.h>
 #include "cmdline.h"
 
 using namespace arithmetic;
@@ -45,11 +45,64 @@ void CmdLine::parse(int argc, char *argv[])
     }
 }
 
+#ifdef CHARCONV
+#include <charconv>
 template<class T>
-bool CmdObject::parse_number(const char* str, T& value)
+const char* from_chars(const char* str, T& value)
 {
     auto [ptr, ec] { std::from_chars(str, str + strlen(str), value) };
     if (ec != std::errc())
+        return nullptr;
+    return ptr;
+}
+#else
+#include <cerrno>
+template<typename  T, typename std::enable_if_t<std::is_integral<T>::value && std::is_unsigned<T>::value, bool> = true>
+const char* from_chars(const char* str, T& value)
+{
+    char* str_end;
+    unsigned long long res = std::strtoull(str, &str_end, 10);
+    if (errno == ERANGE)
+        return nullptr;
+    if (res > std::numeric_limits<T>::max())
+        return nullptr;
+    value = (T)res;
+    return str_end;
+}
+template<class T, typename std::enable_if_t<!std::is_floating_point<T>::value && std::is_signed<T>::value, bool> = true>
+const char* from_chars(const char* str, T& value)
+{
+    char* str_end;
+    long long res = std::strtoll(str, &str_end, 10);
+    if (errno == ERANGE)
+        return nullptr;
+    if (res < std::numeric_limits<T>::min() || res > std::numeric_limits<T>::max())
+        return nullptr;
+    value = (T)res;
+    return str_end;
+}
+template<typename  T, typename std::enable_if_t<std::is_floating_point<T>::value, bool> = true>
+const char* from_chars(const char* str, T& value)
+{
+    char* str_end;
+    double res = std::strtod(str, &str_end);
+    if (errno == ERANGE)
+        return nullptr;
+    if (res < std::numeric_limits<T>::lowest() || res > std::numeric_limits<T>::max())
+        return nullptr;
+    if (!std::isnormal(res))
+        return nullptr;
+    value = (T)res;
+    return str_end;
+}
+#endif
+
+template<class T>
+bool CmdObject::parse_number(const char* str, T& value_ref)
+{
+    T value;
+    const char* ptr = from_chars(str, value);
+    if (ptr == nullptr)
         return false;
     if (*ptr && value != 0)
     {
@@ -91,7 +144,10 @@ bool CmdObject::parse_number(const char* str, T& value)
     }
     while (*ptr && std::isspace(*ptr))
         ptr++;
-    return *ptr == 0;
+    if (*ptr != 0)
+        return false;
+    value_ref = value;
+    return true;
 }
 
 template bool CmdObject::parse_number(const char* str, char& value);

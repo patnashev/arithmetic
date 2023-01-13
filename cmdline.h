@@ -6,6 +6,7 @@
 #include <map>
 #include <optional>
 #include <functional>
+#include <limits.h>
 #include "giant.h"
 
 template<class V>
@@ -293,9 +294,9 @@ public:
     CmdKeyListConf& value_string(std::string& value) { _list->add(new CmdKeyList::CmdListValueString(value)); return *this; }
     CmdKeyListConf& value_string(std::optional<std::string>& value) { _list->add(new CmdKeyList::CmdListValueString(value)); return *this; }
     template<class T>
-    CmdKeyListConf& value_number(T& value, T min = std::numeric_limits<T>::lowest(), T max = std::numeric_limits<T>::max()) { _list->add(new CmdKeyList::CmdListValueNumber(value, min, max)); return *this; }
+    CmdKeyListConf& value_number(T& value, T min = std::numeric_limits<T>::lowest(), T max = std::numeric_limits<T>::max()) { _list->add(new CmdKeyList::CmdListValueNumber<T, T>(value, min, max)); return *this; }
     template<class T>
-    CmdKeyListConf& value_number(std::optional<T>& value, T min = std::numeric_limits<T>::lowest(), T max = std::numeric_limits<T>::max()) { _list->add(new CmdKeyList::CmdListValueNumber(value, min, max)); return *this; }
+    CmdKeyListConf& value_number(std::optional<T>& value, T min = std::numeric_limits<T>::lowest(), T max = std::numeric_limits<T>::max()) { _list->add(new CmdKeyList::CmdListValueNumber<std::optional<T>, T>(value, min, max)); return *this; }
 
     R& end() { return (R&)*_parent; }
 
@@ -317,19 +318,19 @@ public:
 
     P& ignore(const std::string& key) { _group->add(new CmdKey(key)); return (P&)*this; }
     P& value_code(const std::string& key, char delim, std::function<bool(const char*)> func) { _group->add(new CmdKeyValueCode(key, delim, func)); return (P&)*this; }
-    P& value_string(const std::string& key, char delim, std::string& value) { _group->add(new CmdKeyValueString(key, delim, value)); return (P&)*this; }
-    P& value_string(const std::string& key, char delim, std::optional<std::string>& value) { _group->add(new CmdKeyValueString(key, delim, value)); return (P&)*this; }
+    P& value_string(const std::string& key, char delim, std::string& value) { _group->add(new CmdKeyValueString<std::string>(key, delim, value)); return (P&)*this; }
+    P& value_string(const std::string& key, char delim, std::optional<std::string>& value) { _group->add(new CmdKeyValueString<std::optional<std::string>>(key, delim, value)); return (P&)*this; }
     template<class T>
-    P& value_number(const std::string& key, char delim, T& value, T min = std::numeric_limits<T>::lowest(), T max = std::numeric_limits<T>::max()) { _group->add(new CmdKeyValueNumber(key, delim, value, min, max)); return (P&)*this; }
+    P& value_number(const std::string& key, char delim, T& value, T min = std::numeric_limits<T>::lowest(), T max = std::numeric_limits<T>::max()) { _group->add(new CmdKeyValueNumber<T, T>(key, delim, value, min, max)); return (P&)*this; }
     template<class T>
-    P& value_number(const std::string& key, char delim, std::optional<T>& value, T min = std::numeric_limits<T>::lowest(), T max = std::numeric_limits<T>::max()) { _group->add(new CmdKeyValueNumber(key, delim, value, min, max)); return (P&)*this; }
+    P& value_number(const std::string& key, char delim, std::optional<T>& value, T min = std::numeric_limits<T>::lowest(), T max = std::numeric_limits<T>::max()) { _group->add(new CmdKeyValueNumber<std::optional<T>, T>(key, delim, value, min, max)); return (P&)*this; }
     template<class T, class V>
-    P& value_enum(const std::string& key, char delim, T& value, const Enum<V>& enm) { _group->add(new CmdKeyValueEnum(key, delim, value, enm)); return (P&)*this; }
+    P& value_enum(const std::string& key, char delim, T& value, const Enum<V>& enm) { _group->add(new CmdKeyValueEnum<T, V>(key, delim, value, enm)); return (P&)*this; }
     template<class T, class V>
-    P& check(const std::string& key, T& dst, V value) { _group->add(new CmdKeyCheck(key, dst, value)); return (P&)*this; }
+    P& check(const std::string& key, T& dst, V value) { _group->add(new CmdKeyCheck<T, V>(key, dst, value)); return (P&)*this; }
     P& check_code(const std::string& key, std::function<void()> func) { _group->add(new CmdKeyCode(key, func)); return (P&)*this; }
     template<class T, class V>
-    P& prev_check(T& dst, V value) { _group->add(new CmdPrevCheck(dst, value)); return (P&)*this; }
+    P& prev_check(T& dst, V value) { _group->add(new CmdPrevCheck<T, V>(dst, value)); return (P&)*this; }
     P& prev_code(std::function<void()> func) { _group->add(new CmdPrevCode(func)); return (P&)*this; }
     CmdKeyGroupConf<P> group(const std::string& key) { return CmdKeyGroupConf<P>(_group->add(new CmdGroup(key)), (P*)this); }
     CmdKeyListConf<P> list(const std::string& key, char delim, char list_delim) { return CmdKeyListConf<P>(_group->add(new CmdKeyList(key, delim, list_delim)), (P*)this); }
