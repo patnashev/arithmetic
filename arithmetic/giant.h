@@ -54,6 +54,9 @@ namespace arithmetic
         virtual void powermod(Giant& a, Giant& b, Giant& n, Giant& res);
         virtual void rnd_seed(Giant& a);
         virtual void rnd(Giant& res, int bits);
+        virtual int kronecker(Giant& a, Giant& b);
+        virtual int kronecker(Giant& a, uint32_t b);
+        virtual int kronecker(uint32_t a, Giant& b);
 
         static void init_default_arithmetic();
         static GiantsArithmetic& default_arithmetic();
@@ -125,6 +128,9 @@ namespace arithmetic
         virtual void power(Giant& a, int32_t b, Giant& res) override;
         virtual void powermod(Giant& a, Giant& b, Giant& n, Giant& res) override;
         virtual void rnd(Giant& res, int bits) override;
+        virtual int kronecker(Giant& a, Giant& b) override;
+        virtual int kronecker(Giant& a, uint32_t b) override;
+        virtual int kronecker(uint32_t a, Giant& b) override;
 
         std::string version();
     };
@@ -149,7 +155,7 @@ namespace arithmetic
     {
         int _capacity = 0;
         int _size = 0;
-        void* _data = nullptr;
+        uint32_t* _data = nullptr;
     };
 
     class Giant : public FieldElement<GiantsArithmetic, Giant>, protected giant_struct
@@ -349,6 +355,18 @@ namespace arithmetic
             Giant res;
             res.arithmetic().rnd(res, bits);
             return res;
+        }
+        friend int kronecker(Giant& a, Giant& b)
+        {
+            return a.arithmetic().kronecker(a, b);
+        }
+        friend int kronecker(Giant& a, uint32_t b)
+        {
+            return a.arithmetic().kronecker(a, b);
+        }
+        friend int kronecker(uint32_t a, Giant& b)
+        {
+            return b.arithmetic().kronecker(a, b);
         }
     };
 }

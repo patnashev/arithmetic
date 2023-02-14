@@ -8,6 +8,7 @@
 #include "giant.h"
 #include "arithmetic.h"
 #include "exception.h"
+#include "integer.h"
 #ifdef GMP
 #include <gmp.h>
 #ifdef _WIN32
@@ -74,7 +75,7 @@ namespace arithmetic
         if (a._capacity >= capacity)
             return;
         a._capacity = capacity;
-        a._data = realloc(a._data, capacity*sizeof(uint32_t));
+        a._data = (uint32_t*)realloc(a._data, capacity*sizeof(uint32_t));
     }
 
     void GiantsArithmetic::copy(const Giant& a, Giant& res)
@@ -535,6 +536,60 @@ namespace arithmetic
         res._size = i;
     }
 
+    int GiantsArithmetic::kronecker(Giant& a, Giant& b)
+    {
+        GWASSERT(0);
+        return 0;
+    }
+
+    int GiantsArithmetic::kronecker(Giant& a, uint32_t b)
+    {
+        if (!a.bit(0) && !(b & 1))
+            return 0;
+        int i;
+        int res = 1;
+        for (i = 0; b != 0 && !(b & 1); i++, b >>= 1);
+        uint32_t amod8 = a.data()[0] & 7;
+        if ((i & 1) && (amod8 == 3 || amod8 == 5))
+            res *= -1;
+        res *= arithmetic::kronecker(a%b, b);
+        if (abs(res) > 1)
+            res = 0;
+        return res;
+    }
+
+    int GiantsArithmetic::kronecker(uint32_t a, Giant& b)
+    {
+        if (!(a & 1) && !b.bit(0))
+            return 0;
+        int i, j;
+        int res = 1;
+        for (i = 0; i < b.bitlen() && !b.bit(i); i++);
+        if ((i & 1) && ((a & 7) == 3 || (a & 7) == 5))
+            res *= -1;
+        for (j = 0; a != 0 && !(a & 1); j++, a >>= 1);
+        if (i > 0)
+        {
+            Giant tmp(b);
+            tmp >>= i;
+            res *= arithmetic::kronecker(tmp%a, a);
+            if ((a & 2) && tmp.bit(1))
+                res *= -1;
+        }
+        else
+        {
+            uint32_t bmod8 = b.data()[0] & 7;
+            if ((j & 1) && (bmod8 == 3 || bmod8 == 5))
+                res *= -1;
+            res *= arithmetic::kronecker(b%a, a);
+            if ((a & 2) && b.bit(1))
+                res *= -1;
+        }
+        if (abs(res) > 1)
+            res = 0;
+        return res;
+    }
+
     void GWGiantsArithmetic::alloc(Giant& a)
     {
         a._capacity = capacity();
@@ -627,7 +682,7 @@ namespace arithmetic
         if (a._capacity >= capacity)
             return;
         a._capacity = capacity;
-        a._data = realloc(a._data, capacity*GMP_NUMB_BITS/8);
+        a._data = (uint32_t*)realloc(a._data, capacity*GMP_NUMB_BITS/8);
     }
 
     void GMPArithmetic::copy(const Giant& a, Giant& res)
@@ -907,6 +962,21 @@ namespace arithmetic
         if (GMP_NUMB_BITS == 64 && (res._size & 1))
             res.data()[res._size] = 0;
         res._size = (res._size*32 + GMP_NUMB_BITS - 1)/GMP_NUMB_BITS;
+    }
+
+    int GMPArithmetic::kronecker(Giant& a, Giant& b)
+    {
+        return mpz_kronecker(mpz(a), mpz(b));
+    }
+
+    int GMPArithmetic::kronecker(Giant& a, uint32_t b)
+    {
+        return mpz_kronecker_ui(mpz(a), b);
+    }
+
+    int GMPArithmetic::kronecker(uint32_t a, Giant& b)
+    {
+        return mpz_ui_kronecker(a, mpz(b));
     }
 
     void GWGMPArithmetic::alloc(Giant& a)
