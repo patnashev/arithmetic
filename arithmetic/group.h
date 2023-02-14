@@ -214,13 +214,13 @@ namespace arithmetic
             else if (b == 3 && &a != &res)
             {
                 dbl(a, res);
-                add(a, res, a, res);
+                add(res, a, a, res);
             }
             else if (b == 3)
             {
                 Element tmp = res;
                 dbl(tmp, res);
-                add(tmp, res, tmp, res);
+                add(res, tmp, tmp, res);
             }
             else
             {
@@ -247,12 +247,12 @@ namespace arithmetic
                 {
                     dbl(tmp, res);
                     if ((1 << len) > j)
-                        add(tmp, res, tmp, res2);
+                        add(res, tmp, tmp, res2);
                 }
                 if (i == 3)
                 {
                     dbl(tmp, res2);
-                    add(tmp, res2, tmp, res);
+                    add(res2, tmp, tmp, res);
                     if ((1 << len) > j)
                        dbl(res2, res2);
                 }
@@ -263,14 +263,14 @@ namespace arithmetic
                 {
                     if (b & i)
                     {
-                        add(res, res2, tmp, res);
+                        add(res2, res, tmp, res);
                         if (i > j)
                             dbl(res2, res2);
                     }
                     else
                     {
                         if (i > j)
-                            add(res, res2, tmp, res2);
+                            add(res2, res, tmp, res2);
                         dbl(res, res);
                     }
                 }
@@ -302,12 +302,12 @@ namespace arithmetic
             if (i == 2)
             {
                 dbl(tmp, res1);
-                add(tmp, res1, tmp, res2);
+                add(res1, tmp, tmp, res2);
             }
             if (i == 3)
             {
                 dbl(tmp, res2);
-                add(tmp, res2, tmp, res1);
+                add(res2, tmp, tmp, res1);
                 dbl(res2, res2);
             }
             if (len <= 0)
@@ -319,19 +319,19 @@ namespace arithmetic
             {
                 if (b & i)
                 {
-                    add(res1, res2, tmp, res1);
+                    add(res2, res1, tmp, res1);
                     dbl(res2, res2);
                 }
                 else
                 {
-                    add(res1, res2, tmp, res2);
+                    add(res2, res1, tmp, res2);
                     dbl(res1, res1);
                 }
             }
         }
 
         // https://eprint.iacr.org/2017/293.pdf
-        virtual void mul(Element& a, int32_t prime, size_t index, Element& res)
+        virtual void mul(Element& a, int32_t prime, int index, Element& res)
         {
             if (prime < 14)
             {
@@ -342,7 +342,9 @@ namespace arithmetic
             int len = 60;
             int e = prime;
             int d = 1;
-            if (index >= 0 && index < precomputed_DAC_S_d_len)
+            if (index < 0)
+                d = -index;
+            else if (index > 0 && index < precomputed_DAC_S_d_len)
                 d = precomputed_DAC_S_d[index];
             else
                 d = get_DAC_S_d(e, (int)(e/1.618) - 100, (int)(e/1.618) + 100, &len);
@@ -380,7 +382,7 @@ namespace arithmetic
                 {
                     ed = ed + e;
                     e = 2*e;
-                    add(ed_init ? Ted : Td, Te, Td, Ted);
+                    add(Te, ed_init ? Ted : Td, Td, Ted);
                     dbl(Te, Te);
                     ed_init = true;
                 }
@@ -417,12 +419,12 @@ namespace arithmetic
             {
                 if (b.bit(len - i))
                 {
-                    add(res1, res2, tmp, res1);
+                    add(res2, res1, tmp, res1);
                     dbl(res2, res2);
                 }
                 else
                 {
-                    add(res1, res2, tmp, res2);
+                    add(res2, res1, tmp, res2);
                     dbl(res1, res1);
                 }
             }

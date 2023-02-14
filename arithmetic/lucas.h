@@ -13,23 +13,26 @@ namespace arithmetic
         using Element = LucasV;
 
     public:
-        LucasVArithmetic() : _gw(nullptr) { }
-        LucasVArithmetic(GWArithmetic& gw) : _gw(&gw) { }
+        LucasVArithmetic(bool negativeQ = false) : _gw(nullptr), _negativeQ(negativeQ) { }
+        LucasVArithmetic(GWArithmetic& gw, bool negativeQ = false) : _gw(&gw), _negativeQ(negativeQ) { }
         virtual ~LucasVArithmetic() { }
 
         virtual void copy(const LucasV& a, LucasV& res) override;
         virtual void move(LucasV&& a, LucasV& res) override;
         virtual void init(LucasV& res) override;
         virtual void init(const GWNum& P, LucasV& res);
+        virtual void init(const GWNum& P, bool parity, LucasV& res);
         virtual void add(LucasV& a, LucasV& b, LucasV& a_minus_b, LucasV& res) override;
         virtual void dbl(LucasV& a, LucasV& res) override;
         virtual void optimize(LucasV& a) override;
 
         GWArithmetic& gw() { return *_gw; }
         void set_gw(GWArithmetic& gw) { _gw = &gw; }
+        bool negativeQ() { return _negativeQ; }
 
     private:
         GWArithmetic* _gw;
+        bool _negativeQ;
     };
 
     class LucasV : public DifferentialGroupElement<LucasVArithmetic, LucasV>
@@ -43,9 +46,11 @@ namespace arithmetic
         {
             arithmetic.init(*this);
         }
-        LucasV(LucasVArithmetic& arithmetic, const GWNum& P) : DifferentialGroupElement<LucasVArithmetic, LucasV>(arithmetic), _V(new GWNum(arithmetic.gw()))
+        template<class T>
+        LucasV(LucasVArithmetic& arithmetic, T&& P, bool parity = true) : DifferentialGroupElement<LucasVArithmetic, LucasV>(arithmetic), _V(new GWNum(arithmetic.gw()))
         {
-            arithmetic.init(P, *this);
+            *_V = std::forward<T>(P);
+            _parity = parity;
         }
         LucasV(LucasVArithmetic& arithmetic, gwnum a) : DifferentialGroupElement<LucasVArithmetic, LucasV>(arithmetic), _V(new GWNumWrapper(arithmetic.gw(), a))
         {
@@ -55,9 +60,9 @@ namespace arithmetic
         }
         LucasV(const LucasV& a) : DifferentialGroupElement<LucasVArithmetic, LucasV>(a.arithmetic()), _V(new GWNum(a.arithmetic().gw()))
         {
-            arithmetic().init(a.V(), *this);
+            arithmetic().init(a.V(), a.parity(), *this);
         }
-        LucasV(LucasV&& a) noexcept : DifferentialGroupElement<LucasVArithmetic, LucasV>(a.arithmetic()), _V(std::move(a._V))
+        LucasV(LucasV&& a) noexcept : DifferentialGroupElement<LucasVArithmetic, LucasV>(a.arithmetic()), _V(std::move(a._V)), _parity(a._parity)
         {
         }
 
@@ -88,8 +93,10 @@ namespace arithmetic
 
         GWNum& V() { return *_V; }
         const GWNum& V() const { return *_V; }
+        bool parity() const { return _parity; }
 
     private:
         std::unique_ptr<GWNum> _V;
+        bool _parity;
     };
 }
