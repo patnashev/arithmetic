@@ -10,6 +10,7 @@ class Progress
 public:
     Progress() { }
 
+    void reset() { _cur_stage = 0; _cur_progress = 0; _time_total = 0; _time_stage = 0; _time_op = 0; _timer = 0; _op_count = 0; }
     void add_stage(double cost) { _total_cost += cost; _costs.push_back(cost); }
     void next_stage() { _cur_stage++; update(0, 0); }
     void skip_stage() { _cur_stage++; }
@@ -17,6 +18,7 @@ public:
     void time_init(double elapsed);
     void set_parent(Progress* parent) { _parent = parent; }
 
+    std::vector<double>& costs() { return _costs; }
     double progress_stage() { return _cur_progress; }
     double progress_total() { if (_cur_stage >= _costs.size()) return 1; double cost = 0; for (int i = 0; i < _cur_stage; cost += _costs[i], i++); return (cost + _costs[_cur_stage]*_cur_progress)/_total_cost; }
     double cost_total() { return _total_cost; }

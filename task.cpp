@@ -90,7 +90,7 @@ void Task::run()
                 throw;
             }
             //GWASSERT(0);
-            _logging->warning("Arithmetic error, restarting at %.1f%%.\n", state() ? 100.0*state()->iteration()/iterations() : 0.0);
+            _logging->warning("Arithmetic error, restarting at %.1f%%.\n", 100.0*progress());
             if (reliable && reliable->restart_flag() && !reliable->failure_flag())
             {
                 std::string ops = "pass " + std::to_string(i) + " suspicious ops:";
@@ -159,18 +159,18 @@ void Task::on_state()
     if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - _last_write).count() >= DISK_WRITE_TIME || abort_flag() || state_save_flag)
     {
         _logging->debug("saving state to disk.\n");
-        _logging->progress().update(_state ? _state->iteration()/(double)iterations() : 0.0, (int)_gwstate->handle.fft_count/2);
+        _logging->progress().update(progress(), (int)_gwstate->handle.fft_count/2);
         _logging->state_save();
         write_state();
         _last_write = std::chrono::system_clock::now();
-        _logging->progress().update(_state ? _state->iteration()/(double)iterations() : 0.0, (int)_gwstate->handle.fft_count/2);
+        _logging->progress().update(progress(), (int)_gwstate->handle.fft_count/2);
         _logging->progress_save();
     }
     if (abort_flag())
         throw TaskAbortException();
     if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - _last_progress).count() >= PROGRESS_TIME)
     {
-        _logging->progress().update(_state ? _state->iteration()/(double)iterations() : 0.0, (int)_gwstate->handle.fft_count/2);
+        _logging->progress().update(progress(), (int)_gwstate->handle.fft_count/2);
         _logging->report_progress();
         _last_progress = std::chrono::system_clock::now();
     }
