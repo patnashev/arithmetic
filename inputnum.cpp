@@ -432,7 +432,7 @@ std::string InputNum::build_text(int max_len)
         }
         else
             res.append(sb);
-        if (_n != 1)
+        if (_type == KBNC && _n != 1)
         {
             res.append(1, '^');
             res.append(std::to_string(_n));

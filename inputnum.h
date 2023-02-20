@@ -19,9 +19,13 @@ public:
 public:
     InputNum() { _gk = 0; _gb = 0; }
     InputNum(int k, int b, int n, int c) { init(k, b, n, c); }
+    template<class T>
+    InputNum(T&& b) { _type = GENERIC; _gk = 1; _gb = std::forward<T>(b); _n = 0; _c = 0; process(); }
 
     template<class TK, class TB>
-    void init(TK k, TB b, int n, int c) { _type = KBNC; _gk = k; _gb = b; _n = n; _c = c; process(); }
+    void init(TK&& k, TB&& b, int n, int c) { _type = KBNC; _gk = std::forward<TK>(k); _gb = std::forward<TB>(b); _n = n; _c = c; process(); }
+    template<class T>
+    void init(T&& b) { _type = GENERIC; _gk = 1; _gb = std::forward<T>(b); _n = 0; _c = 0; process(); }
     bool read(File& file);
     void write(File& file);
     bool parse(const std::string& s);
