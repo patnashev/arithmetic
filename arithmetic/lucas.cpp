@@ -48,7 +48,6 @@ namespace arithmetic
     {
         gw().setaddin(negativeQ() && a.parity() ? 2 : -2);
         gw().mul(a.V(), a.V(), res.V(), GWMUL_FFT_S1 | GWMUL_ADDINCONST | GWMUL_STARTNEXTFFT);
-        gw().setaddin(0);
         res._parity = false;
     }
 

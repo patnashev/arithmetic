@@ -425,7 +425,7 @@ namespace arithmetic
         {
             GWNum tmp = c;
             if (options & GWMUL_MULBYCONST)
-                gwsmallmul(gwdata(), gwdata()->mulbyconst, *tmp);
+                gwsmallmul(gwdata(), mulbyconst(), *tmp);
             mul(a, b, res, options);
             add(res, tmp, res);
         }
@@ -442,7 +442,7 @@ namespace arithmetic
         {
             GWNum tmp = c;
             if (options & GWMUL_MULBYCONST)
-                gwsmallmul(gwdata(), gwdata()->mulbyconst, *tmp);
+                gwsmallmul(gwdata(), mulbyconst(), *tmp);
             mul(a, b, res, options);
             sub(res, tmp, res);
         }
@@ -662,7 +662,7 @@ namespace arithmetic
                 gwmul3_carefully(gwdata(), *s1, (*a == *b) ? *s1 : *s2, *res, options & (~GWMUL_PRESERVE_S1) & (~GWMUL_PRESERVE_S2) & (~GWMUL_STARTNEXTFFT));
                 gwunfft(gwdata(), *s3, *s3);
                 if (options & GWMUL_MULBYCONST)
-                    gwsmallmul(gwdata(), gwdata()->mulbyconst, *s3);
+                    gwsmallmul(gwdata(), mulbyconst(), *s3);
                 gwadd3o(gwdata(), *res, *s3, *res, GWADD_FORCE_NORMALIZE);
                 gwerror_checking(gwdata(), false);
                 if (gw_get_maxerr(gwdata()) > _max_roundoff)
@@ -710,7 +710,7 @@ namespace arithmetic
                 gwmul3_carefully(gwdata(), *s1, (*a == *b) ? *s1 : *s2, *res, options & (~GWMUL_PRESERVE_S1) & (~GWMUL_PRESERVE_S2) & (~GWMUL_STARTNEXTFFT));
                 gwunfft(gwdata(), *s3, *s3);
                 if (options & GWMUL_MULBYCONST)
-                    gwsmallmul(gwdata(), gwdata()->mulbyconst, *s3);
+                    gwsmallmul(gwdata(), mulbyconst(), *s3);
                 gwsub3o(gwdata(), *res, *s3, *res, GWADD_FORCE_NORMALIZE);
                 gwerror_checking(gwdata(), false);
                 if (gw_get_maxerr(gwdata()) > _max_roundoff)

@@ -125,8 +125,8 @@ namespace arithmetic
         virtual void unfft(GWNum& a, GWNum& res);
 
         void square(GWNum& a, GWNum& res, int options) { mul(a, a, res, options); }
-        void setmulbyconst(int32_t a) { gwsetmulbyconst(gwdata(), a); }
-        void setaddin(int32_t a) { gwsetaddin(gwdata(), a); }
+        void setmulbyconst(int32_t a) { if (gwdata()->mulbyconst == a) return; gwsetmulbyconst(gwdata(), a); }
+        void setaddin(int32_t a) { if (_addin == a) return; gwsetaddin(gwdata(), a); _addin = a; }
 
         GWState& state() { return _state; }
         gwhandle* gwdata() { return &_state.handle; }
@@ -134,10 +134,13 @@ namespace arithmetic
         Giant& N() { GWASSERT(_state.N); return *_state.N; }
         CarefulGWArithmetic& carefully() { return *_careful; }
         const GWNumWrapper wrap(gwnum a);
+        int32_t mulbyconst() { return gwdata()->mulbyconst; }
+        int32_t addin() { return _addin; }
 
     protected:
         GWState& _state;
         CarefulGWArithmetic* _careful = nullptr;
+        int32_t _addin = 0;
     };
 
     class CarefulGWArithmetic : public GWArithmetic
