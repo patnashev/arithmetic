@@ -40,6 +40,48 @@ void InputNum::write(File& file)
     file.commit_writer(*writer);
 }
 
+template<class It>
+void iterate_digits(bool& prime, It& it, It& first, const It& last)
+{
+    prime = it != last && *it == 'p';
+    if (prime)
+        it++;
+    for (first = it; it != last && std::isdigit(*it); it++);
+}
+
+int get_prime(int n)
+{
+    if (n == 0)
+        return 1;
+    PrimeIterator primes = PrimeIterator::get();
+    for (int i = 1; i < n; i++, primes++);
+    return *primes;
+}
+
+template<class It, class T, typename std::enable_if_t<std::is_integral<T>::value, bool> = true>
+bool parse_digits(bool prime, const It& first, const It& last, T& value)
+{
+    if (last == first || last - first > (prime ? 8 : 9))
+        return false;
+    if (prime)
+        value = get_prime(stoi(std::string(first, last)));
+    else
+        value = stoi(std::string(first, last));
+    return true;
+}
+
+template<class It, class T, typename std::enable_if_t<!std::is_integral<T>::value, bool> = true>
+bool parse_digits(bool prime, It& first, It& last, T& value)
+{
+    if (last == first || (prime && last - first > 8))
+        return false;
+    if (prime)
+        value = get_prime(stoi(std::string(first, last)));
+    else
+        value = std::string(first, last);
+    return true;
+}
+
 bool InputNum::parse(const std::string& s)
 {
     std::string::const_iterator it, it_s;
@@ -48,32 +90,30 @@ bool InputNum::parse(const std::string& s)
     uint32_t n = 0;
     int32_t c = 0;
     Giant tmp;
+    bool prime;
 
     for (it = s.begin(); it != s.end() && std::isspace(*it); it++);
     if (it != s.end() && *it == '\"')
         it++;
-    for (it_s = it; it != s.end() && std::isdigit(*it); it++);
-    if (it == it_s)
-        return false;
+    iterate_digits(prime, it, it_s, s.end());
     if (it != s.end() && *it == '*')
     {
-        gk = std::string(it_s, it);
-        for (it_s = ++it; it != s.end() && std::isdigit(*it); it++);
-        if (it == it_s)
+        if (!parse_digits(prime, it_s, it, gk))
             return false;
+        iterate_digits(prime, ++it, it_s, s.end());
     }
     else
         gk = 1;
     if (it == s.end() || *it == '^' || *it == '\"')
     {
-        gb = std::string(it_s, it);
+        if (!parse_digits(prime, it_s, it, gb))
+            return false;
     }
     else if (*it == '!')
     {
         type = FACTORIAL;
-        if (it == it_s || it - it_s > 9)
+        if (!parse_digits(prime, it_s, it, n))
             return false;
-        n = stoi(std::string(it_s, it));
         gb = 1;
         tmp = 1;
         for (uint32_t i = 2; i <= n; i++)
@@ -89,21 +129,26 @@ bool InputNum::parse(const std::string& s)
     else if (*it == '#')
     {
         type = PRIMORIAL;
-        if (it == it_s || it - it_s > 9)
+        if (it == it_s || it - it_s > (prime ? 8 : 9))
             return false;
         n = stoi(std::string(it_s, it));
         gb = 1;
         tmp = 1;
+        int last = 1;
         PrimeIterator primes = PrimeIterator::get();
-        for (uint32_t i = 0; i < n; i++, primes++)
+        for (uint32_t i = 0; prime ? i < n : *primes <= (int)n; i++, primes++)
         {
-            tmp *= *primes;
-            if (tmp.size() > 8192 || i == n - 1)
+            last = *primes;
+            tmp *= last;
+            if (tmp.size() > 8192)
             {
                 gb *= tmp;
                 tmp = 1;
             }
         }
+        n = last;
+        if (tmp != 1)
+            gb *= tmp;
     }
     else
         return false;
@@ -111,25 +156,26 @@ bool InputNum::parse(const std::string& s)
     {
         if (*it == '^')
         {
-            for (it_s = ++it; it != s.end() && std::isdigit(*it); it++);
-            if (it == it_s || it - it_s > 9)
+            iterate_digits(prime, ++it, it_s, s.end());
+            if (!parse_digits(prime, it_s, it, n))
                 return false;
-            n = stoi(std::string(it_s, it));
         }
         else
             it++;
+        bool minus = false;
         if (it == s.end())
             return false;
         else if (*it == '+')
-            c = 1;
+            minus = false;
         else if (*it == '-')
-            c = -1;
+            minus = true;
         else
             return false;
-        for (it_s = ++it; it != s.end() && std::isdigit(*it); it++);
-        if (it == it_s || it - it_s > 9)
+        iterate_digits(prime, ++it, it_s, s.end());
+        if (!parse_digits(prime, it_s, it, c))
             return false;
-        c *= stoi(std::string(it_s, it));
+        if (minus)
+            c = -c;
     }
     else
     {

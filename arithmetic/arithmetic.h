@@ -125,7 +125,7 @@ namespace arithmetic
         virtual void unfft(GWNum& a, GWNum& res);
 
         void square(GWNum& a, GWNum& res, int options) { mul(a, a, res, options); }
-        void setmulbyconst(int32_t a) { if (gwdata()->mulbyconst == a) return; gwsetmulbyconst(gwdata(), a); }
+        void setmulbyconst(int32_t a) { if (gwdata()->mulbyconst == a) return; GWASSERT(abs(a) <= state().maxmulbyconst); gwsetmulbyconst(gwdata(), a); }
         void setaddin(int32_t a) { if (_addin == a) return; gwsetaddin(gwdata(), a); _addin = a; }
 
         GWState& state() { return _state; }
