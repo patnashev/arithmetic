@@ -102,34 +102,44 @@ void Logging::report(const std::string& message, int level)
 {
     if (_overwrite_line)
         std::cout << "\r                                                                      \r";
-    _overwrite_line = false;
     if (_print_prefix)
         std::cout << _prefix;
-    if (!message.empty() && message.back() == '\r')
+    std::cout << message;
+    if (!_file_log.empty() && level != LEVEL_PROGRESS)
     {
-        std::cout.write(message.data(), message.size() - 1);
-        _overwrite_line = true;
+        FILE *fp = fopen(_file_log.data(), "a");
+        if (fp)
+        {
+            if (_print_prefix)
+                fprintf(fp, _prefix.data());
+            fprintf(fp, message.data());
+            fclose(fp);
+        }
     }
-    else
-        std::cout << message;
-    _print_prefix = !message.empty() && (message.back() == '\r' || message.back() == '\n');
+    _overwrite_line = (level == LEVEL_PROGRESS);
+    _print_prefix = !message.empty() && (level == LEVEL_PROGRESS || message.back() == '\n');
 }
 
 void Logging::report_progress()
 {
+    if (_level > LEVEL_PROGRESS)
+        return;
+    char buf[100];
     if (progress().num_stages() > 1 && progress().progress_stage() > 0 && progress().progress_stage() < 1)
     {
         if (progress().time_op() > 0)
-            info("%.1f%% stage / %.1f%% total, time per op: %.3f ms. \r", progress().progress_stage()*100, progress().progress_total()*100, progress().time_op()*1000);
+            snprintf(buf, 100, "%.1f%% stage / %.1f%% total, time per op: %.3f ms. ", progress().progress_stage()*100, progress().progress_total()*100, progress().time_op()*1000);
         else
-            info("%.1f%% stage / %.1f%% total. \r", progress().progress_stage()*100, progress().progress_total()*100);
+            snprintf(buf, 100, "%.1f%% stage / %.1f%% total. ", progress().progress_stage()*100, progress().progress_total()*100);
+        report(buf, LEVEL_PROGRESS);
     }
     else if (progress().num_stages() > 0)
     {
         if (progress().time_op() > 0)
-            info("%.1f%% done, time per op: %.3f ms. \r", progress().progress_total()*100, progress().time_op()*1000);
+            snprintf(buf, 100, "%.1f%% done, time per op: %.3f ms. ", progress().progress_total()*100, progress().time_op()*1000);
         else
-            info("%.1f%% done. \r", progress().progress_total()*100);
+            snprintf(buf, 100, "%.1f%% done. ", progress().progress_total()*100);
+        report(buf, LEVEL_PROGRESS);
     }
 }
 
@@ -138,7 +148,7 @@ void Logging::report_factor(InputNum& input, const arithmetic::Giant& f)
     std::string str = f.to_string();
     result(true, "found factor %s\n", str.data());
     result_save(input.input_text() + " found factor " + str + ", time: " + std::to_string((int)progress().time_total()) + " s.\n");
-    FILE *fp = fopen("factors.txt", "a");
+    FILE *fp = fopen(_file_factor.data(), "a");
     if (fp)
     {
         fprintf(fp, "%s | %s\n", str.data(), input.input_text().data());
@@ -148,7 +158,7 @@ void Logging::report_factor(InputNum& input, const arithmetic::Giant& f)
 
 void Logging::result_save(const std::string& message)
 {
-    FILE *fp = fopen("result.txt", "a");
+    FILE *fp = fopen(_file_result.data(), "a");
     if (fp)
     {
         fwrite(_prefix.data(), 1, _prefix.length(), fp);
@@ -157,7 +167,7 @@ void Logging::result_save(const std::string& message)
     }
 }
 
-void Logging::progress_file(File* file_progress)
+void Logging::file_progress(File* file_progress)
 {
     _file_progress = file_progress;
     if (file_progress == nullptr)

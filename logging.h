@@ -46,9 +46,10 @@ class Logging
 public:
     static const int LEVEL_DEBUG = 0;
     static const int LEVEL_INFO = 1;
-    static const int LEVEL_WARNING = 2;
-    static const int LEVEL_ERROR = 3;
-    static const int LEVEL_RESULT = 4;
+    static const int LEVEL_PROGRESS = 2;
+    static const int LEVEL_WARNING = 3;
+    static const int LEVEL_ERROR = 4;
+    static const int LEVEL_RESULT = 5;
 
 public:
     Logging(int level = LEVEL_INFO) : _level(level) { }
@@ -70,9 +71,13 @@ public:
 
     virtual bool state_save_flag() { return false; }
     virtual void state_save() { }
-    virtual void progress_file(File* file_progress);
     virtual void progress_save();
     virtual void heartbeat() { }
+
+    virtual void file_progress(File* file_progress);
+    void file_result(const std::string& filename) { _file_result = filename; }
+    void file_factor(const std::string& filename) { _file_factor = filename; }
+    void file_log(const std::string& filename) { _file_log = filename; }
 
     int level() { return _level; }
     Progress& progress() { return _progress; }
@@ -83,6 +88,9 @@ protected:
     int _level;
     Progress _progress;
     File* _file_progress = nullptr;
+    std::string _file_result = "result.txt";
+    std::string _file_factor = "factors.txt";
+    std::string _file_log;
     std::string _prefix;
     bool _print_prefix = true;
     bool _overwrite_line = false;
