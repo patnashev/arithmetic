@@ -67,6 +67,8 @@ bool parse_digits(bool prime, const It& first, const It& last, T& value)
         value = get_prime(stoi(std::string(first, last)));
     else
         value = stoi(std::string(first, last));
+    if (value == 0)
+        return false;
     return true;
 }
 
@@ -79,6 +81,8 @@ bool parse_digits(bool prime, It& first, It& last, T& value)
         value = get_prime(stoi(std::string(first, last)));
     else
         value = std::string(first, last);
+    if (value == 0)
+        return false;
     return true;
 }
 
