@@ -111,8 +111,8 @@ void Logging::report(const std::string& message, int level)
         if (fp)
         {
             if (_print_prefix)
-                fprintf(fp, _prefix.data());
-            fprintf(fp, message.data());
+                fwrite(_prefix.data(), 1, _prefix.length(), fp);
+            fwrite(message.data(), 1, message.length(), fp);
             fclose(fp);
         }
     }
