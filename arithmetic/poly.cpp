@@ -71,7 +71,7 @@ namespace arithmetic
         _max_output = max_polymult_output(gw.state());
         polymult_init(pmdata(), gw.gwdata());
         polymult_set_max_num_threads(pmdata(), max_threads);
-        pmdata()->L3_CACHE_SIZE = L3_CACHE_MB;
+        polymult_default_tuning(pmdata(), 256, L3_CACHE_MB*max_threads);
     }
 
     PolyMult::~PolyMult()

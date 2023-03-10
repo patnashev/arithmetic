@@ -228,6 +228,11 @@ void ConfigKeyValue::parse_args(int argc, char *argv[], int& cur)
             return;
         val_s++;
     }
+    else
+    {
+        if (*val_s == 0)
+            return;
+    }
     if (!set_value(val_s))
         return;
     cur += inc;
