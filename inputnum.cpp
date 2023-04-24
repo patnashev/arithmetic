@@ -440,7 +440,7 @@ void InputNum::process()
     if (_type == KBNC && _gk == 1 && _c == 1 && _n > 1 && (_n & (_n - 1)) == 0)
         for (_gfn = 1; (1UL << _gfn) < _n; _gfn++);
 
-    _display_text = build_text(40);
+    _display_text = build_text(30);
 }
 
 std::string InputNum::build_text(int max_len)
