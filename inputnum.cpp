@@ -220,14 +220,17 @@ void InputNum::add_factor(const Giant& factor, int power)
 
 void InputNum::add_factor(Giant& factor)
 {
+    if (!_b_cofactor || (*_b_cofactor)%factor != 0)
+        return;
     auto it = _b_factors.begin();
     for (; it != _b_factors.end() && it->first != factor; it++);
     if (it != _b_factors.end())
         it->second++;
     else
         _b_factors.emplace_back(factor, 1);
-    if (_b_cofactor)
-        *_b_cofactor /= factor;
+    *_b_cofactor /= factor;
+    if (*_b_cofactor == 1)
+        _b_cofactor.reset();
 }
 
 void InputNum::process()
@@ -270,11 +273,11 @@ void InputNum::process()
                         for (; smallprimes.back().second < bitmap.size(); smallprimes.back().second += smallprimes.back().first)
                             bitmap[smallprimes.back().second] = 1;
                     for (; tmp%(i*2 + 1) == 0; tmp /= i*2 + 1)
-                        add_factor(i*2 + 1);
+                        add_factor(i*2 + 1, 1);
                 }
             if (tmp > 1 && tmp < (1 << (2*s)))
             {
-                add_factor(tmp);
+                add_factor(tmp, 1);
                 tmp = 1;
             }
             for (j = 0; j < s && tmp > 1; j += 5)
@@ -285,10 +288,10 @@ void InputNum::process()
                         bitmap[it->second] = 1;
                 for (i = 1 << (s - 1 + j); i < bitmap.size(); i++)
                     for (; !bitmap[i] && tmp%(i*2 + 1) == 0; tmp /= i*2 + 1)
-                        add_factor(i*2 + 1);
+                        add_factor(i*2 + 1, 1);
                 if (tmp > 1 && (uint32_t)tmp.bitlen() <= 2*(s + j + 4))
                 {
-                    add_factor(tmp);
+                    add_factor(tmp, 1);
                     tmp = 1;
                 }
             }
@@ -314,7 +317,7 @@ void InputNum::process()
                 gw.mul(y, y, y, _b_cofactor->bit(len - i) ? GWMUL_MULBYCONST : 0);
             if (y == 3)
             {
-                add_factor(*_b_cofactor);
+                add_factor(*_b_cofactor, 1);
                 _b_cofactor.reset();
             }
         }
@@ -391,7 +394,7 @@ void InputNum::process()
                     rgw.mul(x, x, x, tmp.bit(len - i) ? GWMUL_MULBYCONST : 0);
                 if (x == 3)
                 {
-                    add_factor(tmp);
+                    add_factor(tmp, 1);
                     *_b_cofactor /= tmp;
                     gwstate.done();
                     gwstate.setup(*_b_cofactor);
@@ -403,7 +406,7 @@ void InputNum::process()
                         gw.mul(y, y, y, _b_cofactor->bit(len - i) ? GWMUL_MULBYCONST : 0);
                     if (y == 3)
                     {
-                        add_factor(*_b_cofactor);
+                        add_factor(*_b_cofactor, 1);
                         _b_cofactor.reset();
                         break;
                     }
@@ -563,7 +566,7 @@ void InputNum::to_base2(InputNum& k, InputNum& base2)
     base2._n = n2;
     base2._c = c;
     base2._b_factors.clear();
-    base2.add_factor(2);
+    base2.add_factor(2, 1);
     base2._b_cofactor.reset();
     base2._input_text = _input_text;
     base2._display_text = k._display_text;

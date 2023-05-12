@@ -57,8 +57,8 @@ public:
     const std::string& display_text() { return _display_text; }
 
 private:
-    void add_factor(uint32_t factor, int power = 1);
-    void add_factor(const arithmetic::Giant& factor, int power = 1);
+    void add_factor(uint32_t factor, int power);
+    void add_factor(const arithmetic::Giant& factor, int power);
     void process();
     std::string build_text(int max_len = -1);
 

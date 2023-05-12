@@ -355,13 +355,13 @@ void ConfigKeyList::parse_args(int argc, char *argv[], int& cur)
         for (i = 0, k = 0; val_s[i]; i++)
             if (val_s[i] == _list_delim)
                 k++;
-        if (k != (int)_objects.size() - 1)
+        if (_fixed_size && k != (int)_objects.size() - 1)
             return;
         for (i = 0, j = 0, k = 0; ; i++)
             if (!val_s[i] || val_s[i] == _list_delim)
             {
                 std::string val_str(val_s + j, i - j);
-                if (!_objects[k]->set_value(val_str.data()))
+                if (!_objects[k%_objects.size()]->set_value(val_str.data()))
                     return;
                 k++;
                 if (!val_s[i])
@@ -401,13 +401,13 @@ void ConfigKeyList::parse_ini(std::map<std::string, std::map<std::string, std::s
     for (i = 0, k = 0; val_s[i]; i++)
         if (val_s[i] == _list_delim)
             k++;
-    if (k != (int)_objects.size() - 1)
+    if (_fixed_size && k != (int)_objects.size() - 1)
         return;
     for (i = 0, j = 0, k = 0; ; i++)
         if (!val_s[i] || val_s[i] == _list_delim)
         {
             std::string val_str(val_s + j, i - j);
-            if (!_objects[k]->set_value(val_str.data()))
+            if (!_objects[k%_objects.size()]->set_value(val_str.data()))
                 return;
             k++;
             if (!val_s[i])

@@ -199,7 +199,7 @@ public:
     };
 
 public:
-    ConfigKeyList(const std::string& name, char delim, char list_delim) : ConfigObject(name), _delim(delim), _list_delim(list_delim) { }
+    ConfigKeyList(const std::string& name, char delim, char list_delim, bool fixed_size) : ConfigObject(name), _delim(delim), _list_delim(list_delim), _fixed_size(fixed_size){ }
 
     template<class T>
     T* add(T* object) { _objects.emplace_back(object);  return object; }
@@ -210,6 +210,7 @@ public:
 protected:
     char _delim;
     char _list_delim;
+    bool _fixed_size;
     std::vector<std::unique_ptr<ConfigListValue>> _objects;
 };
 
@@ -314,7 +315,7 @@ public:
     P& on_check(T& dst, V value) { _group->last()->set_parsed(new ConfigKeyCheck<T, V>("", dst, value)); return (P&)*this; }
     P& on_code(std::function<void()> func) { _group->last()->set_parsed(new ConfigKeyCode("", func)); return (P&)*this; }
     ConfigKeyGroupSetup<P> group(const std::string& key) { return ConfigKeyGroupSetup<P>(_group->add(new ConfigGroup(key)), (P*)this); }
-    ConfigKeyListSetup<P> list(const std::string& key, char delim, char list_delim) { return ConfigKeyListSetup<P>(_group->add(new ConfigKeyList(key, delim, list_delim)), (P*)this); }
+    ConfigKeyListSetup<P> list(const std::string& key, char delim, char list_delim, bool fixed_size = true) { return ConfigKeyListSetup<P>(_group->add(new ConfigKeyList(key, delim, list_delim, fixed_size)), (P*)this); }
     ConfigExclusiveSetup<P> exclusive() { return ConfigExclusiveSetup<P>(_group->add(new ConfigExclusive()), (P*)this); }
 
     R& end() { return (R&)*_parent; }
