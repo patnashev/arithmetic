@@ -818,6 +818,25 @@ namespace arithmetic
         }
         _op++;
     }
+
+    SerializedGWNum& SerializedGWNum::operator = (const GWNum& a)
+    {
+        int len;
+        if (gwserialize(a.arithmetic().gwdata(), *a, NULL, 0, &len) != GWERROR_MALLOC)
+            throw ArithmeticException();
+        _data.resize(-len);
+        if (gwserialize(a.arithmetic().gwdata(), *a, _data.data(), (int)_data.size(), &len) != 0 || _data.size() != len)
+            throw ArithmeticException();
+        return *this;
+    }
+
+    void SerializedGWNum::to_GWNum(GWNum& a) const
+    {
+        if (empty())
+            a = 0;
+        else
+            gwdeserialize(a.arithmetic().gwdata(), _data.data(), (int)_data.size(), *a);
+    }
 }
 
 int gwconvert(
@@ -953,4 +972,219 @@ int gwconvert(
     gwdata_s->read_count += 1;
     gwdata_d->write_count += 1;
     return (0);
+}
+
+#define GWSERIALIZE_HEADER_SIZE 4
+#define GWSERIALIZE_FLAG_IRRATIONAL 1
+#define GWSERIALIZE_FLAG_GENERALMOD 2
+
+int gwserialize(
+    gwhandle *gwdata,  /* Handle initialized by gwsetup */
+    gwnum gg,          /* Source gwnum */
+    uint32_t *array,   /* Array to contain the serialized value */
+    int arraylen,	   /* Maximum size of the array */
+    int *arrayused)    /* Size of the serialized value */
+{
+    int	err_code;
+    unsigned long limit;
+
+/* Make sure data is not FFTed.  Caller should really try to avoid this scenario. */
+
+	if (FFT_state (gg) != NOT_FFTed) gwunfft (gwdata, gg, gg);
+
+/* Set result to zero in case of error.  If caller does not check the returned error code */
+/* a result value of zero is less likely to cause problems/crashes. */
+
+    *arrayused = 0;
+
+/* If this is a general-purpose mod, then only convert the needed words */
+/* which will be less than half the FFT length.  If this is a zero padded */
+/* FFT, then only convert a little more than half of the FFT data words. */
+/* For a DWT, convert all the FFT data. */
+
+	if (gwdata->GENERAL_MOD) limit = gwdata->GW_GEN_MOD_MAX + 3;
+	else if (gwdata->ZERO_PADDED_FFT) limit = gwdata->FFTLEN / 2 + 4;
+	else limit = gwdata->FFTLEN;
+
+/* GENERAL_MOD has some strange cases we must handle.  In particular the */
+/* last fft word translated can be 2^bits and the next word could be -1, */
+/* this must be translated into zero, zero. */
+
+	if (gwdata->GENERAL_MOD) {
+		long	val, prev_val;
+		while (limit < gwdata->FFTLEN) {
+			err_code = get_fft_value (gwdata, gg, limit, &val);
+			if (err_code) return (err_code);
+			if (val == -1 || val == 0) break;
+			limit++;
+			ASSERTG (limit <= gwdata->FFTLEN / 2 + 2);
+			if (limit > gwdata->FFTLEN / 2 + 2) return (GWERROR_INTERNAL + 9);
+		}
+		while (limit > 1) {		/* Find top word */
+			err_code = get_fft_value (gwdata, gg, limit-1, &prev_val);
+			if (err_code) return (err_code);
+			if (val != prev_val || val < -1 || val > 0) break;
+			limit--;
+		}
+		limit++;
+	}
+
+    if ((int)limit + GWSERIALIZE_HEADER_SIZE > arraylen)
+    {
+        *arrayused = -((int)limit + GWSERIALIZE_HEADER_SIZE);
+        return GWERROR_MALLOC;
+    }
+
+    array[0] = 0;
+    array[1] = 0;
+    array[2] = 0;
+    array[3] = 0;
+
+    long val;
+    unsigned long i;
+    for (i = 0; i < limit; i++)
+    {
+        err_code = get_fft_value(gwdata, gg, i, &val);
+        if (err_code) return (err_code);
+        if (!gwdata->RATIONAL_FFT)
+        {
+            val <<= 1;
+            if (is_big_word(gwdata, i))
+                val |= 1;
+        }
+        array[i + GWSERIALIZE_HEADER_SIZE] = (uint32_t)val;
+    }
+
+    uint8_t* header = (uint8_t*)array;
+    if (!gwdata->RATIONAL_FFT)
+        header[0] |= GWSERIALIZE_FLAG_IRRATIONAL;
+    if (gwdata->GENERAL_MOD)
+        header[0] |= GWSERIALIZE_FLAG_GENERALMOD;
+    header[1] = (uint8_t)gwdata->NUM_B_PER_SMALL_WORD;
+    array[1] = (uint32_t)gwdata->b;
+    array[2] = (uint32_t)gwdata->FFTLEN;
+    array[3] = (uint32_t)limit;
+    *arrayused = (int)limit + GWSERIALIZE_HEADER_SIZE;
+
+/* Return success */
+
+	gwdata->read_count += 1;
+	return (0);
+}
+
+void gwdeserialize(
+    gwhandle *gwdata,	    /* Handle initialized by gwsetup */
+    const uint32_t *array,  /* Array containing the binary value */
+    int arraylen,	        /* Length of the array */
+    gwnum g)	    	    /* Destination gwnum */
+{
+    unsigned long i, limit;
+    long val;
+    uint8_t* header = (uint8_t*)array;
+
+    ASSERTG(arraylen >= GWSERIALIZE_HEADER_SIZE && array[2] != 0);
+
+    limit = array[3];
+
+    if (!gwdata->RATIONAL_FFT == ((header[0] & GWSERIALIZE_FLAG_IRRATIONAL) != 0) &&
+        gwdata->GENERAL_MOD == ((header[0] & GWSERIALIZE_FLAG_GENERALMOD) != 0) &&
+        gwdata->NUM_B_PER_SMALL_WORD == header[1] &&
+        gwdata->b == array[1] &&
+        gwdata->FFTLEN == array[2])
+    {
+        for (i = 0; i < limit; i++)
+        {
+            val = (int32_t)array[i + GWSERIALIZE_HEADER_SIZE];
+            if ((header[0] & GWSERIALIZE_FLAG_IRRATIONAL))
+            {
+                ASSERTG(((val & 1) != 0) == is_big_word(gwdata, i));
+                val >>= 1;
+            }
+            set_fft_value(gwdata, g, i, val);
+        }
+
+/* Clear the upper words */
+
+		for ( ; i < gwdata->FFTLEN; i++) {
+			set_fft_value (gwdata, g, i, 0);
+		}
+    }
+
+    else if (gwdata->b == array[1])
+    {
+        std::vector<int64_t> pow;
+        int64_t value;
+        int	bs_in_value, bs;
+        unsigned long i_d, limit_d;
+
+        pow.push_back(1);
+        pow.push_back(gwdata->b);
+        value = 0;
+        bs_in_value = 0;
+        i_d = 0;
+
+        // Figure out how many FFT words we will need to set
+        
+        if (gwdata->GENERAL_MOD) limit_d = gwdata->GW_GEN_MOD_MAX + 3;
+        else if (gwdata->ZERO_PADDED_FFT) limit_d = gwdata->FFTLEN / 2 + 4;
+        else limit_d = gwdata->FFTLEN;
+
+        /* Collect bs until we have all of them */
+
+        for (i = 0; i < limit; i++) {
+            bs = header[1];
+            val = (int32_t)array[i + GWSERIALIZE_HEADER_SIZE];
+            if ((header[0] & GWSERIALIZE_FLAG_IRRATIONAL))
+            {
+                if ((val & 1))
+                    bs++;
+                val >>= 1;
+            }
+            while (pow.size() <= bs_in_value)
+                pow.push_back(pow.back()*gwdata->b);
+            value += val*pow[bs_in_value];
+            bs_in_value += bs;
+
+            for (; i_d < limit_d; i_d++) {
+                if (i_d == limit_d - 1) {
+                    if (i < limit - 1) break;
+                    val = (long)value;
+                }
+                else {
+                    bs = gwdata->NUM_B_PER_SMALL_WORD;
+                    if (is_big_word(gwdata, i_d))
+                        bs++;
+                    if (i < limit - 1 && bs > bs_in_value) break;
+                    while (pow.size() <= bs)
+                        pow.push_back(pow.back()*gwdata->b);
+                    val = (long)(value%pow[bs]);
+                    value /= pow[bs];
+                    if (val > pow[bs]/2)
+                    {
+                        val -= (long)pow[bs];
+                        value++;
+                    }
+                    else if (val < -pow[bs]/2)
+                    {
+                        val += (long)pow[bs];
+                        value--;
+                    }
+                    bs_in_value -= bs;
+                }
+                set_fft_value(gwdata, g, i_d, val);
+            }
+        }
+
+        /* Clear the upper words */
+
+        for (; i_d < gwdata->FFTLEN; i_d++) {
+            set_fft_value(gwdata, g, i_d, 0);
+        }
+    }
+
+    /* Clear various flags, update counts */
+
+    unnorms(g) = 0.0f;		/* Set unnormalized add counter */
+    FFT_state(g) = NOT_FFTed;	/* Clear has been completely/partially FFTed flag */
+    gwdata->write_count += 1;
 }

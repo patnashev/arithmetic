@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 #include <unordered_set>
 #include <mutex>
 
@@ -196,6 +197,24 @@ namespace arithmetic
         double _max_roundoff = 0.4;
     };
 
+    class SerializedGWNum
+    {
+    public:
+        SerializedGWNum() { }
+
+        void init(const uint32_t* data, size_t size) { _data.clear(); _data.insert(_data.end(), data, data + size); }
+        SerializedGWNum& operator = (const GWNum& a);
+        void to_GWNum(GWNum& a) const;
+
+    public:
+        bool empty() const { return _data.empty(); }
+        const uint32_t* data() const { return _data.data(); }
+        size_t size() const { return _data.size(); }
+
+    private:
+        std::vector<uint32_t> _data;
+    };
+
     class GWNum : public FieldElement<GWArithmetic, GWNum>
     {
         friend class GWArithmetic;
@@ -242,6 +261,11 @@ namespace arithmetic
         GWNum& operator = (const Giant& a)
         {
             arithmetic().state().giants->to_GWNum(a, *this);
+            return *this;
+        }
+        GWNum& operator = (const SerializedGWNum& a)
+        {
+            a.to_GWNum(*this);
             return *this;
         }
 
@@ -328,3 +352,16 @@ int gwconvert(
     gwhandle *gwdata_d,	/* Handle initialized by gwsetup */
     gwnum	s,
     gwnum	d);
+
+int gwserialize(
+    gwhandle *gwdata,   /* Handle initialized by gwsetup */
+    gwnum s,            /* Source gwnum */
+    uint32_t *array,    /* Array to contain the serialized value */
+    int arraylen,	    /* Maximum size of the array */
+    int *arrayused);    /* Size of the serialized value */
+
+void gwdeserialize(
+    gwhandle *gwdata,	    /* Handle initialized by gwsetup */
+    const uint32_t *array,  /* Array containing the binary value */
+    int arraylen,	        /* Length of the array */
+    gwnum d);	    	    /* Destination gwnum */

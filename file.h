@@ -2,7 +2,12 @@
 
 #include <memory>
 #include <vector>
-#include "giant.h"
+
+namespace arithmetic
+{
+    class Giant;
+    class SerializedGWNum;
+}
 
 class Writer
 {
@@ -17,6 +22,7 @@ public:
     void write(double value);
     void write(const std::string& value);
     void write(const arithmetic::Giant& value);
+    void write(const arithmetic::SerializedGWNum& value);
     void write(const char* ptr, int count);
     void write_text(const char* ptr);
     void write_text(const std::string& value);
@@ -42,6 +48,7 @@ public:
     bool read(double& value);
     bool read(std::string& value);
     bool read(arithmetic::Giant& value);
+    bool read(arithmetic::SerializedGWNum& value);
 
     char type() { return _type; }
     char version() { return _version; }

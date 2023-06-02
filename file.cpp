@@ -49,6 +49,13 @@ void Writer::write(const arithmetic::Giant& value)
     _buffer.insert(_buffer.end(), (char*)value.data(), (char*)(value.data() + value.size()));
 }
 
+void Writer::write(const arithmetic::SerializedGWNum& value)
+{
+    int32_t len = value.size();
+    _buffer.insert(_buffer.end(), (char*)&len, 4 + (char*)&len);
+    _buffer.insert(_buffer.end(), (char*)value.data(), (char*)(value.data() + value.size()));
+}
+
 void Writer::write(const char* ptr, int count)
 {
     _buffer.insert(_buffer.end(), ptr, ptr + count);
@@ -155,6 +162,19 @@ bool Reader::read(arithmetic::Giant& value)
     if (len < 0)
         value.arithmetic().neg(value, value);
     _pos += abs(len)*4;
+    return true;
+}
+
+bool Reader::read(arithmetic::SerializedGWNum& value)
+{
+    if (_size < _pos + 4)
+        return false;
+    int len = *(int32_t*)(_data + _pos);
+    _pos += 4;
+    if (_size < _pos + len*sizeof(uint32_t))
+        return false;
+    value.init((uint32_t*)(_data + _pos), len);
+    _pos += len*sizeof(uint32_t);
     return true;
 }
 
