@@ -35,14 +35,14 @@ void Writer::write(double value)
 
 void Writer::write(const std::string& value)
 {
-    int32_t len = (int)value.size();
+    int32_t len = (int32_t)value.size();
     _buffer.insert(_buffer.end(), (char*)&len, 4 + (char*)&len);
     _buffer.insert(_buffer.end(), (char*)value.data(), (char*)(value.data() + value.size()));
 }
 
 void Writer::write(const arithmetic::Giant& value)
 {
-    int32_t len = value.size();
+    int32_t len = (int32_t)value.size();
     if (value < 0)
         len *= -1;
     _buffer.insert(_buffer.end(), (char*)&len, 4 + (char*)&len);
@@ -51,7 +51,7 @@ void Writer::write(const arithmetic::Giant& value)
 
 void Writer::write(const arithmetic::SerializedGWNum& value)
 {
-    int32_t len = value.size();
+    int32_t len = (int32_t)value.size();
     _buffer.insert(_buffer.end(), (char*)&len, 4 + (char*)&len);
     _buffer.insert(_buffer.end(), (char*)value.data(), (char*)(value.data() + value.size()));
 }

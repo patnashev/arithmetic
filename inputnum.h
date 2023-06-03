@@ -38,6 +38,7 @@ public:
     static uint64_t parse_numeral(const std::string& s);
 
     bool empty() const { return _gb == 0; }
+    int type() { return _type; }
     uint32_t k() { return _gk.size() == 1 ? *(_gk.data()) : 0; }
     uint32_t b() { return _gb.size() == 1 ? *(_gb.data()) : 0; }
     uint32_t n() { return _type == KBNC ? _n : 1; }

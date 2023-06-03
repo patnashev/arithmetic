@@ -110,7 +110,7 @@ protected:
     bool set_value(const char* value_s) { auto it = _enum.values.find(value_s); if (it == _enum.values.end()) return false; _value = it->second; return true; }
 
 protected:
-    V& _value;
+    T& _value;
     const Enum<V>& _enum;
 };
 
