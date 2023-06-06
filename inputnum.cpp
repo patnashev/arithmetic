@@ -52,9 +52,13 @@ void iterate_digits(bool& prime, It& it, It& first, const It& last)
 template<class It>
 void iterate_func(std::string& f, It& it, const It& last)
 {
+    f.clear();
     It it_s;
     for (it_s = it; it != last && std::isalpha(*it); it++);
-    f = std::string(it_s, it);
+    if (it != last && *it == '(')
+        f = std::string(it_s, it);
+    else
+        it = it_s;
 }
 
 template<class It>
