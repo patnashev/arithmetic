@@ -49,6 +49,40 @@ void iterate_digits(bool& prime, It& it, It& first, const It& last)
     for (first = it; it != last && std::isdigit(*it); it++);
 }
 
+template<class It>
+void iterate_func(std::string& f, It& it, const It& last)
+{
+    It it_s;
+    for (it_s = it; it != last && std::isalpha(*it); it++);
+    f = std::string(it_s, it);
+}
+
+template<class It>
+void iterate_args(std::string& f, std::vector<std::string>& args, It& it, const It& last)
+{
+    args.clear();
+    if (f.empty())
+        f = "()";
+    it++;
+    while (it != last && *it != ')')
+    {
+        int recursion = 0;
+        It it_s = it;
+        for (it_s = it; it != last && (recursion > 0 || (*it != ')' && *it != ',')); it++)
+        {
+            if (*it == '(')
+                recursion++;
+            if (*it == ')')
+                recursion--;
+        }
+        args.emplace_back(it_s, it);
+        if (*it == ',')
+            it++;
+    }
+    if (it != last && *it == ')')
+        it++;
+}
+
 int get_prime(int n)
 {
     if (n == 0)
@@ -86,6 +120,29 @@ bool parse_digits(bool prime, It& first, It& last, T& value)
     return true;
 }
 
+bool parse_func(const std::string& f, const std::vector<std::string>& args, Giant& value, std::string& custom_val)
+{
+    if (f == "()")
+    {
+        if (args.size() > 1)
+            return false;
+        InputNum recursive;
+        if (!recursive.parse(args[0]))
+            return false;
+        value = recursive.value();
+        custom_val = "(" + recursive.input_text() + ")";
+    }
+    else
+    {
+        custom_val = f;
+        for (auto it_a = args.begin(); it_a != args.end(); it_a++)
+            custom_val += (it_a == args.begin() ? "(" : ",") + *it_a;
+        custom_val += ")";
+        return false; // not implemented
+    }
+    return true;
+}
+
 bool InputNum::parse(const std::string& s)
 {
     std::string::const_iterator it, it_s;
@@ -95,22 +152,48 @@ bool InputNum::parse(const std::string& s)
     int32_t c = 0;
     Giant tmp;
     bool prime;
+    std::string f;
+    std::vector<std::string> args;
+    std::string custom_k;
+    std::string custom_b;
 
     for (it = s.begin(); it != s.end() && std::isspace(*it); it++);
     if (it != s.end() && *it == '\"')
         it++;
-    iterate_digits(prime, it, it_s, s.end());
+
+    iterate_func(f, it, s.end());
+    if (!f.empty() || (it != s.end() && *it == '('))
+        iterate_args(f, args, it, s.end());
+    else
+        iterate_digits(prime, it, it_s, s.end());
+    
     if (it != s.end() && *it == '*')
     {
-        if (!parse_digits(prime, it_s, it, gk))
+        if (!f.empty())
+        {
+            if (!parse_func(f, args, gk, custom_k))
+                return false;
+        }
+        else if (!parse_digits(prime, it_s, it, gk))
             return false;
-        iterate_digits(prime, ++it, it_s, s.end());
+
+        it++;
+        iterate_func(f, it, s.end());
+        if (!f.empty() || (it != s.end() && *it == '('))
+            iterate_args(f, args, it, s.end());
+        else
+            iterate_digits(prime, it, it_s, s.end());
     }
     else
         gk = 1;
     if (it == s.end() || *it == '^' || *it == '\"')
     {
-        if (!parse_digits(prime, it_s, it, gb))
+        if (!f.empty())
+        {
+            if (!parse_func(f, args, gb, custom_b))
+                return false;
+        }
+        else if (!parse_digits(prime, it_s, it, gb))
             return false;
     }
     else if (*it == '!')
@@ -192,11 +275,24 @@ bool InputNum::parse(const std::string& s)
     if (it != s.end())
         return false;
 
+    if (type != GENERIC && c == 1 && ((type == KBNC && abs(gk.bitlen() - log2(gb)*n) < n/30 + 10) || (type != KBNC && abs(gk.bitlen() - gb.bitlen()) < 10)))
+    {
+        tmp = gb;
+        tmp.power(n);
+        tmp -= gk;
+        if (tmp == 1)
+            _cyclotomic = -3;
+        if (tmp == -1)
+            _cyclotomic = 3;
+    }
+
     _type = type;
     _gk = std::move(gk);
     _gb = std::move(gb);
     _n = n;
     _c = c;
+    _custom_k = custom_k;
+    _custom_b = custom_b;
     process();
     return true;
 }
@@ -430,13 +526,15 @@ void InputNum::process()
                 _gb = 1;
                 for (auto it = _b_factors.begin(); it != _b_factors.end(); it++)
                     _gb *= power(it->first, it->second);
+                _custom_b.clear();
             }
         }
 
-        while (_gk%_gb == 0)
+        while (_gk%_gb == 0 && _cyclotomic == 0)
         {
             _gk /= _gb;
             _n++;
+            _custom_k.clear();
         }
     }
 
@@ -452,7 +550,7 @@ std::string InputNum::build_text(int max_len)
     res.reserve(32);
     if (_gk != 1)
     {
-        std::string sk = _gk.to_string();
+        std::string sk = !_custom_k.empty() ? _custom_k : _gk.to_string();
         if (sk.size() > max_len && max_len > 0)
         {
             res.append(sk, 0, max_len/2);
@@ -476,7 +574,7 @@ std::string InputNum::build_text(int max_len)
     }
     else if (_gb != 1)
     {
-        std::string sb = _gb.to_string();
+        std::string sb = !_custom_b.empty() ? _custom_b : _gb.to_string();
         if (sb.size() > max_len && max_len > 0)
         {
             res.append(sb, 0, max_len/2);
@@ -513,6 +611,14 @@ void InputNum::setup(GWState& state)
     {
         state.setup(_gk*_gb + _c);
     }
+    else if (_cyclotomic != 0 && b() != 0 && !state.force_general_mod)
+    {
+        state.setup(1, b(), abs(_cyclotomic)*_n, _cyclotomic < 0 ? _c : -_c);
+        *state.N = value();
+        _mod_gwstate.reset(new GWState());
+        _mod_gwstate->force_general_mod = true;
+        _mod_gwstate->setup(*state.N);
+    }
     else if (k() != 0 && b() != 0)
     {
         state.setup(k(), b(), _n, _c);
@@ -521,7 +627,7 @@ void InputNum::setup(GWState& state)
     {
         state.setup(_gk*power(_gb, _n) + _c);
     }
-    if (state.fingerprint != fingerprint())
+    if ((_mod_gwstate ? _mod_gwstate->fingerprint : state.fingerprint) != fingerprint())
         throw ArithmeticException();
 }
 
@@ -630,6 +736,22 @@ uint32_t InputNum::fingerprint()
     result = ((uint64_t)result*(_gk%3417905339UL))%3417905339UL;
     result = (result + (uint32_t)_c)%3417905339UL;
     return result;
+}
+
+void InputNum::mod(arithmetic::Giant& a, arithmetic::Giant& res)
+{
+    if (!_mod_gwstate)
+    {
+        _mod_gwstate.reset(new GWState());
+        _mod_gwstate->force_general_mod = true;
+        _mod_gwstate->setup(value());
+    }
+
+    GWArithmetic gw(*_mod_gwstate);
+    GWNum X(gw);
+    X = a;
+    gw.fft(X, X);
+    res = X;
 }
 
 bool InputNum::is_factorized_half()
