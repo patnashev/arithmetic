@@ -33,6 +33,9 @@ namespace arithmetic
         void clone(GWState& state);
         void done();
 
+        bool need_mod() { return !known_factors.empty() && known_factors > 1; }
+        void mod(arithmetic::Giant& a, arithmetic::Giant& res);
+
         gwhandle* gwdata() { return &handle; }
 
         int thread_count = 1;
@@ -70,6 +73,7 @@ namespace arithmetic
         std::string fft_description;
         int fft_length;
         int bit_length;
+        std::unique_ptr<arithmetic::GWState> mod_gwstate;
     };
 
     class GWNum;

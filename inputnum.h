@@ -34,7 +34,6 @@ public:
     void to_base2(InputNum& k, InputNum& base2);
     bool is_factorized_half();
     void add_factor(arithmetic::Giant& factor);
-    void mod(arithmetic::Giant& a, arithmetic::Giant& res);
 
     static uint64_t parse_numeral(const std::string& s);
 
@@ -51,7 +50,6 @@ public:
     arithmetic::Giant value() { return _type == GENERIC ? _gb : _type != KBNC ? _gk*_gb + _c : _gk*power(_gb, _n) + _c; }
     uint32_t fingerprint();
     int bitlen();
-    bool need_mod() { return (bool)_mod_gwstate; }
 
     std::vector<std::pair<arithmetic::Giant, int>>& b_factors() { return _b_factors; }
     std::unique_ptr<arithmetic::Giant>& b_cofactor() { return _b_cofactor; }
@@ -80,5 +78,4 @@ private:
     std::string _custom_b;
     int _gfn = 0;
     int _cyclotomic = 0;
-    std::unique_ptr<arithmetic::GWState> _mod_gwstate;
 };

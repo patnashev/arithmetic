@@ -10,6 +10,8 @@ namespace arithmetic
 {
     void GWState::init()
     {
+        if (N)
+            throw ArithmeticException(); // call done() first
         gwset_num_threads(gwdata(), thread_count);
         gwset_larger_fftlen_count(gwdata(), next_fft_count);
         gwset_safety_margin(gwdata(), safety_margin);
@@ -111,6 +113,8 @@ namespace arithmetic
 
     void GWState::clone(GWState& state)
     {
+        if (N)
+            throw ArithmeticException(); // call done() first
         copy(state);
         gwclone(&handle, &state.handle);
         bit_length = state.bit_length;
@@ -120,10 +124,12 @@ namespace arithmetic
         fingerprint = state.fingerprint;
         fft_description = state.fft_description;
         fft_length = state.fft_length;
+        mod_gwstate.reset();
     }
 
     void GWState::done()
     {
+        mod_gwstate.reset();
         N.reset();
         giants.reset();
         fft_description.clear();
@@ -131,6 +137,23 @@ namespace arithmetic
         gwdone(&handle);
         gwinit(&handle);
     }
+
+    void GWState::mod(arithmetic::Giant& a, arithmetic::Giant& res)
+    {
+        if (!mod_gwstate)
+        {
+            mod_gwstate.reset(new GWState());
+            mod_gwstate->force_general_mod = true;
+            mod_gwstate->setup(*N);
+        }
+
+        GWArithmetic gw(*mod_gwstate);
+        GWNum X(gw);
+        X = a;
+        gw.fft(X, X);
+        res = X;
+    }
+
 
     GWArithmetic::GWArithmetic(GWState& state) : _state(state)
     {

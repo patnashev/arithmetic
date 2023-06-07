@@ -617,11 +617,11 @@ void InputNum::setup(GWState& state)
     }
     else if (_cyclotomic != 0 && b() != 0 && !state.force_general_mod)
     {
-        state.setup(1, b(), abs(_cyclotomic)*_n, _cyclotomic < 0 ? _c : -_c);
-        *state.N = value();
-        _mod_gwstate.reset(new GWState());
-        _mod_gwstate->force_general_mod = true;
-        _mod_gwstate->setup(*state.N);
+        state.known_factors = power(_gb, _n) + (_cyclotomic < 0 ? 1 : -1);
+        state.setup(1, b(), abs(_cyclotomic)*_n, _cyclotomic < 0 ? 1 : -1);
+        if (*state.N%3417905339UL != fingerprint())
+            throw ArithmeticException();
+        return;
     }
     else if (k() != 0 && b() != 0)
     {
@@ -631,7 +631,7 @@ void InputNum::setup(GWState& state)
     {
         state.setup(_gk*power(_gb, _n) + _c);
     }
-    if ((_mod_gwstate ? _mod_gwstate->fingerprint : state.fingerprint) != fingerprint())
+    if (state.fingerprint != fingerprint())
         throw ArithmeticException();
 }
 
@@ -740,22 +740,6 @@ uint32_t InputNum::fingerprint()
     result = ((uint64_t)result*(_gk%3417905339UL))%3417905339UL;
     result = (result + (uint32_t)_c)%3417905339UL;
     return result;
-}
-
-void InputNum::mod(arithmetic::Giant& a, arithmetic::Giant& res)
-{
-    if (!_mod_gwstate)
-    {
-        _mod_gwstate.reset(new GWState());
-        _mod_gwstate->force_general_mod = true;
-        _mod_gwstate->setup(value());
-    }
-
-    GWArithmetic gw(*_mod_gwstate);
-    GWNum X(gw);
-    X = a;
-    gw.fft(X, X);
-    res = X;
 }
 
 bool InputNum::is_factorized_half()
