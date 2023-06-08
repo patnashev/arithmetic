@@ -23,9 +23,9 @@ public:
     InputNum(T&& b) { _type = GENERIC; _gk = 1; _gb = std::forward<T>(b); _n = 0; _c = 0; process(); }
 
     template<class TK, class TB>
-    void init(TK&& k, TB&& b, int n, int c) { _type = KBNC; _gk = std::forward<TK>(k); _gb = std::forward<TB>(b); _n = n; _c = c; process(); }
+    void init(TK&& k, TB&& b, int n, int c) { _type = KBNC; _gk = std::forward<TK>(k); _gb = std::forward<TB>(b); _n = n; _c = c; _custom_k.clear(); _custom_b.clear(); _cyclotomic = 0; _cyclotomic_k = 0; process(); }
     template<class T>
-    void init(T&& b) { _type = GENERIC; _gk = 1; _gb = std::forward<T>(b); _n = 0; _c = 0; process(); }
+    void init(T&& b) { _type = GENERIC; _gk = 1; _gb = std::forward<T>(b); _n = 0; _c = 0; _custom_k.clear(); _custom_b.clear(); _cyclotomic = 0; _cyclotomic_k = 0; process(); }
     bool read(File& file);
     void write(File& file);
     bool parse(const std::string& s);
@@ -78,4 +78,5 @@ private:
     std::string _custom_b;
     int _gfn = 0;
     int _cyclotomic = 0;
+    uint32_t _cyclotomic_k = 0;
 };

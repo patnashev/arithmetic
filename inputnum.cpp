@@ -160,6 +160,8 @@ bool InputNum::parse(const std::string& s)
     std::vector<std::string> args;
     std::string custom_k;
     std::string custom_b;
+    int cyclotomic = 0;
+    uint32_t cyclotomic_k = 0;
 
     for (it = s.begin(); it != s.end() && std::isspace(*it); it++);
     if (it != s.end() && *it == '\"')
@@ -170,108 +172,147 @@ bool InputNum::parse(const std::string& s)
         iterate_args(f, args, it, s.end());
     else
         iterate_digits(prime, it, it_s, s.end());
-    
-    if (it != s.end() && *it == '*')
-    {
-        if (!f.empty())
-        {
-            if (!parse_func(f, args, gk, custom_k))
-                return false;
-        }
-        else if (!parse_digits(prime, it_s, it, gk))
-            return false;
 
-        it++;
-        iterate_func(f, it, s.end());
-        if (!f.empty() || (it != s.end() && *it == '('))
-            iterate_args(f, args, it, s.end());
+    if (!f.empty() && (it == s.end() || *it == '\"'))
+    {
+        if (f == "Phi" && args.size() == 2)
+        {
+            cyclotomic = stoi(args[0]);
+            if (cyclotomic != 3 && cyclotomic != 6)
+                return false;
+            if (!args[1].empty() && args[1][0] == '-')
+            {
+                cyclotomic = (cyclotomic == 3 ? 6 : 3);
+                args[1] = args[1].substr(1);
+            }
+            InputNum recursive;
+            if (!recursive.parse(args[1] + "+1"))
+                return false;
+            type = recursive.type();
+            gk = recursive.value();
+            custom_k = "(" + recursive.input_text() + ")";
+            if (cyclotomic == 6)
+            {
+                gk -= 2;
+                custom_k[custom_k.size() - 3] = '-';
+            }
+            if (recursive.k() != 1)
+            {
+                gk *= recursive.gk();
+                custom_k += "*" + recursive.gk().to_string();
+            }
+            gb = recursive.gb();
+            n = recursive._n;
+            c = 1;
+            cyclotomic_k = (recursive.k() > 0 && recursive.k() < 1000 ? recursive.k() : 0);
+        }
         else
-            iterate_digits(prime, it, it_s, s.end());
+            return false;
     }
     else
-        gk = 1;
-    if (it == s.end() || *it == '^' || *it == '\"')
     {
-        if (!f.empty())
+        if (it != s.end() && *it == '*')
         {
-            if (!parse_func(f, args, gb, custom_b))
+            if (!f.empty())
+            {
+                if (!parse_func(f, args, gk, custom_k))
+                    return false;
+            }
+            else if (!parse_digits(prime, it_s, it, gk))
+                return false;
+
+            it++;
+            iterate_func(f, it, s.end());
+            if (!f.empty() || (it != s.end() && *it == '('))
+                iterate_args(f, args, it, s.end());
+            else
+                iterate_digits(prime, it, it_s, s.end());
+        }
+        else
+            gk = 1;
+        if (it == s.end() || *it == '^' || *it == '\"')
+        {
+            if (!f.empty())
+            {
+                if (!parse_func(f, args, gb, custom_b))
+                    return false;
+            }
+            else if (!parse_digits(prime, it_s, it, gb))
                 return false;
         }
-        else if (!parse_digits(prime, it_s, it, gb))
-            return false;
-    }
-    else if (*it == '!')
-    {
-        type = FACTORIAL;
-        if (!parse_digits(prime, it_s, it, n))
-            return false;
-        gb = 1;
-        tmp = 1;
-        for (uint32_t i = 2; i <= n; i++)
+        else if (*it == '!')
         {
-            tmp *= i;
-            if (tmp.size() > 8192 || i == n)
-            {
-                gb *= tmp;
-                tmp = 1;
-            }
-        }
-    }
-    else if (*it == '#')
-    {
-        type = PRIMORIAL;
-        if (it == it_s || it - it_s > (prime ? 8 : 9))
-            return false;
-        n = stoi(std::string(it_s, it));
-        gb = 1;
-        tmp = 1;
-        int last = 1;
-        PrimeIterator primes = PrimeIterator::get();
-        for (uint32_t i = 0; prime ? i < n : *primes <= (int)n; i++, primes++)
-        {
-            last = *primes;
-            tmp *= last;
-            if (tmp.size() > 8192)
-            {
-                gb *= tmp;
-                tmp = 1;
-            }
-        }
-        n = last;
-        if (tmp != 1)
-            gb *= tmp;
-    }
-    else
-        return false;
-    if (it != s.end())
-    {
-        if (*it == '^')
-        {
-            iterate_digits(prime, ++it, it_s, s.end());
+            type = FACTORIAL;
             if (!parse_digits(prime, it_s, it, n))
                 return false;
+            gb = 1;
+            tmp = 1;
+            for (uint32_t i = 2; i <= n; i++)
+            {
+                tmp *= i;
+                if (tmp.size() > 8192 || i == n)
+                {
+                    gb *= tmp;
+                    tmp = 1;
+                }
+            }
+        }
+        else if (*it == '#')
+        {
+            type = PRIMORIAL;
+            if (it == it_s || it - it_s > (prime ? 8 : 9))
+                return false;
+            n = stoi(std::string(it_s, it));
+            gb = 1;
+            tmp = 1;
+            int last = 1;
+            PrimeIterator primes = PrimeIterator::get();
+            for (uint32_t i = 0; prime ? i < n : *primes <= (int)n; i++, primes++)
+            {
+                last = *primes;
+                tmp *= last;
+                if (tmp.size() > 8192)
+                {
+                    gb *= tmp;
+                    tmp = 1;
+                }
+            }
+            n = last;
+            if (tmp != 1)
+                gb *= tmp;
         }
         else
-            it++;
-        bool minus = false;
-        if (it == s.end())
             return false;
-        else if (*it == '+')
-            minus = false;
-        else if (*it == '-')
-            minus = true;
+        if (it != s.end())
+        {
+            if (*it == '^')
+            {
+                iterate_digits(prime, ++it, it_s, s.end());
+                if (!parse_digits(prime, it_s, it, n))
+                    return false;
+            }
+            else
+                it++;
+            bool minus = false;
+            if (it == s.end())
+                return false;
+            else if (*it == '+')
+                minus = false;
+            else if (*it == '-')
+                minus = true;
+            else
+                return false;
+            iterate_digits(prime, ++it, it_s, s.end());
+            if (!parse_digits(prime, it_s, it, c))
+                return false;
+            if (minus)
+                c = -c;
+        }
         else
-            return false;
-        iterate_digits(prime, ++it, it_s, s.end());
-        if (!parse_digits(prime, it_s, it, c))
-            return false;
-        if (minus)
-            c = -c;
-    }
-    else
-    {
-        n = 1;
-        c = 0;
+        {
+            n = 1;
+            c = 0;
+        }
     }
     if (it != s.end() && *it == '\"')
         it++;
@@ -279,15 +320,17 @@ bool InputNum::parse(const std::string& s)
     if (it != s.end())
         return false;
 
-    if (type != GENERIC && c == 1 && ((type == KBNC && abs(gk.bitlen() - log2(gb)*n) < n/30 + 10) || (type != KBNC && abs(gk.bitlen() - gb.bitlen()) < 10)))
+    if (cyclotomic == 0 && type != GENERIC && c == 1 && ((type == KBNC && abs(gk.bitlen() - log2(gb)*n) < n/30 + 10) || (type != KBNC && abs(gk.bitlen() - gb.bitlen()) < 10)))
     {
         tmp = gb;
         tmp.power(n);
         tmp -= gk;
         if (tmp == 1)
-            _cyclotomic = -3;
+            cyclotomic = 6;
         if (tmp == -1)
-            _cyclotomic = 3;
+            cyclotomic = 3;
+        if (cyclotomic != 0)
+            cyclotomic_k = 1;
     }
 
     _type = type;
@@ -297,6 +340,8 @@ bool InputNum::parse(const std::string& s)
     _c = c;
     _custom_k = custom_k;
     _custom_b = custom_b;
+    _cyclotomic = cyclotomic;
+    _cyclotomic_k = cyclotomic_k;
     process();
     return true;
 }
@@ -615,10 +660,10 @@ void InputNum::setup(GWState& state)
     {
         state.setup(_gk*_gb + _c);
     }
-    else if (_cyclotomic != 0 && b() != 0 && !state.force_general_mod)
+    else if (_cyclotomic != 0 && _cyclotomic_k != 0 && b() != 0 && !state.force_general_mod)
     {
-        state.known_factors = power(_gb, _n) + (_cyclotomic < 0 ? 1 : -1);
-        state.setup(1, b(), abs(_cyclotomic)*_n, _cyclotomic < 0 ? 1 : -1);
+        state.known_factors = _cyclotomic_k*power(_gb, _n) + (_cyclotomic == 6 ? 1 : -1);
+        state.setup(_cyclotomic_k*_cyclotomic_k*_cyclotomic_k, b(), 3*_n, _cyclotomic == 6 ? 1 : -1);
         if (*state.N%3417905339UL != fingerprint())
             throw ArithmeticException();
         return;
