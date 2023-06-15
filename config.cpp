@@ -54,9 +54,9 @@ void Config::parse_ini(File& file)
                 continue;
             }
             if (i == std::string::npos)
-                values[group][st] = "";
+                values[group][(group == "" ? "-" : "") + st] = "";
             else
-                values[group][st.substr(0, i)] = st.substr(i + 1);
+                values[group][(group == "" ? "-" : "") + st.substr(0, i)] = st.substr(i + 1);
         }
         if (not_eof)
         {
@@ -75,7 +75,7 @@ void Config::parse_ini(File& file)
 
     ConfigGroup::parse_ini(values, "");
     for (auto& v : values[""])
-        _default_code(v.first.data());
+        _default_code(v.first.data() + 1);
     values.erase("");
 
     for (auto& s : values)
