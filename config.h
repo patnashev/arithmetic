@@ -6,7 +6,7 @@
 #include <map>
 #include <optional>
 #include <functional>
-#include <limits>
+#include <climits>
 #include "giant.h"
 #include "file.h"
 
