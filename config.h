@@ -6,7 +6,7 @@
 #include <map>
 #include <optional>
 #include <functional>
-#include <limits.h>
+#include <limits>
 #include "giant.h"
 #include "file.h"
 
@@ -161,6 +161,7 @@ public:
     class ConfigListValue
     {
     public:
+        virtual ~ConfigListValue() { }
         virtual bool set_value(const char* value_s) = 0;
     };
     template<class V>
@@ -361,7 +362,7 @@ protected:
     R* _parent;
 };
 
-class Config : public ConfigGroup, public ConfigGroupSetup<Config, nullptr_t>
+class Config : public ConfigGroup, public ConfigGroupSetup<Config, std::nullptr_t>
 {
 public:
     Config() : ConfigGroupSetup(this, nullptr) { }
@@ -371,5 +372,7 @@ public:
     void parse_ini(File& file);
 
 private:
+    using ConfigObject::parse_args;
+    using ConfigObject::parse_ini;
     std::function<void(const char*)> _default_code;
 };

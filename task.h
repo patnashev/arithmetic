@@ -146,6 +146,8 @@ public:
     double timer() { return _timer; }
     int transforms() { return _transforms; }
 
+private:
+    using Task::init;
 protected:
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, TaskState* state, Logging* logging, int iterations);
     void reinit_gwstate() override;

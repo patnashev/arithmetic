@@ -77,8 +77,8 @@ namespace arithmetic
         virtual void alloc(Giant& a) override;
         virtual void alloc(Giant& a, int capacity) override;
         virtual void free(Giant& a) override;
-        virtual void init(const GWNum& a, Giant& res);
-        virtual void to_GWNum(const Giant& a, GWNum& res);
+        virtual void init(const GWNum& a, Giant& res) override;
+        virtual void to_GWNum(const Giant& a, GWNum& res) override;
         virtual void inv(Giant& a, Giant& n, Giant& res) override;
 
     private:
