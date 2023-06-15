@@ -486,7 +486,7 @@ namespace arithmetic
 
         friend Element gcd(Element&& a, Element&& b)
         {
-            return gcd(std::move(a), b);
+            return Element::gcd(std::move(a), b);
         }
 
         Element& inv(Element& n)
@@ -511,12 +511,12 @@ namespace arithmetic
 
         friend Element inv(Element& a, Element&& b)
         {
-            return inv(a, b);
+            return Element::inv(a, b);
         }
 
         friend Element inv(Element&& a, Element&& b)
         {
-            return inv(std::move(a), b);
+            return Element::inv(std::move(a), b);
         }
 
         friend void swap(Element& a, Element& b)
