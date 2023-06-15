@@ -176,7 +176,7 @@ namespace arithmetic
                 bitmap[j] = 1;
         }
         list.clear();
-        list.reserve((int)((std::expint(log(end)) - std::expint(log(start)))*1.1) + 100);
+//        list.reserve((int)((std::expint(log(end)) - std::expint(log(start)))*1.1) + 100);
         i = 0;
         if (start <= primes.back() && start < sqrt(end))
         {
@@ -254,7 +254,7 @@ namespace arithmetic
         if (_cur == 0)
             (*this)++;
         list.clear();
-        list.reserve((int)((std::expint(log(end)) - std::expint(log(start)))*1.1) + 100);
+//        list.reserve((int)((std::expint(log(end)) - std::expint(log(start)))*1.1) + 100);
         std::vector<char> bitmap((end - start)/2, 0);
         for (i = *(*this); i*(uint64_t)i < end; (*this)++, i = *(*this))
         {
