@@ -276,7 +276,7 @@ namespace arithmetic
             return std::log2(a.data()[0]);
         if (a.size() == 2)
             return std::log2(((uint64_t*)a._data)[0]);
-        return bitlen(a);
+        return bitlen(a) - 1;
     }
 
     void GiantsArithmetic::add(Giant& a, Giant& b, Giant& res)

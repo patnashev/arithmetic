@@ -49,6 +49,44 @@ void iterate_digits(bool& prime, It& it, It& first, const It& last)
     for (first = it; it != last && std::isdigit(*it); it++);
 }
 
+template<class It>
+void iterate_func(std::string& f, It& it, const It& last)
+{
+    f.clear();
+    It it_s;
+    for (it_s = it; it != last && std::isalpha(*it); it++);
+    if (it != last && *it == '(')
+        f = std::string(it_s, it);
+    else
+        it = it_s;
+}
+
+template<class It>
+void iterate_args(std::string& f, std::vector<std::string>& args, It& it, const It& last)
+{
+    args.clear();
+    if (f.empty())
+        f = "()";
+    it++;
+    while (it != last && *it != ')')
+    {
+        int recursion = 0;
+        It it_s = it;
+        for (it_s = it; it != last && (recursion > 0 || (*it != ')' && *it != ',')); it++)
+        {
+            if (*it == '(')
+                recursion++;
+            if (*it == ')')
+                recursion--;
+        }
+        args.emplace_back(it_s, it);
+        if (*it == ',')
+            it++;
+    }
+    if (it != last && *it == ')')
+        it++;
+}
+
 int get_prime(int n)
 {
     if (n == 0)
@@ -86,6 +124,29 @@ bool parse_digits(bool prime, It& first, It& last, T& value)
     return true;
 }
 
+bool parse_func(const std::string& f, const std::vector<std::string>& args, Giant& value, std::string& custom_val)
+{
+    if (f == "()")
+    {
+        if (args.size() > 1)
+            return false;
+        InputNum recursive;
+        if (!recursive.parse(args[0]))
+            return false;
+        value = recursive.value();
+        custom_val = "(" + recursive.input_text() + ")";
+    }
+    else
+    {
+        custom_val = f;
+        for (auto it_a = args.begin(); it_a != args.end(); it_a++)
+            custom_val += (it_a == args.begin() ? "(" : ",") + *it_a;
+        custom_val += ")";
+        return false; // not implemented
+    }
+    return true;
+}
+
 bool InputNum::parse(const std::string& s)
 {
     std::string::const_iterator it, it_s;
@@ -95,96 +156,163 @@ bool InputNum::parse(const std::string& s)
     int32_t c = 0;
     Giant tmp;
     bool prime;
+    std::string f;
+    std::vector<std::string> args;
+    std::string custom_k;
+    std::string custom_b;
+    int cyclotomic = 0;
+    uint32_t cyclotomic_k = 0;
 
     for (it = s.begin(); it != s.end() && std::isspace(*it); it++);
     if (it != s.end() && *it == '\"')
         it++;
-    iterate_digits(prime, it, it_s, s.end());
-    if (it != s.end() && *it == '*')
+
+    iterate_func(f, it, s.end());
+    if (!f.empty() || (it != s.end() && *it == '('))
+        iterate_args(f, args, it, s.end());
+    else
+        iterate_digits(prime, it, it_s, s.end());
+
+    if (!f.empty() && (it == s.end() || *it == '\"'))
     {
-        if (!parse_digits(prime, it_s, it, gk))
+        if (f == "Phi" && args.size() == 2)
+        {
+            cyclotomic = stoi(args[0]);
+            if (cyclotomic != 3 && cyclotomic != 6)
+                return false;
+            if (!args[1].empty() && args[1][0] == '-')
+            {
+                cyclotomic = (cyclotomic == 3 ? 6 : 3);
+                args[1] = args[1].substr(1);
+            }
+            InputNum recursive;
+            if (!recursive.parse(args[1] + "+1"))
+                return false;
+            type = recursive.type();
+            gk = recursive.value();
+            custom_k = "(" + recursive.input_text() + ")";
+            if (cyclotomic == 6)
+            {
+                gk -= 2;
+                custom_k[custom_k.size() - 3] = '-';
+            }
+            if (recursive.k() != 1)
+            {
+                gk *= recursive.gk();
+                custom_k += "*" + recursive.gk().to_string();
+            }
+            gb = recursive.gb();
+            n = recursive._n;
+            c = 1;
+            cyclotomic_k = (recursive.k() > 0 && recursive.k() < 1000 ? recursive.k() : 0);
+        }
+        else
             return false;
-        iterate_digits(prime, ++it, it_s, s.end());
     }
     else
-        gk = 1;
-    if (it == s.end() || *it == '^' || *it == '\"')
     {
-        if (!parse_digits(prime, it_s, it, gb))
-            return false;
-    }
-    else if (*it == '!')
-    {
-        type = FACTORIAL;
-        if (!parse_digits(prime, it_s, it, n))
-            return false;
-        gb = 1;
-        tmp = 1;
-        for (uint32_t i = 2; i <= n; i++)
+        if (it != s.end() && *it == '*')
         {
-            tmp *= i;
-            if (tmp.size() > 8192 || i == n)
+            if (!f.empty())
             {
-                gb *= tmp;
-                tmp = 1;
+                if (!parse_func(f, args, gk, custom_k))
+                    return false;
             }
+            else if (!parse_digits(prime, it_s, it, gk))
+                return false;
+
+            it++;
+            iterate_func(f, it, s.end());
+            if (!f.empty() || (it != s.end() && *it == '('))
+                iterate_args(f, args, it, s.end());
+            else
+                iterate_digits(prime, it, it_s, s.end());
         }
-    }
-    else if (*it == '#')
-    {
-        type = PRIMORIAL;
-        if (it == it_s || it - it_s > (prime ? 8 : 9))
-            return false;
-        n = stoi(std::string(it_s, it));
-        gb = 1;
-        tmp = 1;
-        int last = 1;
-        PrimeIterator primes = PrimeIterator::get();
-        for (uint32_t i = 0; prime ? i < n : *primes <= (int)n; i++, primes++)
+        else
+            gk = 1;
+        if (it == s.end() || *it == '^' || *it == '\"')
         {
-            last = *primes;
-            tmp *= last;
-            if (tmp.size() > 8192)
+            if (!f.empty())
             {
-                gb *= tmp;
-                tmp = 1;
+                if (!parse_func(f, args, gb, custom_b))
+                    return false;
             }
-        }
-        n = last;
-        if (tmp != 1)
-            gb *= tmp;
-    }
-    else
-        return false;
-    if (it != s.end())
-    {
-        if (*it == '^')
-        {
-            iterate_digits(prime, ++it, it_s, s.end());
-            if (!parse_digits(prime, it_s, it, n))
+            else if (!parse_digits(prime, it_s, it, gb))
                 return false;
         }
+        else if (*it == '!')
+        {
+            type = FACTORIAL;
+            if (!parse_digits(prime, it_s, it, n))
+                return false;
+            gb = 1;
+            tmp = 1;
+            for (uint32_t i = 2; i <= n; i++)
+            {
+                tmp *= i;
+                if (tmp.size() > 8192 || i == n)
+                {
+                    gb *= tmp;
+                    tmp = 1;
+                }
+            }
+        }
+        else if (*it == '#')
+        {
+            type = PRIMORIAL;
+            if (it == it_s || it - it_s > (prime ? 8 : 9))
+                return false;
+            n = stoi(std::string(it_s, it));
+            gb = 1;
+            tmp = 1;
+            int last = 1;
+            PrimeIterator primes = PrimeIterator::get();
+            for (uint32_t i = 0; prime ? i < n : *primes <= (int)n; i++, primes++)
+            {
+                last = *primes;
+                tmp *= last;
+                if (tmp.size() > 8192)
+                {
+                    gb *= tmp;
+                    tmp = 1;
+                }
+            }
+            n = last;
+            if (tmp != 1)
+                gb *= tmp;
+        }
         else
-            it++;
-        bool minus = false;
-        if (it == s.end())
             return false;
-        else if (*it == '+')
-            minus = false;
-        else if (*it == '-')
-            minus = true;
+        if (it != s.end())
+        {
+            if (*it == '^')
+            {
+                iterate_digits(prime, ++it, it_s, s.end());
+                if (!parse_digits(prime, it_s, it, n))
+                    return false;
+            }
+            else
+                it++;
+            bool minus = false;
+            if (it == s.end())
+                return false;
+            else if (*it == '+')
+                minus = false;
+            else if (*it == '-')
+                minus = true;
+            else
+                return false;
+            iterate_digits(prime, ++it, it_s, s.end());
+            if (!parse_digits(prime, it_s, it, c))
+                return false;
+            if (minus)
+                c = -c;
+        }
         else
-            return false;
-        iterate_digits(prime, ++it, it_s, s.end());
-        if (!parse_digits(prime, it_s, it, c))
-            return false;
-        if (minus)
-            c = -c;
-    }
-    else
-    {
-        n = 1;
-        c = 0;
+        {
+            n = 1;
+            c = 0;
+        }
     }
     if (it != s.end() && *it == '\"')
         it++;
@@ -192,11 +320,28 @@ bool InputNum::parse(const std::string& s)
     if (it != s.end())
         return false;
 
+    if (cyclotomic == 0 && type != GENERIC && c == 1 && ((type == KBNC && abs(gk.bitlen() - log2(gb)*n) < n/30 + 10) || (type != KBNC && abs(gk.bitlen() - gb.bitlen()) < 10)))
+    {
+        tmp = gb;
+        tmp.power(n);
+        tmp -= gk;
+        if (tmp == 1)
+            cyclotomic = 6;
+        if (tmp == -1)
+            cyclotomic = 3;
+        if (cyclotomic != 0)
+            cyclotomic_k = 1;
+    }
+
     _type = type;
     _gk = std::move(gk);
     _gb = std::move(gb);
     _n = n;
     _c = c;
+    _custom_k = custom_k;
+    _custom_b = custom_b;
+    _cyclotomic = cyclotomic;
+    _cyclotomic_k = cyclotomic_k;
     process();
     return true;
 }
@@ -430,13 +575,15 @@ void InputNum::process()
                 _gb = 1;
                 for (auto it = _b_factors.begin(); it != _b_factors.end(); it++)
                     _gb *= power(it->first, it->second);
+                _custom_b.clear();
             }
         }
 
-        while (_gk%_gb == 0)
+        while (_gk%_gb == 0 && _cyclotomic == 0)
         {
             _gk /= _gb;
             _n++;
+            _custom_k.clear();
         }
     }
 
@@ -452,7 +599,7 @@ std::string InputNum::build_text(int max_len)
     res.reserve(32);
     if (_gk != 1)
     {
-        std::string sk = _gk.to_string();
+        std::string sk = !_custom_k.empty() ? _custom_k : _gk.to_string();
         if (sk.size() > max_len && max_len > 0)
         {
             res.append(sk, 0, max_len/2);
@@ -476,7 +623,7 @@ std::string InputNum::build_text(int max_len)
     }
     else if (_gb != 1)
     {
-        std::string sb = _gb.to_string();
+        std::string sb = !_custom_b.empty() ? _custom_b : _gb.to_string();
         if (sb.size() > max_len && max_len > 0)
         {
             res.append(sb, 0, max_len/2);
@@ -512,6 +659,14 @@ void InputNum::setup(GWState& state)
     else if (_type != KBNC)
     {
         state.setup(_gk*_gb + _c);
+    }
+    else if (_cyclotomic != 0 && _cyclotomic_k != 0 && b() != 0 && !state.force_general_mod)
+    {
+        state.known_factors = _cyclotomic_k*power(_gb, _n) + (_cyclotomic == 6 ? 1 : -1);
+        state.setup(_cyclotomic_k*_cyclotomic_k*_cyclotomic_k, b(), 3*_n, _cyclotomic == 6 ? 1 : -1);
+        if (*state.N%3417905339UL != fingerprint())
+            throw ArithmeticException();
+        return;
     }
     else if (k() != 0 && b() != 0)
     {
