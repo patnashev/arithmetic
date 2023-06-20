@@ -279,6 +279,22 @@ namespace arithmetic
         return bitlen(a) - 1;
     }
 
+    size_t GiantsArithmetic::digits(const Giant& a, int base)
+    {
+        if (a == 0)
+            return 1;
+        if (base == 2)
+            return bitlen(a);
+        if (a.size() == 1)
+            return (size_t)std::floor(std::log2(a.data()[0])/std::log2(base)) + 1;
+        int log = (int)std::floor((bitlen(a) - 1)/std::log2(base));
+        Giant tmp(*this);
+        tmp = base;
+        power(tmp, log, tmp);
+        for (; tmp <= a; tmp *= base, log++);
+        return log;
+    }
+
     void GiantsArithmetic::add(Giant& a, Giant& b, Giant& res)
     {
         int size = abs(a._size) + 1;

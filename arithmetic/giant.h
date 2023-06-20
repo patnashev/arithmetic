@@ -35,6 +35,7 @@ namespace arithmetic
         virtual bool bit(const Giant& a, int b);
         virtual void substr(const Giant& a, int offset, int count, Giant& res);
         virtual double log2(const Giant& a);
+        virtual size_t digits(const Giant& a, int base);
         virtual void add(Giant& a, Giant& b, Giant& res) override;
         virtual void add(Giant& a, int32_t b, Giant& res) override;
         virtual void sub(Giant& a, Giant& b, Giant& res) override;
@@ -333,6 +334,7 @@ namespace arithmetic
         {
             return a.arithmetic().log2(a); 
         }
+        size_t digits(int base = 10) { return arithmetic().digits(*this, base); }
         Giant& power(int32_t a)
         {
             arithmetic().power(*this, a, *this);

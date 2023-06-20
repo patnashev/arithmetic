@@ -23,9 +23,9 @@ public:
     InputNum(T&& b) { _type = GENERIC; _gk = 1; _gb = std::forward<T>(b); _n = 0; _c = 0; process(); }
 
     template<class TK, class TB>
-    void init(TK&& k, TB&& b, int n, int c) { _type = KBNC; _gk = std::forward<TK>(k); _gb = std::forward<TB>(b); _n = n; _c = c; _custom_k.clear(); _custom_b.clear(); _cyclotomic = 0; _cyclotomic_k = 0; process(); }
+    void init(TK&& k, TB&& b, int n, int c) { _type = KBNC; _gk = std::forward<TK>(k); _gb = std::forward<TB>(b); _n = n; _c = c; _custom_k.clear(); _custom_b.clear(); _cyclotomic = 0; _cyclotomic_k = 0; _hex_k = 0; process(); }
     template<class T>
-    void init(T&& b) { _type = GENERIC; _gk = 1; _gb = std::forward<T>(b); _n = 0; _c = 0; _custom_k.clear(); _custom_b.clear(); _cyclotomic = 0; _cyclotomic_k = 0; process(); }
+    void init(T&& b) { _type = GENERIC; _gk = 1; _gb = std::forward<T>(b); _n = 0; _c = 0; _custom_k.clear(); _custom_b.clear(); _cyclotomic = 0; _cyclotomic_k = 0; _hex_k = 0; process(); }
     bool read(File& file);
     void write(File& file);
     bool parse(const std::string& s);
@@ -34,6 +34,7 @@ public:
     void to_base2(InputNum& k, InputNum& base2);
     bool is_factorized_half();
     void add_factor(arithmetic::Giant& factor);
+    void print_info();
 
     static uint64_t parse_numeral(const std::string& s);
 
@@ -52,15 +53,13 @@ public:
     int bitlen();
 
     std::vector<std::pair<arithmetic::Giant, int>>& b_factors() { return _b_factors; }
-    std::unique_ptr<arithmetic::Giant>& b_cofactor() { return _b_cofactor; }
+    arithmetic::Giant& b_cofactor() { return _b_cofactor; }
     std::vector<int> factorize_minus1(int depth);
 
     const std::string& input_text() { return _input_text; }
     const std::string& display_text() { return _display_text; }
 
 private:
-    void add_factor(uint32_t factor, int power);
-    void add_factor(const arithmetic::Giant& factor, int power);
     void process();
     std::string build_text(int max_len = -1);
 
@@ -71,7 +70,9 @@ private:
     uint32_t _n = 0;
     int32_t _c = 0;
     std::vector<std::pair<arithmetic::Giant, int>> _b_factors;
-    std::unique_ptr<arithmetic::Giant> _b_cofactor;
+    arithmetic::Giant _b_cofactor;
+    std::vector<std::pair<arithmetic::Giant, int>> _factors;
+    arithmetic::Giant _cofactor;
     std::string _input_text;
     std::string _display_text;
     std::string _custom_k;
@@ -79,4 +80,5 @@ private:
     int _gfn = 0;
     int _cyclotomic = 0;
     uint32_t _cyclotomic_k = 0;
+    uint32_t _hex_k = 0;
 };

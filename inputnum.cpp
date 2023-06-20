@@ -1,6 +1,9 @@
 
 #include <cctype>
 #include <cmath>
+#include <iostream>
+#include <iomanip>
+#include <algorithm>
 #include <stdlib.h>
 #include "gwnum.h"
 #include "cpuid.h"
@@ -162,6 +165,7 @@ bool InputNum::parse(const std::string& s)
     std::string custom_b;
     int cyclotomic = 0;
     uint32_t cyclotomic_k = 0;
+    uint32_t hex_k = 0;
 
     for (it = s.begin(); it != s.end() && std::isspace(*it); it++);
     if (it != s.end() && *it == '\"')
@@ -346,26 +350,9 @@ bool InputNum::parse(const std::string& s)
     return true;
 }
 
-void InputNum::add_factor(uint32_t factor, int power)
-{
-    Giant tmp;
-    tmp = factor;
-    add_factor(tmp, power);
-}
-
-void InputNum::add_factor(const Giant& factor, int power)
-{
-    auto it = _b_factors.begin();
-    for (; it != _b_factors.end() && it->first != factor; it++);
-    if (it != _b_factors.end())
-        it->second += power;
-    else
-        _b_factors.emplace_back(factor, power);
-}
-
 void InputNum::add_factor(Giant& factor)
 {
-    if (!_b_cofactor || (*_b_cofactor)%factor != 0)
+    if (_b_cofactor.empty() || _b_cofactor%factor != 0)
         return;
     auto it = _b_factors.begin();
     for (; it != _b_factors.end() && it->first != factor; it++);
@@ -373,79 +360,76 @@ void InputNum::add_factor(Giant& factor)
         it->second++;
     else
         _b_factors.emplace_back(factor, 1);
-    *_b_cofactor /= factor;
-    if (*_b_cofactor == 1)
-        _b_cofactor.reset();
+    _b_cofactor /= factor;
+    if (_b_cofactor == 1)
+        _b_cofactor.arithmetic().free(_b_cofactor);
 }
 
-void InputNum::process()
+void add_factor(std::vector<std::pair<arithmetic::Giant, int>>& factors, const Giant& factor, int power)
 {
-    _b_factors.clear();
-    _b_cofactor.reset();
-
-    uint32_t i, j;
-    if (_type != KBNC)
-    {
-        /*Giant tmp;
-        _b_factors.reserve(_n);
-        PrimeIterator primes = PrimeIterator::get();
-        for (i = 0; i < _n; i++, primes++)
-        {
-            tmp = *primes;
-            _b_factors.emplace_back(tmp, 1);
-        }*/
-    }
+    auto it = factors.begin();
+    for (; it != factors.end() && it->first != factor; it++);
+    if (it != factors.end())
+        it->second += power;
     else
+        factors.emplace_back(factor, power);
+}
+
+void add_factor(std::vector<std::pair<arithmetic::Giant, int>>& factors, uint32_t factor, int power)
+{
+    Giant tmp;
+    tmp = factor;
+    add_factor(factors, tmp, power);
+}
+
+void factorize(Giant& N, std::vector<std::pair<arithmetic::Giant, int>>& factors, Giant& cofactor, uint32_t s = 10)
+{
+    uint32_t i, j;
+    Giant tmp = N;
+    for (i = 0; !tmp.bit(i); i++);
+    if (i > 0)
     {
-        Giant tmp = _gb;
-        for (i = 0; !tmp.bit(i); i++);
-        if (i > 0)
-        {
-            add_factor(2, i);
-            tmp >>= i;
-        }
-        uint32_t s = 10;
-        std::vector<char> bitmap;
-        if (tmp > 1)
-        {
-            bitmap.resize((size_t)1 << (s - 1), 0);
-            std::vector<std::pair<int, int>> smallprimes;
-            for (i = 1; i < bitmap.size(); i++)
-                if (!bitmap[i])
-                {
-                    smallprimes.emplace_back(i*2 + 1, (i*2 + 1)*(i*2 + 1)/2);
-                    if (i < ((size_t)1 << (s/2 - 1)))
-                        for (; smallprimes.back().second < bitmap.size(); smallprimes.back().second += smallprimes.back().first)
-                            bitmap[smallprimes.back().second] = 1;
-                    for (; tmp%(i*2 + 1) == 0; tmp /= i*2 + 1)
-                        add_factor(i*2 + 1, 1);
-                }
-            if (tmp > 1 && tmp < (1 << (2*s)))
+        add_factor(factors, 2, i);
+        tmp >>= i;
+    }
+    std::vector<char> bitmap;
+    if (tmp > 1)
+    {
+        bitmap.resize((size_t)1 << (s - 1), 0);
+        std::vector<std::pair<int, int>> smallprimes;
+        for (i = 1; i < bitmap.size(); i++)
+            if (!bitmap[i])
             {
-                add_factor(tmp, 1);
+                smallprimes.emplace_back(i*2 + 1, (i*2 + 1)*(i*2 + 1)/2);
+                if (i < ((size_t)1 << (s/2 - 1)))
+                    for (; smallprimes.back().second < bitmap.size(); smallprimes.back().second += smallprimes.back().first)
+                        bitmap[smallprimes.back().second] = 1;
+                for (; tmp%(i*2 + 1) == 0; tmp /= i*2 + 1)
+                    add_factor(factors, i*2 + 1, 1);
+            }
+        if (tmp > 1 && tmp < (1 << (2*s)))
+        {
+            add_factor(factors, tmp, 1);
+            tmp = 1;
+        }
+        for (j = 0; j < s && tmp > 1; j += 5)
+        {
+            bitmap.resize((size_t)1 << (s - 1 + j + 5), 0);
+            for (auto it = smallprimes.begin(); it != smallprimes.end(); it++)
+                for (; it->second < bitmap.size(); it->second += it->first)
+                    bitmap[it->second] = 1;
+            for (i = 1 << (s - 1 + j); i < bitmap.size(); i++)
+                for (; !bitmap[i] && tmp%(i*2 + 1) == 0; tmp /= i*2 + 1)
+                    add_factor(factors, i*2 + 1, 1);
+            if (tmp > 1 && (uint32_t)tmp.bitlen() <= 2*(s + j + 4))
+            {
+                add_factor(factors, tmp, 1);
                 tmp = 1;
             }
-            for (j = 0; j < s && tmp > 1; j += 5)
-            {
-                bitmap.resize((size_t)1 << (s - 1 + j + 5), 0);
-                for (auto it = smallprimes.begin(); it != smallprimes.end(); it++)
-                    for (; it->second < bitmap.size(); it->second += it->first)
-                        bitmap[it->second] = 1;
-                for (i = 1 << (s - 1 + j); i < bitmap.size(); i++)
-                    for (; !bitmap[i] && tmp%(i*2 + 1) == 0; tmp /= i*2 + 1)
-                        add_factor(i*2 + 1, 1);
-                if (tmp > 1 && (uint32_t)tmp.bitlen() <= 2*(s + j + 4))
-                {
-                    add_factor(tmp, 1);
-                    tmp = 1;
-                }
-            }
         }
-        if (tmp > 1)
-            _b_cofactor.reset(new Giant(tmp));
     }
-
-    _input_text = build_text();
+    if (tmp > 1)
+        cofactor = std::move(tmp);
 
 /*    if (_b_cofactor)
     {
@@ -559,10 +543,49 @@ void InputNum::process()
             }
         }
     }*/
+}
+
+void InputNum::process()
+{
+    _factors.clear();
+    if (!_cofactor.empty())
+        _cofactor.arithmetic().free(_cofactor);
+    _b_factors.clear();
+    if (!_b_cofactor.empty())
+        _b_cofactor.arithmetic().free(_b_cofactor);
+
+    if (_type != KBNC)
+    {
+        /*Giant tmp;
+        _b_factors.reserve(_n);
+        PrimeIterator primes = PrimeIterator::get();
+        for (i = 0; i < _n; i++, primes++)
+        {
+            tmp = *primes;
+            _b_factors.emplace_back(tmp, 1);
+        }*/
+    }
+    else
+    {
+        factorize(_gb, _b_factors, _b_cofactor);
+        if (abs(_c) == 1)
+        {
+            factorize(_gk, _factors, _cofactor);
+            for (auto& factor : _b_factors)
+                ::add_factor(_factors, factor.first, factor.second*_n);
+            std::sort(_factors.begin(), _factors.end(), [](std::pair<arithmetic::Giant, int>& a, std::pair<arithmetic::Giant, int>& b) { return a.first < b.first; });
+            if (!_b_cofactor.empty() && !_cofactor.empty())
+                _cofactor *= power(_b_cofactor, _n);
+            else if (!_b_cofactor.empty())
+                _cofactor = power(_b_cofactor, _n);
+        }
+    }
+
+    _input_text = build_text();
 
     if (_type == KBNC && _gb != 1)
     {
-        if (!_b_cofactor)
+        if (_b_cofactor.empty())
         {
             int a = _b_factors[0].second;
             for (auto it = ++_b_factors.begin(); it != _b_factors.end(); it++)
@@ -721,8 +744,9 @@ void InputNum::to_base2(InputNum& k, InputNum& base2)
     base2._n = n2;
     base2._c = c;
     base2._b_factors.clear();
-    base2.add_factor(2, 1);
-    base2._b_cofactor.reset();
+    ::add_factor(base2._b_factors, 2, 1);
+    if (!base2._b_cofactor.empty())
+        base2._b_cofactor.arithmetic().free(base2._b_cofactor);
     base2._input_text = _input_text;
     base2._display_text = k._display_text;
     base2._display_text.append(1, '*');
@@ -789,13 +813,13 @@ uint32_t InputNum::fingerprint()
 
 bool InputNum::is_factorized_half()
 {
-    if (!_b_cofactor)
+    if (!_b_cofactor.empty())
         return true;
     arithmetic::Giant factorized;
     factorized = 1;
     for (auto it = _b_factors.begin(); it != _b_factors.end(); it++)
         factorized *= power(it->first, it->second);
-    return factorized > *_b_cofactor;
+    return factorized > _b_cofactor;
 }
 
 inline int isFactor(Giant& _gk, Giant& _gb, uint32_t _n, uint32_t nbit, int _c, uint32_t p)
@@ -868,4 +892,133 @@ std::vector<int> InputNum::factorize_minus1(int depth)
         }
 
     return factors;
+}
+
+void InputNum::print_info()
+{
+    if (_type == ZERO)
+        return;
+
+    Giant N = value();
+    Giant tmp;
+    std::string st;
+
+    std::cout << display_text() << ", " << N.bitlen() << " bits, " << N.digits() << " digits." << std::endl;
+
+    std::vector<std::pair<arithmetic::Giant, int>> factors;
+    arithmetic::Giant cofactor;
+    factorize(N, factors, cofactor);
+    if (factors.empty())
+        std::cout << "No small factors." << std::endl;
+    else
+    {
+        std::cout << "Small factors:";
+        for (auto& factor : factors)
+        {
+            std::cout << " " << factor.first.to_string();
+            if (factor.second > 1)
+                std::cout << "^" << factor.second;
+        }
+        std::cout << std::endl;
+    }
+
+    factors.clear();
+    if (!cofactor.empty())
+        cofactor.arithmetic().free(cofactor);
+    if (_c == 1)
+    {
+        factors = _factors;
+        cofactor = _cofactor;
+    }
+    else
+    {
+        N -= 1;
+        factorize(N, factors, cofactor);
+        N += 1;
+    }
+    if (_c == 1 && _type == FACTORIAL)
+        std::cout << "Factors of N-1 are all numbers less or equal than " << _n << "." << std::endl;
+    else if (_c == 1 && _type == PRIMORIAL)
+        std::cout << "Factors of N-1 are all prime numbers less or equal than " << _n << "." << std::endl;
+    else if (factors.empty())
+        std::cout << "No small factors of N-1." << std::endl;
+    else
+    {
+        tmp = 1;
+        st.clear();
+        for (auto& factor : factors)
+        {
+            if (!st.empty())
+                st += " ";
+            st += factor.first.to_string();
+            if (factor.second > 1)
+            {
+                st += "^";
+                st += std::to_string(factor.second);
+            }
+            if (!cofactor.empty())
+                tmp *= power(factor.first, factor.second);
+        }
+        std::cout << "Factors of N-1";
+        if (cofactor.empty())
+            std::cout << " (fully factored)";
+        else if (square(tmp) > N)
+            std::cout << " (more than a half (" << std::fixed << std::setprecision(1) << (log2(tmp)/log2(N)*100) << "%) is factored)";
+        else if (2*square(tmp)*tmp > N)
+            std::cout << " (more than a third (" << std::fixed << std::setprecision(1) << (log2(tmp)/log2(N)*100) << "%) is factored)";
+        else
+            std::cout << " (" << std::fixed << std::setprecision(3) << (log2(tmp)/log2(N)*100) << "% is factored)";
+        std::cout << ": " << st << std::endl;
+    }
+
+    factors.clear();
+    if (!cofactor.empty())
+        cofactor.arithmetic().free(cofactor);
+    if (_c == -1)
+    {
+        factors = _factors;
+        cofactor = _cofactor;
+    }
+    else
+    {
+        N += 1;
+        factorize(N, factors, cofactor);
+        N -= 1;
+    }
+    if (_c == -1 && _type == FACTORIAL)
+        std::cout << "Factors of N+1 are all numbers less or equal than " << _n << "." << std::endl;
+    else if (_c == -1 && _type == PRIMORIAL)
+        std::cout << "Factors of N+1 are all prime numbers less or equal than " << _n << "." << std::endl;
+    else if (factors.empty())
+        std::cout << "No small factors of N+1." << std::endl;
+    else
+    {
+        tmp = 1;
+        st.clear();
+        for (auto& factor : factors)
+        {
+            if (!st.empty())
+                st += " ";
+            st += factor.first.to_string();
+            if (factor.second > 1)
+            {
+                st += "^";
+                st += std::to_string(factor.second);
+            }
+            if (!cofactor.empty())
+                tmp *= power(factor.first, factor.second);
+        }
+        std::cout << "Factors of N+1";
+        if (cofactor.empty())
+            std::cout << " (fully factored)";
+        else if (square(tmp - 1) > N)
+            std::cout << " (more than a half (" << std::fixed << std::setprecision(1) << (log2(tmp)/log2(N)*100) << "%) is factored)";
+        else if (2*square(tmp)*(tmp - 1) > N)
+            std::cout << " (more than a third (" << std::fixed << std::setprecision(1) << (log2(tmp)/log2(N)*100) << "%) is factored)";
+        else
+            std::cout << " (" << std::fixed << std::setprecision(3) << (log2(tmp)/log2(N)*100) << "% is factored)";
+        std::cout << ": " << st << std::endl;
+    }
+
+    std::cout << "(2/N)=" << kronecker(2, N) << ", (3/N)=" << kronecker(3, N) << ", (5/N)=" << kronecker(5, N) << ", (7/N)=" << kronecker(7, N) << ", (11/N)=" << kronecker(11, N) << "." << std::endl;
 }
