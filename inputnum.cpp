@@ -164,8 +164,8 @@ bool InputNum::parse(const std::string& s)
     std::string custom_k;
     std::string custom_b;
     int cyclotomic = 0;
-    uint32_t cyclotomic_k = 0;
-    uint32_t hex_k = 0;
+    int32_t cyclotomic_k = 0;
+    int32_t hex_k = 0;
 
     for (it = s.begin(); it != s.end() && std::isspace(*it); it++);
     if (it != s.end() && *it == '\"')
@@ -209,6 +209,51 @@ bool InputNum::parse(const std::string& s)
             n = recursive._n;
             c = 1;
             cyclotomic_k = (recursive.k() > 0 && recursive.k() < 1000 ? recursive.k() : 0);
+        }
+        else if (f == "Hex" && args.size() == 1)
+        {
+            bool neg = false;
+            if (!args[0].empty() && args[0][0] == '-')
+            {
+                neg = true;
+                args[0] = args[0].substr(1);
+            }
+            InputNum recursive;
+            if (!recursive.parse(args[0] + "+1"))
+                return false;
+            type = recursive.type();
+            gk = recursive.value();
+            gk -= 1;
+            if (gk%3 != 0)
+                return false;
+            gk /= 3;
+            recursive._c = (neg ? -1 : 1);
+            gk += recursive._c;
+            if (recursive.k() != 1)
+            {
+                gk *= recursive.gk();
+                custom_k = "*" + recursive.gk().to_string();
+            }
+            gb = recursive.gb();
+            n = recursive._n;
+            c = 1;
+            hex_k = (recursive.k() > 0 && recursive.k() < 32 ? recursive.k() : 0)*recursive._c;
+            if (type == KBNC)
+            {
+                if (recursive.gk()%3 == 0)
+                    recursive.gk() /= 3;
+                else
+                {
+                    recursive.gk() *= recursive.gb()/3;
+                    recursive._n--;
+                }
+                custom_k = "(" + recursive.build_text() + ")" + custom_k;
+            }
+            else if (type == FACTORIAL || type == PRIMORIAL)
+            {
+                std::string st = recursive.build_text();
+                custom_k = "(" + st.substr(0, st.size() - 2) + "/3" + st.substr(st.size() - 2) + ")" + custom_k;
+            }
         }
         else
             return false;
@@ -346,6 +391,7 @@ bool InputNum::parse(const std::string& s)
     _custom_b = custom_b;
     _cyclotomic = cyclotomic;
     _cyclotomic_k = cyclotomic_k;
+    _hex_k = hex_k;
     process();
     return true;
 }
@@ -687,6 +733,20 @@ void InputNum::setup(GWState& state)
     {
         state.known_factors = _cyclotomic_k*power(_gb, _n) + (_cyclotomic == 6 ? 1 : -1);
         state.setup(_cyclotomic_k*_cyclotomic_k*_cyclotomic_k, b(), 3*_n, _cyclotomic == 6 ? 1 : -1);
+        if (*state.N%3417905339UL != fingerprint())
+            throw ArithmeticException();
+        return;
+    }
+    else if (_hex_k != 0 && b() != 0 && !state.force_general_mod)
+    {
+        Giant x = (-_hex_k)*power(_gb, _n);
+        Giant val = value() + x;
+        state.known_factors = (val + std::move(x))*val;
+        _hex_k = abs(_hex_k);
+        if (_hex_k%3 == 0)
+            state.setup(_hex_k/3*_hex_k/3*_hex_k/3*_hex_k*_hex_k*_hex_k, b(), 6*_n, 1);
+        else
+            state.setup(_hex_k*_hex_k*_hex_k*_hex_k*_hex_k*_hex_k*b()*b()*b()/27, b(), 6*_n - 3, 1);
         if (*state.N%3417905339UL != fingerprint())
             throw ArithmeticException();
         return;

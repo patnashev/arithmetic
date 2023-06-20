@@ -144,12 +144,21 @@ namespace arithmetic
         {
             mod_gwstate.reset(new GWState());
             mod_gwstate->force_general_mod = true;
-            mod_gwstate->setup(*N);
+            if (gwdata()->GENERAL_MOD)
+                mod_gwstate->setup(square(*N));
+            else
+                mod_gwstate->setup(*N);
         }
 
         GWArithmetic gw(*mod_gwstate);
         GWNum X(gw);
-        X = a;
+        if (known_factors > *N)
+        {
+            mod_gwstate->mod(a, res);
+            X = res;
+        }
+        else
+            X = a;
         gw.fft(X, X);
         res = X;
     }

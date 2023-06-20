@@ -79,6 +79,6 @@ private:
     std::string _custom_b;
     int _gfn = 0;
     int _cyclotomic = 0;
-    uint32_t _cyclotomic_k = 0;
-    uint32_t _hex_k = 0;
+    int32_t _cyclotomic_k = 0;
+    int32_t _hex_k = 0;
 };
