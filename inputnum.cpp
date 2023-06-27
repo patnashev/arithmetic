@@ -1,9 +1,11 @@
 
+#include <climits>
 #include <cctype>
 #include <cmath>
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
+#include <functional>
 #include <stdlib.h>
 #include "gwnum.h"
 #include "cpuid.h"
@@ -163,7 +165,6 @@ bool InputNum::parse(const std::string& s)
     std::vector<std::string> args;
     std::string custom_k;
     std::string custom_b;
-    int cyclotomic = 0;
     int32_t cyclotomic_k = 0;
     int32_t hex_k = 0;
 
@@ -181,7 +182,7 @@ bool InputNum::parse(const std::string& s)
     {
         if (f == "Phi" && args.size() == 2)
         {
-            cyclotomic = stoi(args[0]);
+            int cyclotomic = stoi(args[0]);
             if (cyclotomic != 3 && cyclotomic != 6)
                 return false;
             if (!args[1].empty() && args[1][0] == '-')
@@ -208,7 +209,7 @@ bool InputNum::parse(const std::string& s)
             gb = recursive.gb();
             n = recursive._n;
             c = 1;
-            cyclotomic_k = (recursive.k() > 0 && recursive.k() < 1000 ? recursive.k() : 0);
+            cyclotomic_k = (cyclotomic == 6 ? -1 : 1)*(recursive.k() > 0 && recursive.k() < 1000 ? recursive.k() : 0);
         }
         else if (f == "Hex" && args.size() == 1)
         {
@@ -369,19 +370,6 @@ bool InputNum::parse(const std::string& s)
     if (it != s.end())
         return false;
 
-    if (cyclotomic == 0 && type != GENERIC && c == 1 && ((type == KBNC && abs(gk.bitlen() - log2(gb)*n) < n/30 + 10) || (type != KBNC && abs(gk.bitlen() - gb.bitlen()) < 10)))
-    {
-        tmp = gb;
-        tmp.power(n);
-        tmp -= gk;
-        if (tmp == 1)
-            cyclotomic = 6;
-        if (tmp == -1)
-            cyclotomic = 3;
-        if (cyclotomic != 0)
-            cyclotomic_k = 1;
-    }
-
     _type = type;
     _gk = std::move(gk);
     _gb = std::move(gb);
@@ -389,26 +377,10 @@ bool InputNum::parse(const std::string& s)
     _c = c;
     _custom_k = custom_k;
     _custom_b = custom_b;
-    _cyclotomic = cyclotomic;
     _cyclotomic_k = cyclotomic_k;
     _hex_k = hex_k;
     process();
     return true;
-}
-
-void InputNum::add_factor(Giant& factor)
-{
-    if (_b_cofactor.empty() || _b_cofactor%factor != 0)
-        return;
-    auto it = _b_factors.begin();
-    for (; it != _b_factors.end() && it->first != factor; it++);
-    if (it != _b_factors.end())
-        it->second++;
-    else
-        _b_factors.emplace_back(factor, 1);
-    _b_cofactor /= factor;
-    if (_b_cofactor == 1)
-        _b_cofactor.arithmetic().free(_b_cofactor);
 }
 
 void add_factor(std::vector<std::pair<arithmetic::Giant, int>>& factors, const Giant& factor, int power)
@@ -428,9 +400,36 @@ void add_factor(std::vector<std::pair<arithmetic::Giant, int>>& factors, uint32_
     add_factor(factors, tmp, power);
 }
 
-void factorize(Giant& N, std::vector<std::pair<arithmetic::Giant, int>>& factors, Giant& cofactor, uint32_t s = 10)
+void InputNum::add_factor(Giant& factor)
+{
+    if (!_b_cofactor.empty() && _b_cofactor%factor == 0)
+    {
+        ::add_factor(_b_factors, factor, 1);
+        if (abs(_c) == 1)
+            ::add_factor(_factors, factor, _n);
+        _b_cofactor /= factor;
+        if (_b_cofactor == 1)
+            _b_cofactor.arithmetic().free(_b_cofactor);
+        if (!_cofactor.empty())
+        {
+            _cofactor /= power(factor, _n);
+            if (_cofactor == 1)
+                _cofactor.arithmetic().free(_cofactor);
+        }
+    }
+    else if (!_cofactor.empty() && _cofactor%factor == 0)
+    {
+        ::add_factor(_factors, factor, 1);
+        _cofactor /= factor;
+        if (_cofactor == 1)
+            _cofactor.arithmetic().free(_cofactor);
+    }
+}
+
+void factorize(Giant& N, std::vector<std::pair<arithmetic::Giant, int>>& factors, Giant& cofactor, std::function<bool(Giant&, uint32_t)> is_factor = nullptr, uint32_t s = 10)
 {
     uint32_t i, j;
+    int power;
     Giant tmp = N;
     for (i = 0; !tmp.bit(i); i++);
     if (i > 0)
@@ -438,10 +437,10 @@ void factorize(Giant& N, std::vector<std::pair<arithmetic::Giant, int>>& factors
         add_factor(factors, 2, i);
         tmp >>= i;
     }
-    std::vector<char> bitmap;
+    std::vector<bool> bitmap;
     if (tmp > 1)
     {
-        bitmap.resize((size_t)1 << (s - 1), 0);
+        bitmap.resize((size_t)1 << (s - 1), false);
         std::vector<std::pair<int, int>> smallprimes;
         for (i = 1; i < bitmap.size(); i++)
             if (!bitmap[i])
@@ -449,9 +448,12 @@ void factorize(Giant& N, std::vector<std::pair<arithmetic::Giant, int>>& factors
                 smallprimes.emplace_back(i*2 + 1, (i*2 + 1)*(i*2 + 1)/2);
                 if (i < ((size_t)1 << (s/2 - 1)))
                     for (; smallprimes.back().second < bitmap.size(); smallprimes.back().second += smallprimes.back().first)
-                        bitmap[smallprimes.back().second] = 1;
-                for (; tmp%(i*2 + 1) == 0; tmp /= i*2 + 1)
-                    add_factor(factors, i*2 + 1, 1);
+                        bitmap[smallprimes.back().second] = true;
+                if ((is_factor != nullptr && is_factor(tmp, i*2 + 1)) || (is_factor == nullptr && tmp%(i*2 + 1) == 0))
+                {
+                    for (power = 1, tmp /= i*2 + 1; tmp%(i*2 + 1) == 0; power++, tmp /= i*2 + 1);
+                    add_factor(factors, i*2 + 1, power);
+                }
             }
         if (tmp > 1 && tmp < (1 << (2*s)))
         {
@@ -460,14 +462,17 @@ void factorize(Giant& N, std::vector<std::pair<arithmetic::Giant, int>>& factors
         }
         for (j = 0; j < s && tmp > 1; j += 5)
         {
-            bitmap.resize((size_t)1 << (s - 1 + j + 5), 0);
+            bitmap.resize((size_t)1 << (s - 1 + (j + 5 < s ? j + 5 : s)), false);
             for (auto it = smallprimes.begin(); it != smallprimes.end(); it++)
                 for (; it->second < bitmap.size(); it->second += it->first)
-                    bitmap[it->second] = 1;
+                    bitmap[it->second] = true;
             for (i = 1 << (s - 1 + j); i < bitmap.size(); i++)
-                for (; !bitmap[i] && tmp%(i*2 + 1) == 0; tmp /= i*2 + 1)
-                    add_factor(factors, i*2 + 1, 1);
-            if (tmp > 1 && (uint32_t)tmp.bitlen() <= 2*(s + j + 4))
+                if (!bitmap[i] && ((is_factor != nullptr && is_factor(tmp, i*2 + 1)) || (is_factor == nullptr && tmp%(i*2 + 1) == 0)))
+                {
+                    for (power = 1, tmp /= i*2 + 1; tmp%(i*2 + 1) == 0; power++, tmp /= i*2 + 1);
+                    add_factor(factors, i*2 + 1, power);
+                }
+            if (tmp > 1 && (uint32_t)tmp.bitlen() <= 2*(s - 1 + (j + 5 < s ? j + 5 : s)))
             {
                 add_factor(factors, tmp, 1);
                 tmp = 1;
@@ -614,20 +619,46 @@ void InputNum::process()
     else
     {
         factorize(_gb, _b_factors, _b_cofactor);
-        if (abs(_c) == 1)
-        {
-            factorize(_gk, _factors, _cofactor);
-            for (auto& factor : _b_factors)
-                ::add_factor(_factors, factor.first, factor.second*_n);
-            std::sort(_factors.begin(), _factors.end(), [](std::pair<arithmetic::Giant, int>& a, std::pair<arithmetic::Giant, int>& b) { return a.first < b.first; });
-            if (!_b_cofactor.empty() && !_cofactor.empty())
-                _cofactor *= power(_b_cofactor, _n);
-            else if (!_b_cofactor.empty())
-                _cofactor = power(_b_cofactor, _n);
-        }
+    }
+    
+    if (abs(_c) == 1)
+    {
+        factorize(_gk, _factors, _cofactor);
+        for (auto& factor : _b_factors)
+            ::add_factor(_factors, factor.first, factor.second*_n);
+        std::sort(_factors.begin(), _factors.end(), [](std::pair<arithmetic::Giant, int>& a, std::pair<arithmetic::Giant, int>& b) { return a.first < b.first; });
+        if (!_b_cofactor.empty() && !_cofactor.empty())
+            _cofactor *= power(_b_cofactor, _n);
+        else if (!_b_cofactor.empty())
+            _cofactor = power(_b_cofactor, _n);
     }
 
     _input_text = build_text();
+
+    if (_type == KBNC && _c == 1 && _cyclotomic_k == 0 && _hex_k == 0)
+    {
+        if (_gk == 1 && _n > 1 && (_n & (_n - 1)) == 0)
+            for (_gfn = 1; (1UL << _gfn) < _n; _gfn++);
+        if ((abs(_gk.bitlen() - log2(_gb)*_n) < _n/30 + 10))
+        {
+            Giant tmp = _gb;
+            tmp.power(_n);
+            Giant cyclo_tmp = tmp - _gk;
+            if (cyclo_tmp == 1)
+                _cyclotomic_k = -1;
+            if (cyclo_tmp == -1)
+                _cyclotomic_k = 1;
+            if (_gb%3 == 0)
+            {
+                tmp /= 3;
+                tmp -= _gk;
+                if (tmp == 1)
+                    _hex_k = -1;
+                if (tmp == -1)
+                    _hex_k = 1;
+            }
+        }
+    }
 
     if (_type == KBNC && _gb != 1)
     {
@@ -648,16 +679,13 @@ void InputNum::process()
             }
         }
 
-        while (_gk%_gb == 0 && _cyclotomic == 0)
+        while (_gk%_gb == 0 && _cyclotomic_k == 0 && _hex_k == 0)
         {
             _gk /= _gb;
             _n++;
             _custom_k.clear();
         }
     }
-
-    if (_type == KBNC && _gk == 1 && _c == 1 && _n > 1 && (_n & (_n - 1)) == 0)
-        for (_gfn = 1; (1UL << _gfn) < _n; _gfn++);
 
     _display_text = build_text(30);
 }
@@ -729,26 +757,35 @@ void InputNum::setup(GWState& state)
     {
         state.setup(_gk*_gb + _c);
     }
-    else if (_cyclotomic != 0 && _cyclotomic_k != 0 && b() != 0 && !state.force_general_mod)
+    else if ((_cyclotomic_k != 0 || _hex_k != 0) && b() != 0 && !state.force_general_mod)
     {
-        state.known_factors = _cyclotomic_k*power(_gb, _n) + (_cyclotomic == 6 ? 1 : -1);
-        state.setup(_cyclotomic_k*_cyclotomic_k*_cyclotomic_k, b(), 3*_n, _cyclotomic == 6 ? 1 : -1);
+        if (_cyclotomic_k != 0)
+        {
+            uint32_t k = (uint32_t)abs(_cyclotomic_k);
+            state.known_factors = k*power(_gb, _n) + (_cyclotomic_k < 0 ? 1 : -1);
+            state.setup(k*k*k, b(), 3*_n, _cyclotomic_k < 0 ? 1 : -1);
+        }
+        if (_hex_k != 0)
+        {
+            Giant x = (-_hex_k)*power(_gb, _n);
+            Giant val = value() + x;
+            state.known_factors = (val + std::move(x))*val;
+            uint64_t hex_k = (uint64_t)(_hex_k*_hex_k);
+            if (hex_k%3 == 0)
+                state.setup(hex_k*hex_k*hex_k/27, b(), 6*_n, 1);
+            else
+                state.setup(hex_k*hex_k*hex_k*b()*b()*b()/27, b(), 6*_n - 3, 1);
+        }
         if (*state.N%3417905339UL != fingerprint())
             throw ArithmeticException();
-        return;
-    }
-    else if (_hex_k != 0 && b() != 0 && !state.force_general_mod)
-    {
-        Giant x = (-_hex_k)*power(_gb, _n);
-        Giant val = value() + x;
-        state.known_factors = (val + std::move(x))*val;
-        _hex_k = abs(_hex_k);
-        if (_hex_k%3 == 0)
-            state.setup(_hex_k/3*_hex_k/3*_hex_k/3*_hex_k*_hex_k*_hex_k, b(), 6*_n, 1);
-        else
-            state.setup(_hex_k*_hex_k*_hex_k*_hex_k*_hex_k*_hex_k*b()*b()*b()/27, b(), 6*_n - 3, 1);
-        if (*state.N%3417905339UL != fingerprint())
-            throw ArithmeticException();
+        if (state.gwdata()->GENERAL_MOD)
+        {
+            state.done();
+            state.known_factors = 1;
+            _cyclotomic_k = 0;
+            _hex_k = 0;
+            setup(state);
+        }
         return;
     }
     else if (k() != 0 && b() != 0)
@@ -772,53 +809,6 @@ int InputNum::bitlen()
     else if (b() == 2)
         return _gk.bitlen() + _n;
     return (int)std::ceil(log2(_gk) + log2(_gb)*_n);
-}
-
-bool InputNum::is_base2()
-{
-    if (_b_factors.size() == 0 || _b_factors[0].first != 2)
-        return false;
-    if (_gb.bitlen() > _b_factors[0].second*2)
-        return false;
-    return true;
-}
-
-void InputNum::to_base2(InputNum& k, InputNum& base2)
-{
-    if (!is_base2())
-        return;
-    int num2 = _b_factors[0].second;
-    int n2 = _n*num2;
-    int c = _c;
-
-    k._type = KBNC;
-    k._gk = _gk;
-    k._gb = _gb >> num2;
-    k._n = _n;
-    k._c = 0;
-    k.process();
-
-    base2._type = KBNC;
-    base2._gk = k.value();
-    base2._gb = 2;
-    base2._n = n2;
-    base2._c = c;
-    base2._b_factors.clear();
-    ::add_factor(base2._b_factors, 2, 1);
-    if (!base2._b_cofactor.empty())
-        base2._b_cofactor.arithmetic().free(base2._b_cofactor);
-    base2._input_text = _input_text;
-    base2._display_text = k._display_text;
-    base2._display_text.append(1, '*');
-    base2._display_text.append(1, '2');
-    base2._display_text.append(1, '^');
-    base2._display_text.append(std::to_string(n2));
-    if (c > 0)
-        base2._display_text.append(1, '+');
-    if (c < 0)
-        base2._display_text.append(1, '-');
-    if (c != 0)
-        base2._display_text.append(std::to_string(abs(c)));
 }
 
 uint64_t InputNum::parse_numeral(const std::string& s)
@@ -848,110 +838,93 @@ uint64_t InputNum::parse_numeral(const std::string& s)
     return val;
 }
 
-uint32_t InputNum::fingerprint()
+uint32_t InputNum::mod(uint32_t modulus)
 {
-    uint32_t b = _gb%3417905339UL;
+    uint32_t b;
+    if (_gb < modulus)
+        b = _gb.data()[0];
+    else
+        b = _gb%modulus;
     if (_type == GENERIC)
         return b;
-    uint32_t result = b;
+    uint64_t result;
     if (_type == KBNC)
     {
-        result = 1;
-        int exp = _n;
-        while (exp > 0)
+        result = (_n & 1) ? b : 1;
+        uint64_t mult = b;
+        for (uint32_t i = 2; i <= _n; i <<= 1)
         {
-            if (exp & 1)
-                result = ((uint64_t)result*b)%3417905339UL;
-            b = ((uint64_t)b*b)%3417905339UL;
-            exp >>= 1;
+            mult *= mult;
+            if (mult >= (1ULL << 32))
+                mult %= modulus;
+            if ((_n & i) != 0)
+            {
+                result *= mult;
+                if (result >= (1ULL << 32))
+                    result %= modulus;
+            }
         }
     }
-    result = ((uint64_t)result*(_gk%3417905339UL))%3417905339UL;
-    result = (result + (uint32_t)_c)%3417905339UL;
-    return result;
-}
-
-bool InputNum::is_factorized_half()
-{
-    if (!_b_cofactor.empty())
-        return true;
-    arithmetic::Giant factorized;
-    factorized = 1;
-    for (auto it = _b_factors.begin(); it != _b_factors.end(); it++)
-        factorized *= power(it->first, it->second);
-    return factorized > _b_cofactor;
-}
-
-inline int isFactor(Giant& _gk, Giant& _gb, uint32_t _n, uint32_t nbit, int _c, uint32_t p)
-{
-    uint32_t b = _gb%p;
-    uint64_t mult = b;
-    for (int i = nbit; i > 0; i >>= 1)
+    else
+        result = b;
+    if (_gk > 1)
     {
-        mult *= mult;
-        if (mult >= (1ULL << 32)) mult %= p;
-        if ((_n & i) != 0)
-        {
-            mult *= b;
-            if (mult >= (1ULL << 32)) mult %= p;
-        }
+        if (_gk < modulus)
+            result *= _gk.data()[0];
+        else
+            result *= _gk%modulus;
     }
-    mult *= _gk%p;
-    mult += _c;
-    mult -= 1;
-    mult %= p;
-    return mult == 0;
+    if (_c >= 0)
+        result += _c;
+    else
+    {
+        uint32_t c = (uint32_t)(-_c);
+        if (result < c)
+            result += (uint64_t)modulus << 31;
+        result -= c;
+    }
+    return (uint32_t)(result%modulus);
+}
+
+bool InputNum::is_half_factored()
+{
+    if (abs(_c) != 1)
+        return false;
+    if (_cofactor.empty() || _cofactor.bitlen()*2 + 10 < bitlen())
+        return true;
+    if (_cofactor.bitlen()*2 > bitlen() + 10)
+        return false;
+    Giant tmp;
+    tmp = 1;
+    for (auto& factor : _factors)
+        tmp *= power(factor.first, factor.second);
+    if (_c == 1)
+        return tmp > _cofactor;
+    tmp -= 1;
+    return tmp > _cofactor;
 }
 
 std::vector<int> InputNum::factorize_minus1(int depth)
 {
-    uint32_t i;
-    uint64_t mult;
-    uint32_t nbit;
-    for (nbit = 1; nbit <= _n; nbit <<= 1);
-    nbit >>= 2;
-    std::vector<int> factors;
     uint32_t s = (depth + 1)/2;
     if (s%2 == 1)
         s++;
-    if (isFactor(_gk, _gb, _n, nbit, _c, 2))
+    Giant minus1 = value() - 1;
+    std::vector<std::pair<arithmetic::Giant, int>> factors;
+    factorize(minus1, factors, minus1, [&](Giant& x, uint32_t p) { return mod(p) == 1; }, s);
+
+    std::vector<int> divisors;
+    for (auto& factor : factors)
     {
-        factors.push_back(2);
-        mult = factors.back();
-        for (mult *= factors.back(); mult < (1ULL << 31) && isFactor(_gk, _gb, _n, nbit, _c, (uint32_t)mult); factors.back() = (int)mult, mult *= factors.back());
+        if (factor.first > INT_MAX)
+            continue;
+        int base = (int)(factor.first.data()[0]);
+        int divisor = base;
+        for (int i = 1; i < factor.second && divisor < INT_MAX/base; i++, divisor *= base);
+        divisors.push_back(divisor);
     }
 
-    std::vector<char> bitmap;
-    bitmap.resize((size_t)1 << (s - 1), 0);
-    std::vector<std::pair<int, int>> smallprimes;
-    for (i = 1; i < bitmap.size(); i++)
-        if (!bitmap[i])
-        {
-            smallprimes.emplace_back(i*2 + 1, (i*2 + 1)*(i*2 + 1)/2);
-            if (i < ((size_t)1 << (s/2 - 1)))
-                for (; smallprimes.back().second < bitmap.size(); smallprimes.back().second += smallprimes.back().first)
-                    bitmap[smallprimes.back().second] = 1;
-            if (isFactor(_gk, _gb, _n, nbit, _c, i*2 + 1))
-            {
-                factors.push_back(i*2 + 1);
-                mult = factors.back();
-                for (mult *= factors.back(); mult < (1ULL << 31) && isFactor(_gk, _gb, _n, nbit, _c, (uint32_t)mult); factors.back() = (int)mult, mult *= factors.back());
-            }
-        }
-
-    bitmap.resize((size_t)1 << (depth - 1), 0);
-    for (auto it = smallprimes.begin(); it != smallprimes.end(); it++)
-        for (; it->second < bitmap.size(); it->second += it->first)
-            bitmap[it->second] = 1;
-    for (i = 1 << (s - 1); i < bitmap.size(); i++)
-        if (!bitmap[i] && isFactor(_gk, _gb, _n, nbit, _c, i*2 + 1))
-        {
-            factors.push_back(i*2 + 1);
-            mult = factors.back();
-            for (mult *= factors.back(); mult < (1ULL << 31) && isFactor(_gk, _gb, _n, nbit, _c, (uint32_t)mult); factors.back() = (int)mult, mult *= factors.back());
-        }
-
-    return factors;
+    return divisors;
 }
 
 void InputNum::print_info()
@@ -967,7 +940,7 @@ void InputNum::print_info()
 
     std::vector<std::pair<arithmetic::Giant, int>> factors;
     arithmetic::Giant cofactor;
-    factorize(N, factors, cofactor);
+    factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { return mod(p) == 0; });
     if (factors.empty())
         std::cout << "No small factors." << std::endl;
     else
@@ -993,19 +966,25 @@ void InputNum::print_info()
     else
     {
         N -= 1;
-        factorize(N, factors, cofactor);
+        factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { return mod(p) == 1; });
         N += 1;
     }
-    if (_c == 1 && _type == FACTORIAL)
-        std::cout << "Factors of N-1 are all numbers less or equal than " << _n << "." << std::endl;
-    else if (_c == 1 && _type == PRIMORIAL)
-        std::cout << "Factors of N-1 are all prime numbers less or equal than " << _n << "." << std::endl;
-    else if (factors.empty())
+    if (factors.empty() && (_c != 1 || (_type != FACTORIAL && _type != PRIMORIAL)))
         std::cout << "No small factors of N-1." << std::endl;
     else
     {
         tmp = 1;
         st.clear();
+        if (_c == 1 && _type == FACTORIAL)
+        {
+            tmp = _gb;
+            st = std::to_string(_n) + "!";
+        }
+        if (_c == 1 && _type == PRIMORIAL)
+        {
+            tmp = _gb;
+            st = std::to_string(_n) + "#";
+        }
         for (auto& factor : factors)
         {
             if (!st.empty())
@@ -1042,19 +1021,25 @@ void InputNum::print_info()
     else
     {
         N += 1;
-        factorize(N, factors, cofactor);
+        factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { return mod(p) == p - 1; });
         N -= 1;
     }
-    if (_c == -1 && _type == FACTORIAL)
-        std::cout << "Factors of N+1 are all numbers less or equal than " << _n << "." << std::endl;
-    else if (_c == -1 && _type == PRIMORIAL)
-        std::cout << "Factors of N+1 are all prime numbers less or equal than " << _n << "." << std::endl;
-    else if (factors.empty())
+    if (factors.empty() && (_c != -1 || (_type != FACTORIAL && _type != PRIMORIAL)))
         std::cout << "No small factors of N+1." << std::endl;
     else
     {
         tmp = 1;
         st.clear();
+        if (_c == -1 && _type == FACTORIAL)
+        {
+            tmp = _gb;
+            st = std::to_string(_n) + "!";
+        }
+        if (_c == -1 && _type == PRIMORIAL)
+        {
+            tmp = _gb;
+            st = std::to_string(_n) + "#";
+        }
         for (auto& factor : factors)
         {
             if (!st.empty())

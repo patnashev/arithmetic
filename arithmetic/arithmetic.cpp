@@ -58,7 +58,7 @@ namespace arithmetic
             bit_length /= 2;
         giants.reset(GiantsArithmetic::alloc_gwgiants(gwdata(), (bit_length >> 5) + 10));
         N.reset(new Giant());
-        *N = k*power(std::move(*N = (uint32_t)b), n) + c;
+        *N = (uint32_t)k*power(std::move(*N = (uint32_t)b), n) + c;
         if (gwdata()->GENERAL_MOD)
             bit_length = N->bitlen();
         fingerprint = *N%3417905339UL;

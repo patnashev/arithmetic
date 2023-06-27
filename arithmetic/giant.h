@@ -233,6 +233,30 @@ namespace arithmetic
             return *this;
         }
         using FieldElement<GiantsArithmetic, Giant>::operator*=;
+        friend Giant operator * (Giant& a, uint32_t b)
+        {
+            Giant res(a.arithmetic());
+            res.arithmetic().mul(a, b, res);
+            return res;
+        }
+        friend Giant operator * (uint32_t a, Giant& b)
+        {
+            Giant res(b.arithmetic());
+            res.arithmetic().mul(b, a, res);
+            return res;
+        }
+        friend Giant operator * (Giant&& a, uint32_t b)
+        {
+            Giant res(std::move(a));
+            res *= b;
+            return res;
+        }
+        friend Giant operator * (uint32_t a, Giant&& b)
+        {
+            Giant res(std::move(b));
+            res *= a;
+            return res;
+        }
         Giant& operator <<= (int a)
         {
             arithmetic().shiftleft(*this, a, *this);
