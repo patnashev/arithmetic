@@ -144,7 +144,7 @@ namespace arithmetic
     PrimeList::PrimeList(int max)
     {
         int i, j, k;
-        std::vector<char> bitmap(max/2, 0);
+        std::vector<bool> bitmap(max/2, false);
         k = 0;
         for (i = 1; i < max/2; i++)
             if (!bitmap[i])
@@ -153,7 +153,7 @@ namespace arithmetic
                 if (i > 16384)
                     continue;
                 for (j = (i*2 + 1)*(i*2 + 1)/2; j < bitmap.size(); j += i*2 + 1)
-                    bitmap[j] = 1;
+                    bitmap[j] = true;
             }
         primes.clear();
         primes.reserve(k + 1);
@@ -163,32 +163,48 @@ namespace arithmetic
                 primes.push_back(i*2 + 1);
     }
 
-    void PrimeList::sieve_range(int start, int end, std::vector<int>& list)
+    template<class T, class IT>
+    void sieve_range_t(T start, T end, std::vector<T>& list, IT& it, const IT& it_end)
     {
-        int i, j;
-        if (!(start & 1))
-            start++;
-        std::vector<char> bitmap((end - start)/2, 0);
-        for (i = 1; i < primes.size() && primes[i]*primes[i] < end; i++)
-        {
-            j = (primes[i] - start%primes[i])%primes[i];
-            for (j = ((j & 1) != 0 ? (j + primes[i]) : j)/2; j < bitmap.size(); j += primes[i])
-                bitmap[j] = 1;
-        }
+        int i, p;
         list.clear();
 #ifndef __clang__
-        list.reserve((int)((std::expint(log(end)) - std::expint(log(start)))*1.1) + 100);
+        list.reserve((int)((std::expint(log(end)) - (start > 2 ? std::expint(log(start)) : 0))*1.1) + 100);
 #endif
-        i = 0;
-        if (start <= primes.back() && start < sqrt(end))
+        if (start <= 2 && 2 < end)
+            list.push_back(2);
+        if (!(start & 1))
+            start++;
+        if (!(end & 1))
+            end++;
+        std::vector<bool> bitmap((end - start)/2, false);
+        if (start == 1 && end > 1)
+            bitmap[0] = true;
+        if (*it == 2)
+            it++;
+        for (; it != it_end && (*it)*(T)(*it) < end; it++)
         {
-            for (j = 0; primes[j] < start; j++);
-            for (; j < primes.size() && primes[j]*primes[j] < end; j++)
-                list.push_back(primes[j]);
+            p = *it;
+            i = start%p;
+            if (i != 0)
+                i = p - i;
+            if (i & 1)
+                i += p;
+            i >>= 1;
+            for (; i < bitmap.size(); i += p)
+                bitmap[i] = true;
+            if (start <= p)
+                list.push_back(p);
         }
-        for (j = 0; j < bitmap.size(); j++)
-            if (!bitmap[j])
-                list.push_back(start + j*2);
+        for (i = 0; i < bitmap.size(); i++)
+            if (!bitmap[i])
+                list.push_back(start + i*2);
+    }
+
+    void PrimeList::sieve_range(int start, int end, std::vector<int>& list)
+    {
+        std::vector<int>::iterator it = primes.begin();
+        sieve_range_t<int,std::vector<int>::iterator>(start, end, list, it, primes.size() < 4792 ? primes.end() : primes.begin() + 4792);
     }
 
     PrimeIterator PrimeList::begin()
@@ -198,34 +214,19 @@ namespace arithmetic
 
     PrimeIterator& PrimeIterator::operator++()
     {
-        _cur++;
-        if (_cur < _list.size())
-            return *this;
-        if (_cur - _range_pos < _range.size())
-            return *this;
-        int start;
-        if (_range_pos == 0)
-        {
-            _range_pos = _list.size();
-            start = _list[_list.size() - 1] + 2;
-        }
-        else
-        {
-            _range_pos += _range.size();
-            start = _range[_range.size() - 1] + 2;
-        }
-        _list.sieve_range(start, start + _list[_list.size() - 1], _range);
-        return *this;
+        return (*this) += 1;
     }
 
     void PrimeIterator::operator++(int)
     {
-        operator++();
+        (*this) += 1;
     }
 
     PrimeIterator& PrimeIterator::operator+=(int offset)
     {
         _cur += offset;
+        if (_cur > 105097564)
+            _cur = 105097564;
         if (_cur < _list.size())
             return *this;
         while (_cur - _range_pos >= _range.size())
@@ -241,35 +242,34 @@ namespace arithmetic
                 _range_pos += _range.size();
                 start = _range[_range.size() - 1] + 2;
             }
-            _list.sieve_range(start, start + _list[_list.size() - 1], _range);
+            int range = _list[_list.size() - 1];
+            if (start < (int)((1UL << 31) - range))
+                _list.sieve_range(start, start + range, _range);
+            else
+            {
+                _list.sieve_range(start, (int)((1UL << 31) - 1), _range);
+                _range.push_back((int)((1UL << 31) - 1));
+            }
         }
         return *this;
     }
 
+    std::unique_ptr<PrimeIterator> _iter105097564;
+
+    const PrimeIterator& PrimeIterator::max()
+    {
+        if (!_iter105097564)
+        {
+            _iter105097564.reset(new PrimeIterator(PrimeList::primes_16bit()));
+            _iter105097564->_cur = 105097564;
+            _iter105097564->_range_pos = 105097564;
+            _iter105097564->_range.push_back((int)((1UL << 31) - 1));
+        }
+        return *_iter105097564;
+    }
+
     void PrimeIterator::sieve_range(uint64_t start, uint64_t end, std::vector<uint64_t>& list)
     {
-        int i, j;
-        if (!(start & 1))
-            start++;
-        if (!(end & 1))
-            end++;
-        if (_cur == 0)
-            (*this)++;
-        list.clear();
-#ifndef __clang__
-        list.reserve((int)((std::expint(log(end)) - std::expint(log(start)))*1.1) + 100);
-#endif
-        std::vector<char> bitmap((end - start)/2, 0);
-        for (i = *(*this); i*(uint64_t)i < end; (*this)++, i = *(*this))
-        {
-            j = (i - start%i)%i;
-            for (j = ((j & 1) != 0 ? (j + i) : j)/2; j < bitmap.size(); j += i)
-                bitmap[j] = 1;
-            if (start <= i)
-                list.push_back(i);
-        }
-        for (j = 0; j < bitmap.size(); j++)
-            if (!bitmap[j])
-                list.push_back(start + j*2);
+        sieve_range_t<uint64_t, PrimeIterator>(start, end, list, *this, max());
     }
 }

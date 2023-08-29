@@ -57,14 +57,15 @@ namespace arithmetic
         }
 
         static PrimeIterator get() { return PrimeIterator(PrimeList::primes_16bit()); }
+        static const PrimeIterator& max();
 
         void sieve_range(uint64_t start, uint64_t end, std::vector<uint64_t>& list);
 
         PrimeIterator& operator++();
         void operator++(int);
         PrimeIterator& operator+=(int offset);
-        bool operator==(PrimeIterator other) const { return _cur == other._cur; }
-        bool operator!=(PrimeIterator other) const { return !(*this == other); }
+        bool operator==(const PrimeIterator& other) const { return _cur == other._cur; }
+        bool operator!=(const PrimeIterator& other) const { return !(*this == other); }
         int operator*() const { return _cur < _list.size() ? _list[_cur] : _range[_cur - _range_pos]; }
         size_t pos() const { return _cur; }
 
