@@ -633,8 +633,6 @@ void InputNum::process()
             _cofactor = power(_b_cofactor, _n);
     }
 
-    _input_text = build_text();
-
     if (_type == KBNC && _c == 1 && _cyclotomic_k == 0 && _hex_k == 0)
     {
         if (_gk == 1 && _n > 1 && (_n & (_n - 1)) == 0)
@@ -659,6 +657,8 @@ void InputNum::process()
             }
         }
     }
+
+    _input_text = build_text();
 
     if (_type == KBNC && _gb != 1)
     {

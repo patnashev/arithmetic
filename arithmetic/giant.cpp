@@ -238,10 +238,16 @@ namespace arithmetic
 
     void GiantsArithmetic::shiftright(Giant& a, int b, Giant& res)
     {
-        alloc(res, abs(a._size) - b/32);
+        int size = abs(a._size) - b/32;
+        alloc(res, size);
         if (res._data != a._data)
-            copy(a, res);
-        gshiftright(b, giant(res));
+        {
+            memcpy(res.data(), a.data() + b/32, size*4);
+            res._size = size*(a._size < 0 ? -1 : 1);
+            gshiftright(b%32, giant(res));
+        }
+        else
+            gshiftright(b, giant(res));
     }
 
     int GiantsArithmetic::bitlen(const Giant& a)
@@ -251,6 +257,8 @@ namespace arithmetic
 
     bool GiantsArithmetic::bit(const Giant& a, int b)
     {
+        if (b/32 >= abs(a._size))
+            return 0;
         return bitval(giant(a), b) != 0;
     }
 
@@ -833,6 +841,8 @@ namespace arithmetic
 
     int GMPArithmetic::bitlen(const Giant& a)
     {
+        if (a._size == 0)
+            return 0;
         return (int)mpz_sizeinbase(mpz(a), 2);
     }
 
