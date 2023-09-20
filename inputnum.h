@@ -44,6 +44,7 @@ public:
     arithmetic::Giant& gk() { return _gk; }
     arithmetic::Giant& gb() { return _gb; }
     int gfn() { return _gfn; }
+    int multifactorial() { return _multifactorial; }
     int cyclotomic() { return _cyclotomic_k; }
     int hex() { return _hex_k; }
     arithmetic::Giant value() { return _type == GENERIC ? _gb : _type != KBNC ? _gk*_gb + _c : _gk*power(_gb, _n) + _c; }
@@ -82,6 +83,7 @@ private:
     std::string _custom_k;
     std::string _custom_b;
     int _gfn = 0;
+    int _multifactorial = 0;
     int32_t _cyclotomic_k = 0;
     int32_t _hex_k = 0;
 };

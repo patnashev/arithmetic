@@ -165,6 +165,7 @@ bool InputNum::parse(const std::string& s)
     std::vector<std::string> args;
     std::string custom_k;
     std::string custom_b;
+    int multifactorial = 0;
     int32_t cyclotomic_k = 0;
     int32_t hex_k = 0;
 
@@ -295,9 +296,20 @@ bool InputNum::parse(const std::string& s)
             type = FACTORIAL;
             if (!parse_digits(prime, it_s, it, n))
                 return false;
+            for (multifactorial = 1, it++; it != s.end() && *it == '!'; it++, multifactorial++);
+            if (multifactorial == 1)
+            {
+                iterate_digits(prime, it, it_s, s.end());
+                if (it != it_s && !parse_digits(prime, it_s, it, multifactorial))
+                    return false;
+            }
+            it--;
             gb = 1;
             tmp = 1;
-            for (uint32_t i = 2; i <= n; i++)
+            uint32_t i = n%multifactorial;
+            while (i < 2)
+                i += multifactorial;
+            for (; i <= n; i += multifactorial)
             {
                 tmp *= i;
                 if (tmp.size() > 8192 || i == n)
@@ -377,6 +389,7 @@ bool InputNum::parse(const std::string& s)
     _c = c;
     _custom_k = custom_k;
     _custom_b = custom_b;
+    _multifactorial = multifactorial;
     _cyclotomic_k = cyclotomic_k;
     _hex_k = hex_k;
     process();
@@ -711,7 +724,10 @@ std::string InputNum::build_text(int max_len)
     if (_type == FACTORIAL)
     {
         res.append(std::to_string(_n));
-        res.append(1, '!');
+        if (_multifactorial <= 3)
+            res.append(_multifactorial, '!');
+        else
+            res.append(1, '!').append(std::to_string(_multifactorial));
     }
     else if (_type == PRIMORIAL)
     {
@@ -978,7 +994,11 @@ void InputNum::print_info()
         if (_c == 1 && _type == FACTORIAL)
         {
             tmp = _gb;
-            st = std::to_string(_n) + "!";
+            st = std::to_string(_n);
+            if (_multifactorial <= 3)
+                st.append(_multifactorial, '!');
+            else
+                st.append(1, '!').append(std::to_string(_multifactorial));
         }
         if (_c == 1 && _type == PRIMORIAL)
         {
@@ -1033,7 +1053,11 @@ void InputNum::print_info()
         if (_c == -1 && _type == FACTORIAL)
         {
             tmp = _gb;
-            st = std::to_string(_n) + "!";
+            st = std::to_string(_n);
+            if (_multifactorial <= 3)
+                st.append(_multifactorial, '!');
+            else
+                st.append(1, '!').append(std::to_string(_multifactorial));
         }
         if (_c == -1 && _type == PRIMORIAL)
         {
