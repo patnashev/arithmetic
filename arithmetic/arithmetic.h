@@ -37,6 +37,7 @@ namespace arithmetic
         void mod(arithmetic::Giant& a, arithmetic::Giant& res);
 
         gwhandle* gwdata() { return &handle; }
+        double ops();
 
         int thread_count = 1;
         int next_fft_count = 0;
@@ -44,7 +45,7 @@ namespace arithmetic
         int maxmulbyconst = 3;
         bool will_error_check = false;
         bool large_pages = false;
-        bool force_general_mod = false;
+        int force_mod_type = 0;
         bool polymult = false;
         int spin_threads = 1;
         std::string instructions;
@@ -59,7 +60,7 @@ namespace arithmetic
             maxmulbyconst = a.maxmulbyconst;
             will_error_check = a.will_error_check;
             large_pages = a.large_pages;
-            force_general_mod = a.force_general_mod;
+            force_mod_type = a.force_mod_type;
             polymult = a.polymult;
             spin_threads = a.spin_threads;
             instructions = a.instructions;
@@ -132,6 +133,7 @@ namespace arithmetic
         void square(GWNum& a, GWNum& res, int options) { mul(a, a, res, options); }
         void setmulbyconst(int32_t a) { if (gwdata()->mulbyconst == a) return; GWASSERT(abs(a) <= state().maxmulbyconst); gwsetmulbyconst(gwdata(), a); }
         void setaddin(int32_t a) { if (_addin == a) return; gwsetaddin(gwdata(), a); _addin = a; }
+        void setpostaddin(int32_t a) { if (_postaddin == a) return; gwsetpostmulbyconstaddin(gwdata(), a); _postaddin = a; }
 
         GWState& state() { return _state; }
         gwhandle* gwdata() { return &_state.handle; }
@@ -146,6 +148,7 @@ namespace arithmetic
         GWState& _state;
         CarefulGWArithmetic* _careful = nullptr;
         int32_t _addin = 0;
+        int32_t _postaddin = 0;
     };
 
     class CarefulGWArithmetic : public GWArithmetic

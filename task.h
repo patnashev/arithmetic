@@ -81,6 +81,7 @@ public:
     int state_update_period() { return _state_update_period; }
     bool is_last(int iteration) { return iteration + 1 - (_state ? _state->iteration() : 0) >= _state_update_period || iteration + 1 == _iterations || abort_flag() || _logging->state_save_flag(); }
     virtual double progress() { return _state ? _state->iteration()/(double)iterations() : 0.0; }
+    int ops() { return (int)(_op_count + (_gw != nullptr ? _gwstate->ops() - _op_base : 0)); }
 
 protected:
     virtual void init(arithmetic::GWState* gwstate, File* file, TaskState* state, Logging* logging, int iterations);
@@ -133,6 +134,8 @@ protected:
     static bool _abort_flag;
     int _restart_count = 0;
     int _restart_op = 0;
+    double _op_count = 0;
+    double _op_base = 0;
 };
 
 class InputTask : public Task

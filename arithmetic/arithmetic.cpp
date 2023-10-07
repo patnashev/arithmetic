@@ -6,6 +6,8 @@
 #include "arithmetic.h"
 #include "exception.h"
 
+gwnum convert_factor = NULL;
+
 namespace arithmetic
 {
     void GWState::init()
@@ -20,8 +22,10 @@ namespace arithmetic
             gwset_will_error_check(gwdata());
         if (large_pages)
             gwset_use_large_pages(gwdata());
-        if (force_general_mod)
-            gwdata()->force_general_mod = 1;
+        if (force_mod_type == 1 || force_mod_type == 2)
+            gwdata()->force_general_mod = force_mod_type;
+        else
+            gwdata()->force_general_mod = 0;
         if (polymult)
             gwset_using_polymult(gwdata());
         gwset_use_spin_wait(gwdata(), spin_threads);
@@ -136,6 +140,7 @@ namespace arithmetic
         fft_length = 0;
         gwdone(&handle);
         gwinit(&handle);
+        convert_factor = NULL;
     }
 
     void GWState::mod(arithmetic::Giant& a, arithmetic::Giant& res)
@@ -143,7 +148,7 @@ namespace arithmetic
         if (!mod_gwstate)
         {
             mod_gwstate.reset(new GWState());
-            mod_gwstate->force_general_mod = true;
+            mod_gwstate->force_mod_type = 2;
             if (gwdata()->GENERAL_MOD)
                 mod_gwstate->setup(square(*N));
             else
@@ -163,6 +168,10 @@ namespace arithmetic
         res = X;
     }
 
+    double GWState::ops()
+    {
+        return gw_get_fft_count(gwdata())*(gwdata()->GENERAL_MMGW_MOD ? 1.0/9.5 : gwdata()->GENERAL_MOD ? 1.0/6 : 1.0/2);
+    }
 
     GWArithmetic::GWArithmetic(GWState& state) : _state(state)
     {
@@ -1006,9 +1015,10 @@ int gwconvert(
     return (0);
 }
 
-#define GWSERIALIZE_HEADER_SIZE 4
+#define GWSERIALIZE_HEADER_SIZE 6
 #define GWSERIALIZE_FLAG_IRRATIONAL 1
 #define GWSERIALIZE_FLAG_GENERALMOD 2
+#define GWSERIALIZE_FLAG_MMGW_MOD 4
 
 int gwserialize(
     gwhandle *gwdata,  /* Handle initialized by gwsetup */
@@ -1035,7 +1045,8 @@ int gwserialize(
 /* For a DWT, convert all the FFT data. */
 
 	if (gwdata->GENERAL_MOD) limit = gwdata->GW_GEN_MOD_MAX + 3;
-	else if (gwdata->ZERO_PADDED_FFT) limit = gwdata->FFTLEN / 2 + 4;
+    //else if (gwdata->GENERAL_MMGW_MOD) limit = 2*gwdata->FFTLEN;
+    else if (gwdata->ZERO_PADDED_FFT) limit = gwdata->FFTLEN / 2 + 4;
 	else limit = gwdata->FFTLEN;
 
 /* GENERAL_MOD has some strange cases we must handle.  In particular the */
@@ -1071,17 +1082,22 @@ int gwserialize(
     array[1] = 0;
     array[2] = 0;
     array[3] = 0;
+    array[4] = 0;
+    array[5] = 0;
 
-    long val;
+    int32_t val;
     unsigned long i;
-    for (i = 0; i < limit; i++)
+    gwiter iter;
+    for (i = 0, gwiter_init_zero(gwdata, &iter, gg); i < limit; i++, gwiter_next(&iter))
     {
-        err_code = get_fft_value(gwdata, gg, i, &val);
+        /*if (gwdata->GENERAL_MMGW_MOD && i == gwdata->FFTLEN)
+            gwiter_init_zero(gwdata->negacyclic_gwdata, &iter, negacyclic_gwnum(gwdata, gg));*/
+        err_code = gwiter_get_fft_value(&iter, &val);
         if (err_code) return (err_code);
         if (!gwdata->RATIONAL_FFT)
         {
             val <<= 1;
-            if (is_big_word(gwdata, i))
+            if (gwiter_is_big_word(&iter))
                 val |= 1;
         }
         array[i + GWSERIALIZE_HEADER_SIZE] = (uint32_t)val;
@@ -1092,10 +1108,13 @@ int gwserialize(
         header[0] |= GWSERIALIZE_FLAG_IRRATIONAL;
     if (gwdata->GENERAL_MOD)
         header[0] |= GWSERIALIZE_FLAG_GENERALMOD;
+    if (gwdata->GENERAL_MMGW_MOD)
+        header[0] |= GWSERIALIZE_FLAG_MMGW_MOD;
     header[1] = (uint8_t)gwdata->NUM_B_PER_SMALL_WORD;
     array[1] = (uint32_t)gwdata->b;
     array[2] = (uint32_t)gwdata->FFTLEN;
-    array[3] = (uint32_t)limit;
+    array[3] = (uint32_t)(gwdata->GENERAL_MMGW_MOD ? gwdata->n : limit);
+    *(uint64_t*)(array + 4) = (uint64_t)gwdata->k;
     *arrayused = (int)limit + GWSERIALIZE_HEADER_SIZE;
 
 /* Return success */
@@ -1111,35 +1130,39 @@ void gwdeserialize(
     gwnum g)	    	    /* Destination gwnum */
 {
     unsigned long i, limit;
-    long val;
+    int32_t val;
+    gwiter iter;
     uint8_t* header = (uint8_t*)array;
 
     ASSERTG(arraylen >= GWSERIALIZE_HEADER_SIZE && array[2] != 0);
 
-    limit = array[3];
+    limit = (header[0] & GWSERIALIZE_FLAG_MMGW_MOD) ? array[2] : array[3];
 
     if (!gwdata->RATIONAL_FFT == ((header[0] & GWSERIALIZE_FLAG_IRRATIONAL) != 0) &&
         gwdata->GENERAL_MOD == ((header[0] & GWSERIALIZE_FLAG_GENERALMOD) != 0) &&
+        gwdata->GENERAL_MMGW_MOD == ((header[0] & GWSERIALIZE_FLAG_MMGW_MOD) != 0) &&
         gwdata->NUM_B_PER_SMALL_WORD == header[1] &&
         gwdata->b == array[1] &&
-        gwdata->FFTLEN == array[2])
+        gwdata->FFTLEN == array[2] &&
+        (!gwdata->GENERAL_MMGW_MOD || gwdata->n == array[3]))
     {
-        for (i = 0; i < limit; i++)
+        for (i = 0, gwiter_init_write_only(gwdata, &iter, g); i < limit; i++, gwiter_next(&iter))
         {
+            /*if (gwdata->GENERAL_MMGW_MOD && i == gwdata->FFTLEN)
+                gwiter_init_write_only(gwdata->negacyclic_gwdata, &iter, negacyclic_gwnum(gwdata, g));*/
             val = (int32_t)array[i + GWSERIALIZE_HEADER_SIZE];
             if ((header[0] & GWSERIALIZE_FLAG_IRRATIONAL))
             {
-                ASSERTG(((val & 1) != 0) == is_big_word(gwdata, i));
+                ASSERTG(((val & 1) != 0) == gwiter_is_big_word(&iter));
                 val >>= 1;
             }
-            set_fft_value(gwdata, g, i, val);
+            gwiter_set_fft_value(&iter, val);
         }
 
 /* Clear the upper words */
 
-		for ( ; i < gwdata->FFTLEN; i++) {
-			set_fft_value (gwdata, g, i, 0);
-		}
+		for ( ; i < gwdata->FFTLEN; i++, gwiter_next(&iter))
+            gwiter_set_fft_value(&iter, 0);
     }
 
     else if (gwdata->b == array[1])
@@ -1148,6 +1171,7 @@ void gwdeserialize(
         int64_t value;
         int	bs_in_value, bs;
         unsigned long i_d, limit_d;
+        bool more_data;
 
         pow.push_back(1);
         pow.push_back(gwdata->b);
@@ -1158,12 +1182,15 @@ void gwdeserialize(
         // Figure out how many FFT words we will need to set
         
         if (gwdata->GENERAL_MOD) limit_d = gwdata->GW_GEN_MOD_MAX + 3;
+        //else if (gwdata->GENERAL_MMGW_MOD) limit_d = 2*gwdata->FFTLEN;
         else if (gwdata->ZERO_PADDED_FFT) limit_d = gwdata->FFTLEN / 2 + 4;
         else limit_d = gwdata->FFTLEN;
 
         /* Collect bs until we have all of them */
 
-        for (i = 0; i < limit; i++) {
+        gwiter_init_write_only(gwdata, &iter, g);
+        for (i = 0; i < limit; i++)
+        {
             bs = header[1];
             val = (int32_t)array[i + GWSERIALIZE_HEADER_SIZE];
             if ((header[0] & GWSERIALIZE_FLAG_IRRATIONAL))
@@ -1176,41 +1203,174 @@ void gwdeserialize(
                 pow.push_back(pow.back()*gwdata->b);
             value += val*pow[bs_in_value];
             bs_in_value += bs;
+            more_data = /*(!gwdata->GENERAL_MMGW_MOD || i != array[2] - 1) &&*/ i != limit - 1;
 
-            for (; i_d < limit_d; i_d++) {
-                if (i_d == limit_d - 1) {
-                    if (i < limit - 1) break;
-                    val = (long)value;
+            for (; i_d < limit_d; i_d++, gwiter_next(&iter)) {
+                /*if (gwdata->GENERAL_MMGW_MOD && i_d == gwdata->FFTLEN - 1)
+                {
+                    if (more_data)
+                        break;
+                    val = (int32_t)value;
+                    value = 0;
+                    bs_in_value = 0;
+                    gwiter_set_fft_value(&iter, val);
+                    i_d++;
+                    gwiter_init_write_only(gwdata->negacyclic_gwdata, &iter, negacyclic_gwnum(gwdata, g));
+                    break;
+                }
+                else*/ if (i_d == limit_d - 1) {
+                    if (more_data) break;
+                    val = (int32_t)value;
                 }
                 else {
                     bs = gwdata->NUM_B_PER_SMALL_WORD;
-                    if (is_big_word(gwdata, i_d))
+                    if (gwiter_is_big_word(&iter))
                         bs++;
-                    if (i < limit - 1 && bs > bs_in_value) break;
+                    if (more_data && bs > bs_in_value) break;
                     while (pow.size() <= bs)
                         pow.push_back(pow.back()*gwdata->b);
-                    val = (long)(value%pow[bs]);
+                    val = (int32_t)(value%pow[bs]);
                     value /= pow[bs];
                     if (val > pow[bs]/2)
                     {
-                        val -= (long)pow[bs];
+                        val -= (int32_t)pow[bs];
                         value++;
                     }
                     else if (val < -pow[bs]/2)
                     {
-                        val += (long)pow[bs];
+                        val += (int32_t)pow[bs];
                         value--;
                     }
                     bs_in_value -= bs;
                 }
-                set_fft_value(gwdata, g, i_d, val);
+                gwiter_set_fft_value(&iter, val);
             }
         }
 
         /* Clear the upper words */
 
-        for (; i_d < gwdata->FFTLEN; i_d++) {
-            set_fft_value(gwdata, g, i_d, 0);
+        for (; i_d < gwdata->FFTLEN; i_d++, gwiter_next(&iter)) {
+            gwiter_set_fft_value(&iter, 0);
+        }
+
+        if (gwdata->GENERAL_MOD && ((header[0] & GWSERIALIZE_FLAG_GENERALMOD) == 0) && *(uint64_t*)(array + 4) > 1)
+        {
+            if (*(uint64_t*)(array + 4) < GWSMALLMUL_MAX)
+                gwsmallmul(gwdata, (double)*(uint64_t*)(array + 4), g);
+            else
+            {
+                if (convert_factor == NULL)
+                {
+                    convert_factor = gwalloc(gwdata);
+                    binarytogw(gwdata, array + 4, 2, convert_factor);
+                }
+                gwmul3_carefully(gwdata, g, convert_factor, g, 0);
+            }
+        }
+
+        if (!gwdata->GENERAL_MOD && ((header[0] & GWSERIALIZE_FLAG_GENERALMOD) != 0) && gwdata->k > 1.0)
+        {
+            if (convert_factor == NULL)
+            {
+                giant Nalloc = NULL;
+                giant N = gwdata->GW_MODULUS;
+                if (N == NULL)
+                {
+                    Nalloc = popg(&gwdata->gdata, ((unsigned long)gwdata->bit_length >> 5) + 2);
+                    N = Nalloc;
+                    ultog(gwdata->b, N);
+                    power(N, gwdata->n);
+                    dblmulg(gwdata->k, N);
+                    iaddg(gwdata->c, N);
+                }
+                giant invK = popg(&gwdata->gdata, ((unsigned long)gwdata->bit_length >> 5) + 2);
+                dbltog(gwdata->k, invK);
+                invg(N, invK);
+
+                convert_factor = gwalloc(gwdata);
+                gianttogw(gwdata, invK, convert_factor);
+
+                if (Nalloc != NULL)
+                    pushg(&gwdata->gdata, 1);
+                pushg(&gwdata->gdata, 1);
+            }
+
+            gwmul3_carefully(gwdata, g, convert_factor, g, 0);
+        }
+
+
+        if (gwdata->GENERAL_MMGW_MOD && ((header[0] & GWSERIALIZE_FLAG_MMGW_MOD) == 0))
+        {
+            gwmul3_carefully(gwdata, g, gwdata->R2_4, g, 0);
+            if (*(uint64_t*)(array + 4) > 1)
+            {
+                if (*(uint64_t*)(array + 4) < GWSMALLMUL_MAX)
+                    gwsmallmul(gwdata, (double)*(uint64_t*)(array + 4), g);
+                else
+                {
+                    if (convert_factor == NULL)
+                    {
+                        convert_factor = gwalloc(gwdata);
+                        binarytogw(gwdata, array + 4, 2, convert_factor);
+                    }
+                    gwmul3_carefully(gwdata, g, convert_factor, g, 0);
+                }
+            }
+        }
+
+        if (((header[0] & GWSERIALIZE_FLAG_MMGW_MOD) != 0) &&
+            (!gwdata->GENERAL_MMGW_MOD || (gwdata->GENERAL_MMGW_MOD && gwdata->n != array[3])))
+        {
+            if (convert_factor == NULL)
+            {
+                giant Nalloc = NULL;
+                giant N = gwdata->GW_MODULUS;
+                if (N == NULL)
+                {
+                    Nalloc = popg(&gwdata->gdata, ((unsigned long)gwdata->bit_length >> 5) + 2);
+                    N = Nalloc;
+                    ultog(gwdata->b, N);
+                    power(N, gwdata->n);
+                    dblmulg(gwdata->k, N);
+                    iaddg(gwdata->c, N);
+                }
+                giant Rold = allocgiant((array[3] >> 5) + 4);
+                itog(1, Rold);
+                gshiftleft(array[3], Rold);
+                sladdg(-1, Rold);
+                dblmulg(gwdata->k, Rold);
+                invg(N, Rold);
+
+                convert_factor = gwalloc(gwdata);
+                if (!gwdata->GENERAL_MMGW_MOD)
+                {
+                    dblmulg(2, Rold);
+                    modg(N, Rold);
+                    gianttogw(gwdata, Rold, convert_factor);
+                }
+                if (gwdata->GENERAL_MMGW_MOD && gwdata->n != array[3])
+                {
+                    giant R = allocgiant((((array[3] > gwdata->n ? array[3] : gwdata->n) + gwdata->n) >> 5) + 2);
+                    itog(1, R);
+                    gshiftleft(gwdata->n, R);
+                    sladdg(-1, R);
+                    squareg(R);
+                    if (R->n[0] & 1)
+                        addg(N, R);
+                    gshiftright(1, R);
+                    modg(N, R);
+                    mulg(Rold, R);
+                    modg(N, R);
+                    gianttogw(gwdata->negacyclic_gwdata, R, convert_factor);
+                    free(R);
+                }
+
+                if (Nalloc != NULL)
+                    pushg(&gwdata->gdata, 1);
+                free(Rold);
+            }
+
+            gwmul3_carefully(gwdata, g, convert_factor, g, 0);
         }
     }
 

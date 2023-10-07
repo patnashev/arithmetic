@@ -773,7 +773,7 @@ void InputNum::setup(GWState& state)
     {
         state.setup(_gk*_gb + _c);
     }
-    else if ((_cyclotomic_k != 0 || _hex_k != 0) && b() != 0 && !state.force_general_mod)
+    else if ((_cyclotomic_k != 0 || _hex_k != 0) && b() != 0 && !state.force_mod_type)
     {
         if (_cyclotomic_k != 0)
         {
@@ -794,7 +794,7 @@ void InputNum::setup(GWState& state)
         }
         if (*state.N%3417905339UL != fingerprint())
             throw ArithmeticException();
-        if (state.gwdata()->GENERAL_MOD)
+        if (state.gwdata()->GENERAL_MOD || state.gwdata()->GENERAL_MMGW_MOD)
         {
             state.done();
             state.known_factors = 1;

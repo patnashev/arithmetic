@@ -36,7 +36,8 @@ void Task::init(arithmetic::GWState* gwstate, File* file, TaskState* state, Logg
     _file = file;
     _state.reset(state);
     _logging = logging;
-    logging->progress().update(0, (int)gwstate->handle.fft_count/2);
+    _op_count = 0;
+    logging->progress().update(0, ops());
     _last_write = std::chrono::system_clock::now();
     _last_progress = std::chrono::system_clock::now();
 }
@@ -52,6 +53,7 @@ void Task::run()
     int* restart_count[2] { &setup_restart_count, &_restart_count };
     while (true)
     {
+        _op_base = _gwstate->ops();
         int i;
         for (i = 0; i < 2; )
         {
@@ -75,6 +77,8 @@ void Task::run()
                 {
                     release();
                     _gw = nullptr;
+                    _op_count = _gwstate->ops() - _op_base;
+                    _op_base = _gwstate->ops();
                     _error_check = true;
                     arithmetics[0].reset();
                     arithmetics[1].reset();
@@ -93,12 +97,12 @@ void Task::run()
             _logging->warning("Arithmetic error, restarting at %.1f%%.\n", 100.0*progress());
             if (reliable && reliable->restart_flag() && !reliable->failure_flag())
             {
-                std::string ops = "pass " + std::to_string(i) + " suspicious ops:";
+                std::string opstr = "pass " + std::to_string(i) + " suspicious ops:";
                 for (auto it = reliable->suspect_ops().begin(); it != reliable->suspect_ops().end(); it++)
                     if (*it >= (i == 1 ? _restart_op : 0))
-                        ops += " " + std::to_string(*it);
-                ops += ".\n";
-                _logging->debug(ops.data());
+                        opstr += " " + std::to_string(*it);
+                opstr += ".\n";
+                _logging->debug(opstr.data());
                 reliable->restart(i == 1 ? _restart_op : 0);
                 i = 0;
                 continue;
@@ -113,6 +117,8 @@ void Task::run()
             }
             break;
         }
+        if (_gw != nullptr)
+            _op_count = _gwstate->ops() - _op_base;
         if (i == 2)
             break;
 
@@ -159,18 +165,18 @@ void Task::on_state()
     if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - _last_write).count() >= DISK_WRITE_TIME || abort_flag() || state_save_flag)
     {
         _logging->debug("saving state to disk.\n");
-        _logging->progress().update(progress(), (int)_gwstate->handle.fft_count/2);
+        _logging->progress().update(progress(), ops());
         _logging->state_save();
         write_state();
         _last_write = std::chrono::system_clock::now();
-        _logging->progress().update(progress(), (int)_gwstate->handle.fft_count/2);
+        _logging->progress().update(progress(), ops());
         _logging->progress_save();
     }
     if (abort_flag())
         throw TaskAbortException();
     if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - _last_progress).count() >= PROGRESS_TIME)
     {
-        _logging->progress().update(progress(), (int)_gwstate->handle.fft_count/2);
+        _logging->progress().update(progress(), ops());
         _logging->report_progress();
         _last_progress = std::chrono::system_clock::now();
     }
@@ -208,16 +214,13 @@ void InputTask::init(InputNum* input, arithmetic::GWState* gwstate, File* file, 
     Task::init(gwstate, file, state, logging, iterations);
     _input = input;
     _timer = getHighResTimer();
-    _transforms = -(int)gwstate->handle.fft_count;
     _error_check = _error_check_near ? gwnear_fft_limit(gwstate->gwdata(), 1) == TRUE : _error_check_forced;
 }
 
 void InputTask::reinit_gwstate()
 {
-    double fft_count = _gwstate->handle.fft_count;
     _gwstate->done();
     _input->setup(*_gwstate);
-    _gwstate->handle.fft_count = fft_count;
     std::string prefix = _logging->prefix();
     _logging->set_prefix("");
     _logging->warning("Restarting using %s\n", _gwstate->fft_description.data());
@@ -230,8 +233,7 @@ void InputTask::reinit_gwstate()
 void InputTask::done()
 {
     _timer = (getHighResTimer() - _timer)/getHighResTimerFrequency();
-    _transforms += (int)_gwstate->handle.fft_count;
-    _logging->progress().update(1, (int)_gwstate->handle.fft_count/2);
+    _logging->progress().update(1, ops());
 }
 
 void InputTask::set_error_check(bool near, bool check)
