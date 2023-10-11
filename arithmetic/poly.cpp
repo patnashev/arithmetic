@@ -67,7 +67,7 @@ namespace arithmetic
 
     PolyMult::PolyMult(GWArithmetic& gw, int max_threads) : _gw(gw)
     {
-        GWASSERT(gw.state().polymult);
+        GWASSERT(gw.state().polymult_safety_margin > 0);
         _max_output = max_polymult_output(gw.state());
         polymult_init(pmdata(), gw.gwdata());
         polymult_set_max_num_threads(pmdata(), max_threads);

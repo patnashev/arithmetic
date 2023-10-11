@@ -26,8 +26,11 @@ namespace arithmetic
             gwdata()->force_general_mod = force_mod_type;
         else
             gwdata()->force_general_mod = 0;
-        if (polymult)
+        if (polymult_safety_margin > 0)
+        {
             gwset_using_polymult(gwdata());
+            gwset_polymult_safety_margin(gwdata(), polymult_safety_margin);
+        }
         gwset_use_spin_wait(gwdata(), spin_threads);
         if (instructions == "SSE2")
         {

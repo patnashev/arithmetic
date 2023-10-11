@@ -173,20 +173,16 @@ namespace arithmetic
         {
             if (!res.Z)
                 res.Z.reset(new GWNum(gw()));
-            if (options & EDADD_NEGATIVE)
-                gw().setmulbyconst(-1);
-            gw().mul(*b.T, *a.Z, *res.Z, GWMUL_FFT_S1 | ((options & EDADD_NEGATIVE) ? GWMUL_MULBYCONST : 0) | GWMUL_STARTNEXTFFT_IF(safe11 || (options & ED_PROJECTIVE))); // C = Z1 * T2
+            gw().mul(*b.T, *a.Z, *res.Z, GWMUL_FFT_S1 | GWMUL_STARTNEXTFFT_IF(safe11 || (options & ED_PROJECTIVE))); // C = Z1 * T2
         }
         else
         {
             if (!res.Z)
                 res.Z.reset(new GWNum(gw()));
-            if ((safe11 || (options & ED_PROJECTIVE)) && !(options & EDADD_NEGATIVE))
+            if ((safe11 || (options & ED_PROJECTIVE)))
                 gw().copy(*b.T, *res.Z);
             else
                 gw().unfft(*b.T, *res.Z);
-            if (options & EDADD_NEGATIVE)
-                gw().neg(*res.Z, *res.Z);
         }
         if (b.Z)
             gw().mul(*b.Z, *a.T, *res.T, GWMUL_FFT_S1 | GWMUL_STARTNEXTFFT_IF(safe11 || (options & ED_PROJECTIVE))); // D = T1 * Z2
@@ -195,6 +191,7 @@ namespace arithmetic
         gw().addsub(*res.T, *res.Z, *res.T, *res.Z, GWADD_DELAYNORM_IF(safe11 || (options & ED_PROJECTIVE))); // E = D + C, H = D - C
         if (options & EDADD_NEGATIVE)
         {
+            swap(*res.T, *res.Z);
             gw().mulmuladd(*a.X, *b.Y, *a.Y, *b.X, (&a == &res) ? *_tmp : *res.X, GWMUL_FFT_S1 | GWMUL_FFT_S2 | GWMUL_FFT_S3 | GWMUL_FFT_S4 | GWMUL_STARTNEXTFFT); // F = X1*Y2 - Y1*[-]X2
             gw().mulmulsub(*a.Y, *b.Y, *a.X, *b.X, *res.Y, GWMUL_STARTNEXTFFT); // G = Y1*Y2 + X1*[-]X2
         }
@@ -207,9 +204,9 @@ namespace arithmetic
             swap(*res.X, *_tmp);
         if (!(options & ED_PROJECTIVE))
             gw().mul(*res.Z, *res.T, *_tmp, GWMUL_FFT_S1 | GWMUL_FFT_S2 | options); // T3 = E * H
-        gw().mul(*res.Y, *res.Z, *res.Z, options); // Y3 = G * H
+        gw().mul(*res.Y, *res.Z, *res.Z, GWMUL_FFT_S1 | options); // Y3 = G * H
+        gw().mul(*res.X, *res.Y, *res.Y, GWMUL_FFT_S1 | options); // Z3 = F * G
         gw().mul(*res.X, *res.T, *res.T, options); // X3 = E * F
-        gw().mul(*res.X, *res.Y, *res.Y, options); // Z3 = F * G
         swap(*res.Y, *res.Z);
         swap(*res.X, *res.T);
         if (!(options & ED_PROJECTIVE))

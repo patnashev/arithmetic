@@ -46,7 +46,7 @@ namespace arithmetic
         bool will_error_check = false;
         bool large_pages = false;
         int force_mod_type = 0;
-        bool polymult = false;
+        double polymult_safety_margin = 0;
         int spin_threads = 1;
         std::string instructions;
         bool information_only = false;
@@ -61,7 +61,7 @@ namespace arithmetic
             will_error_check = a.will_error_check;
             large_pages = a.large_pages;
             force_mod_type = a.force_mod_type;
-            polymult = a.polymult;
+            polymult_safety_margin = a.polymult_safety_margin;
             spin_threads = a.spin_threads;
             instructions = a.instructions;
             known_factors = a.known_factors;
