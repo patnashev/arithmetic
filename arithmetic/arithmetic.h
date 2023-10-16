@@ -75,6 +75,8 @@ namespace arithmetic
         int fft_length;
         int bit_length;
         std::unique_ptr<arithmetic::GWState> mod_gwstate;
+        int32_t _addin = 0;
+        int32_t _postaddin = 0;
     };
 
     class GWNum;
@@ -132,8 +134,8 @@ namespace arithmetic
 
         void square(GWNum& a, GWNum& res, int options) { mul(a, a, res, options); }
         void setmulbyconst(int32_t a) { if (gwdata()->mulbyconst == a) return; GWASSERT(abs(a) <= state().maxmulbyconst); gwsetmulbyconst(gwdata(), a); }
-        void setaddin(int32_t a) { if (_addin == a) return; gwsetaddin(gwdata(), a); _addin = a; }
-        void setpostaddin(int32_t a) { if (_postaddin == a) return; gwsetpostmulbyconstaddin(gwdata(), a); _postaddin = a; }
+        void setaddin(int32_t a) { if (_state._addin == a) return; gwsetaddin(gwdata(), a); _state._addin = a; if (_state._postaddin) gwsetpostmulbyconstaddin(gwdata(), 0); _state._postaddin = 0; }
+        void setpostaddin(int32_t a) { if (_state._postaddin == a) return; gwsetpostmulbyconstaddin(gwdata(), a); _state._postaddin = a; if (_state._addin) gwsetaddin(gwdata(), 0); _state._addin = 0; }
 
         GWState& state() { return _state; }
         gwhandle* gwdata() { return &_state.handle; }
@@ -142,13 +144,11 @@ namespace arithmetic
         CarefulGWArithmetic& carefully() { return *_careful; }
         const GWNumWrapper wrap(gwnum a);
         int32_t mulbyconst() { return gwdata()->mulbyconst; }
-        int32_t addin() { return _addin; }
+        int32_t addin() { return _state._addin; }
 
     protected:
         GWState& _state;
         CarefulGWArithmetic* _careful = nullptr;
-        int32_t _addin = 0;
-        int32_t _postaddin = 0;
     };
 
     class CarefulGWArithmetic : public GWArithmetic

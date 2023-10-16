@@ -7,7 +7,7 @@
 
 namespace arithmetic
 {
-    void get_NAF_W(int W, Giant& a, std::vector<int16_t>& res);
+    void get_NAF_W(int W, Giant& a, std::vector<int16_t>& res, bool compress = true);
 
     template<class Element>
     class GroupArithmetic

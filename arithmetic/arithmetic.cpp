@@ -29,7 +29,7 @@ namespace arithmetic
         if (polymult_safety_margin > 0)
         {
             gwset_using_polymult(gwdata());
-            gwset_polymult_safety_margin(gwdata(), polymult_safety_margin);
+            gwset_polymult_safety_margin(gwdata(), (float)polymult_safety_margin);
         }
         gwset_use_spin_wait(gwdata(), spin_threads);
         if (instructions == "SSE2")
@@ -203,6 +203,8 @@ namespace arithmetic
 
     void GWArithmetic::copy(const GWNum& a, GWNum& res)
     {
+        if (&a == &res)
+            return;
         if (*res == nullptr)
             res.arithmetic().alloc(res);
         gwcopy(gwdata(), *a, *res);
@@ -210,6 +212,8 @@ namespace arithmetic
 
     void GWArithmetic::move(GWNum&& a, GWNum& res)
     {
+        if (&a == &res)
+            return;
         if (res._gwnum != nullptr)
             free(res);
         res._gwnum = a._gwnum;
@@ -228,6 +232,8 @@ namespace arithmetic
 
     int GWArithmetic::cmp(const GWNum& a, const GWNum& b)
     {
+        if (&a == &b)
+            return 0;
         return _state.giants->cmp(popg() = a, popg() = b);
     }
 

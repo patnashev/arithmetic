@@ -267,6 +267,11 @@ namespace arithmetic
         int size = (count + 31 + offset%32)/32;
         if (size > abs(a._size) - offset/32)
             size = abs(a._size) - offset/32;
+        if (size <= 0)
+        {
+            res = 0;
+            return;
+        }
         alloc(res, size);
         memcpy(res.data(), a.data() + offset/32, size*4);
         if ((offset%32 + count)/32 == size - 1)
@@ -856,6 +861,11 @@ namespace arithmetic
         int size = (count + GMP_NUMB_BITS - 1 + offset%GMP_NUMB_BITS)/GMP_NUMB_BITS;
         if (size > abs(a._size) - offset/GMP_NUMB_BITS)
             size = abs(a._size) - offset/GMP_NUMB_BITS;
+        if (size <= 0)
+        {
+            res = 0;
+            return;
+        }
         alloc(res, size*(GMP_NUMB_BITS/32));
         memcpy(res._data, (char*)a._data + offset/GMP_NUMB_BITS*(GMP_NUMB_BITS/8), size*(GMP_NUMB_BITS/8));
         if (GMP_NUMB_BITS == 32 && (offset%GMP_NUMB_BITS + count)/GMP_NUMB_BITS == size - 1)
