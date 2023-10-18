@@ -254,6 +254,7 @@ namespace arithmetic
 
         gw().setpostaddin(negativeQ() && a.parity() ? 1 : -1);
         gw().mul(a.V(), a.V(), res.V(), GWMUL_MULBYCONST | GWMUL_ADDINCONST | options);
+        //gw().mul(a.V(), a.V(), res.V(), GWMUL_MULBYCONST);
         //gwsmalladd(gw().gwdata(), negativeQ() && a.parity() ? 1 : -1, *res.V());
         /*if (!_half_fma)
         {
@@ -287,9 +288,9 @@ namespace arithmetic
             gwfft_for_fma(gw().gwdata(), **_half, **_half_fma);
         }
         if (negativeQ() && a.parity())
-            gw().muladd(a.V(), a.V(), *_half_fma, res.V(), 0);
+            gw().muladd(a.V(), a.V(), dynamic_cast<CarefulGWArithmetic*>(_gw) != nullptr ? *_half : *_half_fma, res.V(), 0);
         else
-            gw().mulsub(a.V(), a.V(), *_half_fma, res.V(), 0);
+            gw().mulsub(a.V(), a.V(), dynamic_cast<CarefulGWArithmetic*>(_gw) != nullptr ? *_half : *_half_fma, res.V(), 0);
 
         if (!_tmp)
             _tmp.reset(new GWNum(gw()));

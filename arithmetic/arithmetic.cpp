@@ -473,7 +473,8 @@ namespace arithmetic
     {
         if (*c == *res || (options & GWMUL_MULBYCONST))
         {
-            GWNum tmp = c;
+            GWNum tmp(*this);
+            unfft(c, tmp);
             if (options & GWMUL_MULBYCONST)
                 gwsmallmul(gwdata(), mulbyconst(), *tmp);
             mul(a, b, res, options);
@@ -490,7 +491,8 @@ namespace arithmetic
     {
         if (*c == *res || (options & GWMUL_MULBYCONST))
         {
-            GWNum tmp = c;
+            GWNum tmp(*this);
+            unfft(c, tmp);
             if (options & GWMUL_MULBYCONST)
                 gwsmallmul(gwdata(), mulbyconst(), *tmp);
             mul(a, b, res, options);
