@@ -54,7 +54,8 @@ namespace arithmetic
 
     void LucasVArithmetic::optimize(LucasV& a)
     {
-        gwfft_for_fma(gw().gwdata(), *a.V(), *a.V());
+        if (dynamic_cast<CarefulGWArithmetic*>(_gw) == nullptr)
+            gwfft_for_fma(gw().gwdata(), *a.V(), *a.V());
     }
 
     void LucasUVArithmetic::copy(const LucasUV& a, LucasUV& res)
