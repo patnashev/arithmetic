@@ -23,7 +23,10 @@ namespace arithmetic
         virtual void init(const GWNum& P, LucasV& res);
         virtual void init(const GWNum& P, bool parity, LucasV& res);
         virtual void add(LucasV& a, LucasV& b, LucasV& a_minus_b, LucasV& res) override;
+        virtual void add(LucasV& a, LucasV& b, LucasV& a_minus_b, LucasV& res, int options);
+        virtual void add(LucasV& a, LucasV& b, int a_minus_b, LucasV& res, int options);
         virtual void dbl(LucasV& a, LucasV& res) override;
+        virtual void dbl(LucasV& a, LucasV& res, int options);
         virtual void optimize(LucasV& a) override;
 
         GWArithmetic& gw() { return *_gw; }
@@ -150,9 +153,10 @@ namespace arithmetic
         virtual void move(LucasUV&& a, LucasUV& res) override;
         virtual void init(LucasUV& res) override;
         virtual void init(GWNum& P, LucasUV& res);
-        virtual void init(GWNum& U, GWNum& V, LucasUV& res);
+        virtual void init(GWNum& U, GWNum& V, bool parity, LucasUV& res);
         virtual void init(GWNum& U, GWNum& V, bool parity, bool halved, LucasUV& res);
         virtual void init_small(int index, LucasUV& res);
+        virtual void init(LucasV& Vn, LucasV& Vn1, LucasUV& res);
         virtual void add(LucasUV& a, LucasUV& b, LucasUV& res) override;
         virtual void sub(LucasUV& a, LucasUV& b, LucasUV& res) override;
         virtual void add(LucasUV& a, LucasUV& b, LucasUV& res, int options);
@@ -172,6 +176,7 @@ namespace arithmetic
     private:
         GWArithmetic* _gw;
         std::unique_ptr<GWNum> _D;
+        std::unique_ptr<GWNum> _invD;
         std::unique_ptr<GWNum> _half;
         std::unique_ptr<GWNum> _half_fma;
         std::unique_ptr<GWNum> _tmp;

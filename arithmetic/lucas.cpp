@@ -38,17 +38,34 @@ namespace arithmetic
 
     void LucasVArithmetic::add(LucasV& a, LucasV& b, LucasV& a_minus_b, LucasV& res)
     {
+        add(a, b, a_minus_b, res, GWMUL_STARTNEXTFFT);
+    }
+
+    void LucasVArithmetic::add(LucasV& a, LucasV& b, LucasV& a_minus_b, LucasV& res, int options)
+    {
         if (negativeQ() && b.parity())
-            gw().muladd(a.V(), b.V(), a_minus_b.V(), res.V(), GWMUL_FFT_S1 | GWMUL_FFT_S2 | GWMUL_FFT_S3 | GWMUL_STARTNEXTFFT);
+            gw().muladd(a.V(), b.V(), a_minus_b.V(), res.V(), GWMUL_FFT_S1 | GWMUL_FFT_S2 | GWMUL_FFT_S3 | options);
         else
-            gw().mulsub(a.V(), b.V(), a_minus_b.V(), res.V(), GWMUL_FFT_S1 | GWMUL_FFT_S2 | GWMUL_FFT_S3 | GWMUL_STARTNEXTFFT);
+            gw().mulsub(a.V(), b.V(), a_minus_b.V(), res.V(), GWMUL_FFT_S1 | GWMUL_FFT_S2 | GWMUL_FFT_S3 | options);
+        res._parity = (a.parity() != b.parity());
+    }
+
+    void LucasVArithmetic::add(LucasV& a, LucasV& b, int a_minus_b, LucasV& res, int options)
+    {
+        gw().setaddin(negativeQ() && b.parity() ? a_minus_b : -a_minus_b);
+        gw().mul(a.V(), b.V(), res.V(), GWMUL_FFT_S1 | GWMUL_FFT_S2 | GWMUL_ADDINCONST | options);
         res._parity = (a.parity() != b.parity());
     }
 
     void LucasVArithmetic::dbl(LucasV& a, LucasV& res)
     {
+        dbl(a, res, GWMUL_STARTNEXTFFT);
+    }
+
+    void LucasVArithmetic::dbl(LucasV& a, LucasV& res, int options)
+    {
         gw().setaddin(negativeQ() && a.parity() ? 2 : -2);
-        gw().mul(a.V(), a.V(), res.V(), GWMUL_FFT_S1 | GWMUL_ADDINCONST | GWMUL_STARTNEXTFFT);
+        gw().mul(a.V(), a.V(), res.V(), GWMUL_FFT_S1 | GWMUL_ADDINCONST | options);
         res._parity = false;
     }
 
@@ -102,9 +119,9 @@ namespace arithmetic
         res._parity = true;
     }
 
-    void LucasUVArithmetic::init(GWNum& U, GWNum& V, LucasUV& res)
+    void LucasUVArithmetic::init(GWNum& U, GWNum& V, bool parity, LucasUV& res)
     {
-        init(U, V, true, false, res);
+        init(U, V, parity, false, res);
     }
 
     void LucasUVArithmetic::init(GWNum& U, GWNum& V, bool parity, bool halved, LucasUV& res)
@@ -170,6 +187,41 @@ namespace arithmetic
         else
             *res._DU = DU/2;
         res._parity = (index & 1);
+    }
+
+    void LucasUVArithmetic::init(LucasV& Vn, LucasV& Vn1, LucasUV& res)
+    {
+        if (_UV_small.size() <= 1)
+            throw ArithmeticException();
+
+        if (!_half)
+        {
+            _half.reset(new GWNum(gw()));
+            *_half = ((gw().N() + 1) >> 1);
+        }
+        gw().mul(Vn.V(), *_half, res.V(), GWMUL_FFT_S2);
+
+        if (!res._DU)
+            res._DU.reset(new GWNum(gw()));
+        *res._DU = res.V();
+        gwsmallmul(gw().gwdata(), _UV_small[1].V, **res._DU);
+        gw().unfft(Vn1.V(), Vn1.V());
+        gw().sub(Vn1.V(), *res._DU, *res._DU, GWADD_FORCE_NORMALIZE);
+
+        if (!_invD)
+        {
+            Giant tmp;
+            if (!_D)
+                tmp = _UV_small[1].DU;
+            else
+                tmp = *_D;
+            tmp.inv(gw().N());
+            _invD.reset(new GWNum(gw()));
+            *_invD = tmp;
+        }
+        gw().mul(*res._DU, *_invD, res.U(), GWMUL_FFT_S2);
+
+        res._parity = Vn.parity();
     }
 
     void LucasUVArithmetic::add(LucasUV& a, LucasUV& b, LucasUV& res)
