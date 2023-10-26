@@ -28,7 +28,7 @@ public:
     void init(T&& b) { _type = GENERIC; _gk = 1; _gb = std::forward<T>(b); _n = 0; _c = 0; _custom_k.clear(); _custom_b.clear(); _cyclotomic_k = 0; _hex_k = 0; process(); }
     bool read(File& file);
     void write(File& file);
-    bool parse(const std::string& s);
+    bool parse(const std::string& s, bool c_required = true);
     void setup(arithmetic::GWState& state);
     void print_info();
 

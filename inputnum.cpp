@@ -136,7 +136,7 @@ bool parse_func(const std::string& f, const std::vector<std::string>& args, Gian
         if (args.size() > 1)
             return false;
         InputNum recursive;
-        if (!recursive.parse(args[0]))
+        if (!recursive.parse(args[0], false))
             return false;
         value = recursive.value();
         custom_val = "(" + recursive.input_text() + ")";
@@ -152,7 +152,7 @@ bool parse_func(const std::string& f, const std::vector<std::string>& args, Gian
     return true;
 }
 
-bool InputNum::parse(const std::string& s)
+bool InputNum::parse(const std::string& s, bool c_required)
 {
     std::string::const_iterator it, it_s;
     int type = KBNC;
@@ -281,7 +281,7 @@ bool InputNum::parse(const std::string& s)
         }
         else
             gk = 1;
-        if (it == s.end() || *it == '^' || *it == '\"')
+        if (it == s.end() || *it == '\"' || *it == '^' || *it == '+' || *it == '-')
         {
             if (!f.empty())
             {
@@ -290,6 +290,15 @@ bool InputNum::parse(const std::string& s)
             }
             else if (!parse_digits(prime, it_s, it, gb))
                 return false;
+
+            if (it != s.end() && *it == '^')
+            {
+                iterate_digits(prime, ++it, it_s, s.end());
+                if (!parse_digits(prime, it_s, it, n))
+                    return false;
+            }
+            else
+                n = 1;
         }
         else if (*it == '!')
         {
@@ -303,7 +312,6 @@ bool InputNum::parse(const std::string& s)
                 if (it != it_s && !parse_digits(prime, it_s, it, multifactorial))
                     return false;
             }
-            it--;
             gb = 1;
             tmp = 1;
             uint32_t i = n%multifactorial;
@@ -325,6 +333,7 @@ bool InputNum::parse(const std::string& s)
             if (it == it_s || it - it_s > (prime ? 8 : 9))
                 return false;
             n = stoi(std::string(it_s, it));
+            it++;
             gb = 1;
             tmp = 1;
             int last = 1;
@@ -345,36 +354,22 @@ bool InputNum::parse(const std::string& s)
         }
         else
             return false;
-        if (it != s.end())
+        if (it != s.end() && (*it == '+' || *it == '-'))
         {
-            if (*it == '^')
-            {
-                iterate_digits(prime, ++it, it_s, s.end());
-                if (!parse_digits(prime, it_s, it, n))
-                    return false;
-            }
-            else
-                it++;
-            bool minus = false;
-            if (it == s.end())
-                return false;
-            else if (*it == '+')
-                minus = false;
-            else if (*it == '-')
-                minus = true;
-            else
-                return false;
+            bool minus = (*it == '-');
             iterate_digits(prime, ++it, it_s, s.end());
             if (!parse_digits(prime, it_s, it, c))
                 return false;
             if (minus)
                 c = -c;
         }
-        else
+        else if (type == KBNC && gk == 1 && n == 1)
         {
-            n = 1;
-            c = 0;
+            type = GENERIC;
+            n = 0;
         }
+        else if (c_required)
+            return false;
     }
     if (it != s.end() && *it == '\"')
         it++;
@@ -734,7 +729,7 @@ std::string InputNum::build_text(int max_len)
         res.append(std::to_string(_n));
         res.append(1, '#');
     }
-    else if (_gb != 1)
+    else
     {
         std::string sb = !_custom_b.empty() ? _custom_b : _gb.to_string();
         if (sb.size() > max_len && max_len > 0)
