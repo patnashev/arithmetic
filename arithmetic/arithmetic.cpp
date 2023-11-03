@@ -173,7 +173,7 @@ namespace arithmetic
 
     double GWState::ops()
     {
-        return gw_get_fft_count(gwdata())*(gwdata()->GENERAL_MMGW_MOD ? 1.0/9.5 : gwdata()->GENERAL_MOD ? 1.0/6 : 1.0/2);
+        return gw_get_fft_count(gwdata())*(gwdata()->GENERAL_MMGW_MOD ? 1.0/7.5 : gwdata()->GENERAL_MOD ? 1.0/6 : 1.0/2);
     }
 
     GWArithmetic::GWArithmetic(GWState& state) : _state(state)
