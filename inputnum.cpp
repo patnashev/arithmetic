@@ -256,6 +256,10 @@ bool InputNum::parse(const std::string& s, bool c_required)
                 std::string st = recursive.build_text();
                 custom_k = "(" + st.substr(0, st.size() - 2) + "/3" + st.substr(st.size() - 2) + ")" + custom_k;
             }
+#ifndef FORCE_HEX
+            // Montgomery reduction is faster than k^6/27 * b^6n + 1
+            hex_k = 0;
+#endif
         }
         else
             return false;
