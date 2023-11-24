@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <vector>
+#include <map>
 #include "inputnum.h"
 #include "file.h"
 
@@ -27,6 +28,10 @@ public:
     int op_count() { return _op_count; }
     int num_stages() { return (int)_costs.size(); }
     int cur_stage() { return _cur_stage; }
+    std::string& param(const std::string& name) { return _params[name]; }
+    int param_int(const std::string& name) { std::string& val = _params[name]; return std::strtol(val.data(), nullptr, 10); }
+    double param_double(const std::string& name) { std::string& val = _params[name]; return std::strtod(val.data(), nullptr); }
+    std::map<std::string, std::string>& params() { return _params; }
 
 private:
     std::vector<double> _costs;
@@ -39,6 +44,7 @@ private:
     double _timer = 0;
     int _op_count = 0;
     Progress* _parent = nullptr;
+    std::map<std::string, std::string> _params;
 };
 
 class Logging
@@ -63,8 +69,9 @@ public:
 
     virtual void report(const std::string& message, int level);
     virtual void report_progress();
-    virtual void report_param(const std::string& /* name */, int /* value */) { }
-    virtual void report_param(const std::string& /* name */, const std::string& /* value */) { }
+    virtual void report_param(const std::string& name, const std::string& value) { progress().param(name) = value; }
+    virtual void report_param(const std::string& name, int value) { progress().param(name) = std::to_string(value); }
+    virtual void report_param(const std::string& name, double value);
     virtual void report_factor(InputNum& input, const arithmetic::Giant& f);
 
     virtual void result_save(const std::string& message);
@@ -102,8 +109,9 @@ public:
     SubLogging(Logging& parent, int level = LEVEL_WARNING) : Logging(level), _parent(parent) { progress().set_parent(&parent.progress()); }
 
     virtual void report(const std::string& message, int level) override { _parent.report(message, level); }
-    virtual void report_param(const std::string& name, int value) override { _parent.report_param(name, value); }
-    virtual void report_param(const std::string& name, const std::string& value) override { _parent.report_param(name, value); }
+    virtual void report_param(const std::string& name, const std::string& value) override { Logging::report_param(name, value); _parent.report_param(name, value); }
+    virtual void report_param(const std::string& name, int value) override { Logging::report_param(name, value); _parent.report_param(name, value); }
+    virtual void report_param(const std::string& name, double value) override { Logging::report_param(name, value); _parent.report_param(name, value); }
     virtual void report_factor(InputNum& input, const arithmetic::Giant& f) override { _parent.report_factor(input, f); }
     virtual void progress_save() override { Logging::progress_save(); _parent.progress_save(); }
     virtual void heartbeat() override { _parent.heartbeat(); }

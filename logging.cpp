@@ -171,27 +171,43 @@ void Logging::result_save(const std::string& message)
     }
 }
 
+void Logging::report_param(const std::string& name, double value)
+{
+    char buf[32];
+    snprintf(buf, 32, "%.16g", value);
+    progress().param(name) = buf;
+}
+
 void Logging::file_progress(File* file_progress)
 {
     _file_progress = file_progress;
     if (file_progress == nullptr)
         return;
-    std::unique_ptr<Reader> reader(file_progress->get_reader());
-    if (!reader)
-        return;
-    if (reader->type() != -1)
-        return;
-    double time;
-    if (!reader->read(time))
-        return;
-    progress().time_init(time);
+    progress().params().clear();
+    std::string st;
+    std::unique_ptr<TextReader> reader(file_progress->get_textreader());
+    while (reader->read_textline(st))
+    {
+        auto i = st.find('=');
+        if (i == std::string::npos)
+            continue;
+        progress().param(st.substr(0, i)) = st.substr(i + 1);
+    }
+    progress().time_init(progress().param_double("time_total"));
 }
 
 void Logging::progress_save()
 {
     if (_file_progress == nullptr)
         return;
-    std::unique_ptr<Writer> writer(_file_progress->get_writer(-1, 0));
-    writer->write(progress().time_total());
+    report_param("time_total", progress().time_total());
+    std::unique_ptr<Writer> writer(_file_progress->get_writer());
+    for (auto& pair : progress().params())
+        if (!pair.second.empty())
+        {
+            writer->write_text(pair.first);
+            writer->write_text("=");
+            writer->write_textline(pair.second);
+        }
     _file_progress->commit_writer(*writer);
 }

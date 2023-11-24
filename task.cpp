@@ -138,6 +138,7 @@ void Task::run()
         (*restart_count[i])++;
 
         _gwstate->next_fft_count++;
+        _logging->report_param("next_fft", _gwstate->next_fft_count);
         reinit_gwstate();
         _restart_op = 0;
         arithmetics[0].reset();
@@ -225,8 +226,6 @@ void InputTask::reinit_gwstate()
     _logging->set_prefix("");
     _logging->warning("Restarting using %s\n", _gwstate->fft_description.data());
     _logging->set_prefix(prefix);
-    _logging->report_param("fft_desc", _gwstate->fft_description);
-    _logging->report_param("fft_len", _gwstate->fft_length);
     _error_check = _error_check_near ? gwnear_fft_limit(_gwstate->gwdata(), 1) == TRUE : _error_check_forced;
 }
 
