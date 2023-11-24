@@ -1176,6 +1176,11 @@ void gwdeserialize(
             gwiter_set_fft_value(&iter, 0);
     }
 
+    else if (gwdata->b == array[1] && gwdata->FFTLEN < array[2] &&
+             (gwdata->GENERAL_MOD != 0) == ((header[0] & GWSERIALIZE_FLAG_GENERALMOD) != 0) &&
+             (gwdata->GENERAL_MMGW_MOD != 0) == ((header[0] & GWSERIALIZE_FLAG_MMGW_MOD) != 0))
+        throw arithmetic::ArithmeticException("Can't deserialize to smaller transform.");
+
     else if (gwdata->b == array[1])
     {
         std::vector<int64_t> pow;
@@ -1384,6 +1389,9 @@ void gwdeserialize(
             gwmul3_carefully(gwdata, g, convert_factor, g, 0);
         }
     }
+
+    else // Radix conversion is necessary
+        throw arithmetic::ArithmeticException("Can't deserialize.");
 
     /* Clear various flags, update counts */
 
