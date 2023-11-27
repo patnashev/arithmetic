@@ -970,6 +970,67 @@ void InputNum::print_info()
         std::cout << std::endl;
     }
 
+    if (_type == KBNC && abs(_c) == 1 && (k() == 1 || _cofactor.empty() || (!_b_cofactor.empty() && _cofactor == power(_b_cofactor, _n))))
+    {
+        uint32_t n = _n;
+        if (k() != 1)
+        {
+            n = gcd(_n, (uint32_t)_factors[0].second);
+            for (auto it = ++_factors.begin(); it != _factors.end(); it++)
+                n = gcd(n, (uint32_t)it->second);
+        }
+
+        uint32_t l = 0;
+        if (n > 1 && _c == 1)
+        {
+            for (l = 1; !(n & l); l <<= 1);
+            if (l == n)
+                l = 0;
+        }
+        if (n > 1 && _c == -1 && (k() != 1 || b() != 2))
+            l = 1;
+        if (n > 1 && _c == -1 && k() == 1 && b() == 2)
+        {
+            PrimeIterator it = PrimeIterator::get();
+            int sqrt_n = (int)std::sqrt(n);
+            for (; n%(*it) != 0 && *it < sqrt_n; it++);
+            if (n%(*it) == 0)
+                l = *it;
+        }
+
+        if (l != 0)
+        {
+            st = "";
+            for (auto& factor : _factors)
+            {
+                if (!st.empty())
+                    st += "*";
+                st += factor.first.to_string();
+                if (factor.second/n*l > 1)
+                {
+                    st += "^";
+                    st += std::to_string(factor.second/n*l);
+                }
+            }
+            if (!_b_cofactor.empty())
+            {
+                if (!st.empty())
+                    st += "*";
+                st += _b_cofactor.to_string();
+                if (_n/n*l > 1)
+                {
+                    st += "^";
+                    st += std::to_string(_n/n*l);
+                }
+            }
+            if (_c > 0)
+                st += "+1";
+            else
+                st += "-1";
+            std::cout << "Algebraic factor: " << st << std::endl;
+        }
+    }
+
     factors.clear();
     if (!cofactor.empty())
         cofactor.arithmetic().free(cofactor);
