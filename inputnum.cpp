@@ -1029,6 +1029,37 @@ void InputNum::print_info()
                 st += "-1";
             std::cout << "Algebraic factor: " << st << std::endl;
         }
+        else if (_c == 1 && _cofactor.empty() && _factors[0].first == 2 && _factors[0].second%4 == 2)
+        {
+            l = 4;
+            for (auto it = ++_factors.begin(); it != _factors.end(); it++)
+                if (it->second%4 != 0)
+                    l = 0;
+            if (l != 0)
+            {
+                st = "2" + (_factors[0].second/2 > 1 ? "^" + std::to_string(_factors[0].second/2) : "");
+                for (auto it = ++_factors.begin(); it != _factors.end(); it++)
+                    st += "*" + it->first.to_string() +  "^" + std::to_string(it->second/2);
+                st += "+2" + (_factors[0].second/4 + 1 > 1 ? "^" + std::to_string(_factors[0].second/4 + 1) : "");
+                for (auto it = ++_factors.begin(); it != _factors.end(); it++)
+                    st += "*" + it->first.to_string() + (it->second/4 > 1 ? "^" + std::to_string(it->second/4) : "");
+                std::cout << "Algebraic factor: " << st << "+1" << std::endl;
+            }
+        }
+        else if (_c == 1 && _cofactor.empty() && ((_factors[0].first == 3 && _factors[0].second%6 == 3) || (_factors.size() > 1 && _factors[1].first == 3 && _factors[1].second%6 == 3)))
+        {
+            l = 6;
+            for (auto it = _factors.begin(); it != _factors.end(); it++)
+                if (it->first != 3 && it->second%6 != 0)
+                    l = 0;
+            if (l != 0)
+            {
+                st = "";
+                for (auto it = ++_factors.begin(); it != _factors.end(); it++)
+                    st += (!st.empty() ? "*" : "") + it->first.to_string() + (it->second/3 > 1 ? "^" + std::to_string(it->second/3) : "");
+                std::cout << "Algebraic factor: " << st << "+1" << std::endl;
+            }
+        }
     }
 
     factors.clear();
