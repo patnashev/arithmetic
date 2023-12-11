@@ -156,7 +156,7 @@ bool InputNum::parse(const std::string& s, bool c_required)
 {
     std::string::const_iterator it, it_s;
     int type = KBNC;
-    Giant gk, gb;
+    Giant gk, gb, gd;
     uint32_t n = 0;
     int32_t c = 0;
     Giant tmp;
@@ -165,6 +165,7 @@ bool InputNum::parse(const std::string& s, bool c_required)
     std::vector<std::string> args;
     std::string custom_k;
     std::string custom_b;
+    std::string custom_d;
     int multifactorial = 0;
     int32_t cyclotomic_k = 0;
     int32_t hex_k = 0;
@@ -209,8 +210,9 @@ bool InputNum::parse(const std::string& s, bool c_required)
             }
             gb = recursive.gb();
             n = recursive._n;
+            gd = recursive.gd();
             c = 1;
-            cyclotomic_k = (cyclotomic == 6 ? -1 : 1)*(recursive.k() > 0 && recursive.k() < 1000 ? recursive.k() : 0);
+            cyclotomic_k = (cyclotomic == 6 ? -1 : 1)*(recursive.k() > 0 && recursive.k() < 1000 && recursive.d() == 1 ? recursive.k() : 0);
         }
         else if (f == "Hex" && args.size() == 1)
         {
@@ -238,8 +240,9 @@ bool InputNum::parse(const std::string& s, bool c_required)
             }
             gb = recursive.gb();
             n = recursive._n;
+            gd = recursive.gd();
             c = 1;
-            hex_k = (recursive.k() > 0 && recursive.k() < 32 ? recursive.k() : 0)*recursive._c;
+            hex_k = (recursive.k() > 0 && recursive.k() < 32 && recursive.d() == 1 ? recursive.k() : 0)*recursive._c;
             if (type == KBNC)
             {
                 if (recursive.gk()%3 == 0)
@@ -266,15 +269,31 @@ bool InputNum::parse(const std::string& s, bool c_required)
     }
     else
     {
-        if (it != s.end() && *it == '*')
+        gk = 1;
+        while (it != s.end() && *it == '*')
         {
+            tmp = 1;
+            std::string tmp_k;
             if (!f.empty())
             {
-                if (!parse_func(f, args, gk, custom_k))
+                if (!parse_func(f, args, gk == 1 ? gk : tmp, gk == 1 ? custom_k : tmp_k))
                     return false;
             }
-            else if (!parse_digits(prime, it_s, it, gk))
+            else if (!parse_digits(prime, it_s, it, gk == 1 ? gk : tmp))
                 return false;
+            if (tmp != 1)
+            {
+                if (!custom_k.empty() || !tmp_k.empty())
+                {
+                    if (custom_k.empty())
+                        custom_k = gk.to_string();
+                    if (tmp_k.empty())
+                        tmp_k = tmp.to_string();
+                    custom_k += "*";
+                    custom_k += tmp_k;
+                }
+                gk *= tmp;
+            }
 
             it++;
             iterate_func(f, it, s.end());
@@ -283,9 +302,8 @@ bool InputNum::parse(const std::string& s, bool c_required)
             else
                 iterate_digits(prime, it, it_s, s.end());
         }
-        else
-            gk = 1;
-        if (it == s.end() || *it == '\"' || *it == '^' || *it == '+' || *it == '-')
+
+        if (it == s.end() || *it == '\"' || *it == '^' || *it == '+' || *it == '-' || *it == '/')
         {
             if (!f.empty())
             {
@@ -358,6 +376,43 @@ bool InputNum::parse(const std::string& s, bool c_required)
         }
         else
             return false;
+
+        gd = 1;
+        while (it != s.end() && *it == '/')
+        {
+            it++;
+            iterate_func(f, it, s.end());
+            if (!f.empty() || (it != s.end() && *it == '('))
+                iterate_args(f, args, it, s.end());
+            else
+                iterate_digits(prime, it, it_s, s.end());
+
+            tmp = 1;
+            std::string tmp_d;
+            if (!f.empty())
+            {
+                if (!parse_func(f, args, gd == 1 ? gd : tmp, gd == 1 ? custom_d : tmp_d))
+                    return false;
+            }
+            else if (!parse_digits(prime, it_s, it, gd == 1 ? gd : tmp))
+                return false;
+            if (tmp != 1)
+            {
+                if (!custom_d.empty() || !tmp_d.empty())
+                {
+                    if (custom_d.empty())
+                        custom_d = gd.to_string();
+                    if (tmp_d.empty())
+                        tmp_d = tmp.to_string();
+                    custom_d += "/";
+                    custom_d += tmp_d;
+                }
+                gd *= tmp;
+            }
+        }
+        if (gd > 1 && gk*(type == KBNC ? power(gb, n) : gb)%gd != 0)
+            return false;
+
         if (it != s.end() && (*it == '+' || *it == '-'))
         {
             bool minus = (*it == '-');
@@ -371,6 +426,10 @@ bool InputNum::parse(const std::string& s, bool c_required)
         {
             type = GENERIC;
             n = 0;
+            gb /= gd;
+            if (!custom_b.empty() && custom_d.empty())
+                custom_d = gd.to_string();
+            gd = 1;
         }
         else if (c_required)
             return false;
@@ -385,9 +444,11 @@ bool InputNum::parse(const std::string& s, bool c_required)
     _gk = std::move(gk);
     _gb = std::move(gb);
     _n = n;
+    _gd = std::move(gd);
     _c = c;
-    _custom_k = custom_k;
-    _custom_b = custom_b;
+    _custom_k = std::move(custom_k);
+    _custom_b = std::move(custom_b);
+    _custom_d = std::move(custom_d);
     _multifactorial = multifactorial;
     _cyclotomic_k = cyclotomic_k;
     _hex_k = hex_k;
@@ -633,7 +694,7 @@ void InputNum::process()
         factorize(_gb, _b_factors, _b_cofactor);
     }
     
-    if (abs(_c) == 1)
+    if (_type != GENERIC)
     {
         factorize(_gk, _factors, _cofactor);
         for (auto& factor : _b_factors)
@@ -643,9 +704,23 @@ void InputNum::process()
             _cofactor *= power(_b_cofactor, _n);
         else if (!_b_cofactor.empty())
             _cofactor = power(_b_cofactor, _n);
+        if (_gd > 1)
+        {
+            std::vector<std::pair<arithmetic::Giant, int>> factors;
+            arithmetic::Giant cofactor;
+            factorize(_gd, factors, cofactor);
+            for (auto& factor : factors)
+                ::add_factor(_factors, factor.first, -factor.second);
+            if (!cofactor.empty())
+            {
+                if (_cofactor.empty() || _cofactor%cofactor != 0)
+                    throw ArithmeticException();
+                _cofactor /= cofactor;
+            }
+        }
     }
 
-    if (_type == KBNC && _c == 1 && _cyclotomic_k == 0 && _hex_k == 0)
+    if (_type == KBNC && _c == 1 && _gd == 1 && _cyclotomic_k == 0 && _hex_k == 0)
     {
         if (_gk == 1 && _n > 1 && (_n & (_n - 1)) == 0)
             for (_gfn = 1; (1UL << _gfn) < _n; _gfn++);
@@ -671,6 +746,58 @@ void InputNum::process()
     }
 
     _input_text = build_text();
+
+    if (_gd > 1)
+    {
+        Giant tmp = gcd(_gk, _gd);
+        if (tmp > 1)
+        {
+            if (!_custom_k.empty() && _custom_d.empty())
+                _custom_d = _gd.to_string();
+            if (_custom_k.empty() && !_custom_d.empty())
+                _custom_k = _gk.to_string();
+            _gk /= tmp;
+            _gd /= tmp;
+        }
+        if (_gd > 1 && _type == KBNC)
+        {
+            uint32_t n = (uint32_t)((32 + log2(_gd))/log2(_gb));
+            if (n > _n - 1)
+                n = _n - 1;
+            if (n > 0)
+            {
+                tmp = power(_gb, n);
+                if (tmp%_gd == 0)
+                {
+                    tmp /= _gd;
+                    while (tmp%_gb == 0)
+                    {
+                        tmp /= _gb;
+                        n--;
+                    }
+                    if (!_custom_k.empty())
+                    {
+                        if (_custom_d.empty())
+                            _custom_k += "*" + tmp.to_string();
+                        else
+                            _custom_k += "*(" + (!_custom_b.empty() ? _custom_b : _gb.to_string()) + "^" + std::to_string(n) + ")";
+                    }
+                    else if (!_custom_d.empty())
+                        _custom_d.clear();
+                    _gk *= tmp;
+                    _n -= n;
+                    _gd = 1;
+                }
+            }
+        }
+        if (_gd > 1 && _type != KBNC)
+        {
+            _gb /= _gd;
+            if (_custom_d.empty())
+                _custom_d = _gd.to_string();
+            _gd = 1;
+        }
+    }
 
     if (_type == KBNC && _gb != 1)
     {
@@ -706,7 +833,7 @@ std::string InputNum::build_text(int max_len)
 {
     std::string res;
     res.reserve(32);
-    if (_gk != 1)
+    if (_gk != 1 || !_custom_k.empty())
     {
         std::string sk = !_custom_k.empty() ? _custom_k : _gk.to_string();
         if (sk.size() > max_len && max_len > 0)
@@ -750,6 +877,19 @@ std::string InputNum::build_text(int max_len)
             res.append(std::to_string(_n));
         }
     }
+    if (_gd > 1 || !_custom_d.empty())
+    {
+        res.append(1, '/');
+        std::string sd = !_custom_d.empty() ? _custom_d : _gd.to_string();
+        if (sd.size() > max_len && max_len > 0)
+        {
+            res.append(sd, 0, max_len/2);
+            res.append(3, '.');
+            res.append(sd, sd.size() - max_len/2, max_len/2);
+        }
+        else
+            res.append(sd);
+    }
     if (_c != 0)
     {
         if (_c > 0)
@@ -770,7 +910,7 @@ void InputNum::setup(GWState& state)
     }
     else if (_type != KBNC)
     {
-        state.setup(_gk*_gb + _c);
+        state.setup(_gk*_gb/_gd + _c);
     }
     else if ((_cyclotomic_k != 0 || _hex_k != 0) && b() != 0 && !state.force_mod_type)
     {
@@ -803,13 +943,13 @@ void InputNum::setup(GWState& state)
         }
         return;
     }
-    else if (k() != 0 && b() != 0)
+    else if (k() != 0 && b() != 0 && d() == 1)
     {
         state.setup(k(), b(), _n, _c);
     }
     else
     {
-        state.setup(_gk*power(_gb, _n) + _c);
+        state.setup(_gk*power(_gb, _n)/_gd + _c);
     }
     if (state.fingerprint != fingerprint())
         throw ArithmeticException();
@@ -820,10 +960,10 @@ int InputNum::bitlen()
     if (_type == GENERIC)
         return _gb.bitlen();
     else if (_type != KBNC)
-        return _gk.bitlen() + _gb.bitlen() - 1;
+        return _gk.bitlen() + _gb.bitlen() - _gd.bitlen();
     else if (b() == 2)
-        return _gk.bitlen() + _n;
-    return (int)std::ceil(log2(_gk) + log2(_gb)*_n);
+        return _gk.bitlen() + _n - _gd.bitlen() + 1;
+    return (int)std::ceil(log2(_gk) + log2(_gb)*_n - log2(_gd));
 }
 
 uint64_t InputNum::parse_numeral(const std::string& s)
@@ -855,40 +995,48 @@ uint64_t InputNum::parse_numeral(const std::string& s)
 
 uint32_t InputNum::mod(uint32_t modulus)
 {
-    uint32_t b;
-    if (_gb < modulus)
-        b = _gb.data()[0];
-    else
-        b = _gb%modulus;
     if (_type == GENERIC)
-        return b;
-    uint64_t result;
-    if (_type == KBNC)
+        return _gb%modulus;
+
+    uint64_t result = 1;
+    if (_type != KBNC)
     {
-        result = (_n & 1) ? b : 1;
-        uint64_t mult = b;
-        for (uint32_t i = 2; i <= _n; i <<= 1)
+        result = _gb%modulus;
+        if (_gk > 1)
+            result *= _gk%modulus;
+    }
+    else
+    {
+        if (!_cofactor.empty())
+            result = _cofactor%modulus;
+        for (auto& factor : _factors)
         {
-            mult *= mult;
-            if (mult >= (1ULL << 32))
-                mult %= modulus;
-            if ((_n & i) != 0)
+            uint32_t b;
+            if (factor.first < modulus)
+                b = factor.first.data()[0];
+            else
+                b = factor.first%modulus;
+            uint64_t mult = 1;
+            for (uint32_t i = 1; i <= factor.second; i <<= 1)
             {
-                result *= mult;
-                if (result >= (1ULL << 32))
-                    result %= modulus;
+                if (i == 1)
+                    mult = b;
+                else
+                {
+                    mult *= mult;
+                    if (mult >= (1ULL << 32))
+                        mult %= modulus;
+                }
+                if ((factor.second & i) != 0)
+                {
+                    result *= mult;
+                    if (result >= (1ULL << 32))
+                        result %= modulus;
+                }
             }
         }
     }
-    else
-        result = b;
-    if (_gk > 1)
-    {
-        if (_gk < modulus)
-            result *= _gk.data()[0];
-        else
-            result *= _gk%modulus;
-    }
+
     if (_c >= 0)
         result += _c;
     else
@@ -970,7 +1118,7 @@ void InputNum::print_info()
         std::cout << std::endl;
     }
 
-    if (_type == KBNC && abs(_c) == 1 && (k() == 1 || _cofactor.empty() || (!_b_cofactor.empty() && _cofactor == power(_b_cofactor, _n))))
+    if (_type == KBNC && abs(_c) == 1 && d() == 1 && (k() == 1 || _cofactor.empty() || (!_b_cofactor.empty() && _cofactor == power(_b_cofactor, _n))))
     {
         uint32_t n = _n;
         if (k() != 1)
@@ -1098,16 +1246,25 @@ void InputNum::print_info()
         }
         for (auto& factor : factors)
         {
+            if (factor.second == 0)
+                continue;
             if (!st.empty())
                 st += " ";
+            if (factor.second < 0)
+                st += "/";
             st += factor.first.to_string();
-            if (factor.second > 1)
+            if (abs(factor.second) > 1)
             {
                 st += "^";
-                st += std::to_string(factor.second);
+                st += std::to_string(abs(factor.second));
             }
             if (!cofactor.empty())
-                tmp *= power(factor.first, factor.second);
+            {
+                if (factor.second > 0)
+                    tmp *= power(factor.first, factor.second);
+                else
+                    tmp /= power(factor.first, -factor.second);
+            }
         }
         std::cout << "Factors of N-1";
         if (cofactor.empty())
@@ -1157,16 +1314,25 @@ void InputNum::print_info()
         }
         for (auto& factor : factors)
         {
+            if (factor.second == 0)
+                continue;
             if (!st.empty())
                 st += " ";
+            if (factor.second < 0)
+                st += "/";
             st += factor.first.to_string();
-            if (factor.second > 1)
+            if (abs(factor.second) > 1)
             {
                 st += "^";
-                st += std::to_string(factor.second);
+                st += std::to_string(abs(factor.second));
             }
             if (!cofactor.empty())
-                tmp *= power(factor.first, factor.second);
+            {
+                if (factor.second > 0)
+                    tmp *= power(factor.first, factor.second);
+                else
+                    tmp /= power(factor.first, -factor.second);
+            }
         }
         std::cout << "Factors of N+1";
         if (cofactor.empty())

@@ -80,6 +80,8 @@ namespace arithmetic
 
     void GiantsArithmetic::copy(const Giant& a, Giant& res)
     {
+        if (&res == &a)
+            return;
         if (a.empty())
         {
             free(res);
@@ -97,6 +99,8 @@ namespace arithmetic
 
     void GiantsArithmetic::move(Giant&& a, Giant& res)
     {
+        if (&res == &a)
+            return;
         if (!res.empty())
             free(res);
         res._capacity = a._capacity;
@@ -231,8 +235,7 @@ namespace arithmetic
     void GiantsArithmetic::shiftleft(Giant& a, int b, Giant& res)
     {
         alloc(res, abs(a._size) + (b + 31)/32);
-        if (res._data != a._data)
-            copy(a, res);
+        copy(a, res);
         gshiftleft(b, giant(res));
     }
 
@@ -314,8 +317,7 @@ namespace arithmetic
         if (size < abs(b._size) + 1)
             size = abs(b._size) + 1;
         alloc(res, size);
-        if (res._data != a._data)
-            copy(a, res);
+        copy(a, res);
         if (a._data != b._data)
             addg(giant(b), giant(res));
         else
@@ -325,8 +327,7 @@ namespace arithmetic
     void GiantsArithmetic::add(Giant& a, int32_t b, Giant& res)
     {
         alloc(res, abs(a._size) + 1);
-        if (res._data != a._data)
-            copy(a, res);
+        copy(a, res);
         sladdg(b, giant(res));
     }
 
@@ -336,31 +337,27 @@ namespace arithmetic
         if (capacity < abs(b._size) + 1)
             capacity = abs(b._size) + 1;
         alloc(res, capacity);
-        if (res._data != a._data)
-            copy(a, res);
+        copy(a, res);
         subg(giant(b), giant(res));
     }
 
     void GiantsArithmetic::sub(Giant& a, int32_t b, Giant& res)
     {
         alloc(res, abs(a._size) + 1);
-        if (res._data != a._data)
-            copy(a, res);
+        copy(a, res);
         sladdg(-b, giant(res));
     }
 
     void GiantsArithmetic::neg(Giant& a, Giant& res)
     {
-        if (res._data != a._data)
-            copy(a, res);
+        copy(a, res);
         res._size = -res._size;
     }
 
     void GiantsArithmetic::mul(Giant& a, Giant& b, Giant& res)
     {
         alloc(res, abs(a._size) + abs(b._size));
-        if (res._data != a._data)
-            copy(a, res);
+        copy(a, res);
         if (a._data != b._data)
         {
             if ((abs(res._size) > 10000 && abs(b._size) > 10 && abs(res._size) > 4*abs(b._size)) || (abs(b._size) > 10000 && abs(res._size) > 10 && abs(b._size) > 4*abs(res._size)))
@@ -379,48 +376,41 @@ namespace arithmetic
     void GiantsArithmetic::mul(Giant& a, int32_t b, Giant& res)
     {
         alloc(res, abs(a._size) + 1);
-        if (res._data != a._data)
-            copy(a, res);
+        copy(a, res);
         imulg(b, giant(res));
     }
 
     void GiantsArithmetic::mul(Giant& a, uint32_t b, Giant& res)
     {
         alloc(res, abs(a._size) + 1);
-        if (res._data != a._data)
-            copy(a, res);
+        copy(a, res);
         ulmulg(b, giant(res));
     }
 
     void GiantsArithmetic::div(Giant& a, Giant& b, Giant& res)
     {
-        alloc(res, abs(a._size));
-        if (res._data != a._data)
-            copy(a, res);
-        divg(giant(b), giant(res));
+        copy(a, res);
+        if (b != 1)
+            divg(giant(b), giant(res));
     }
 
     void GiantsArithmetic::div(Giant& a, int32_t b, Giant& res)
     {
-        alloc(res, abs(a._size));
-        if (res._data != a._data)
-            copy(a, res);
-        dbldivg(b, giant(res));
+        copy(a, res);
+        if (b != 1)
+            dbldivg(b, giant(res));
     }
 
     void GiantsArithmetic::div(Giant& a, uint32_t b, Giant& res)
     {
-        alloc(res, abs(a._size));
-        if (res._data != a._data)
-            copy(a, res);
-        dbldivg(b, giant(res));
+        copy(a, res);
+        if (b != 1)
+            dbldivg(b, giant(res));
     }
 
     void GiantsArithmetic::mod(Giant& a, Giant& b, Giant& res)
     {
-        alloc(res, abs(a._size));
-        if (res._data != a._data)
-            copy(a, res);
+        copy(a, res);
         modg(giant(b), giant(res));
     }
 
@@ -448,17 +438,14 @@ namespace arithmetic
             copy(a, res);
             return;
         }
-        alloc(res, abs(a._size));
-        if (res._data != a._data)
-            copy(a, res);
+        copy(a, res);
         gcdg(giant(b), giant(res));
     }
 
     void GiantsArithmetic::inv(Giant& a, Giant& n, Giant& res)
     {
         alloc(res, abs(n._size));
-        if (res._data != a._data)
-            copy(a, res);
+        copy(a, res);
         if (res == 0)
             throw NoInverseException(res);
         invg(giant(n), giant(res));
@@ -479,16 +466,14 @@ namespace arithmetic
         else
             capacity *= b;
         alloc(res, capacity);
-        if (res._data != a._data)
-            copy(a, res);
+        copy(a, res);
         ::power(giant(res), b);
     }
 
     void GiantsArithmetic::powermod(Giant& a, Giant& b, Giant& n, Giant& res)
     {
         alloc(res, abs(n._size));
-        if (res._data != a._data)
-            copy(a, res);
+        copy(a, res);
         ::powermodg(giant(res), giant(b), giant(n));
     }
 
@@ -663,8 +648,7 @@ namespace arithmetic
     void GWGiantsArithmetic::inv(Giant& a, Giant& n, Giant& res)
     {
         alloc(res, abs(n._size));
-        if (res._data != a._data)
-            copy(a, res);
+        copy(a, res);
         if (res == 0)
             throw NoInverseException(res);
         invgi(&((gwhandle*)_gwdata)->gdata, 0, giant(n), giant(res));
@@ -716,6 +700,8 @@ namespace arithmetic
 
     void GMPArithmetic::copy(const Giant& a, Giant& res)
     {
+        if (&res == &a)
+            return;
         if (a.empty())
         {
             free(res);
@@ -736,6 +722,8 @@ namespace arithmetic
 
     void GMPArithmetic::move(Giant&& a, Giant& res)
     {
+        if (&res == &a)
+            return;
         if (!res.empty())
             free(res);
         res._capacity = a._capacity;
@@ -905,8 +893,7 @@ namespace arithmetic
 
     void GMPArithmetic::neg(Giant& a, Giant& res)
     {
-        if (res._data != a._data)
-            copy(a, res);
+        copy(a, res);
         res._size = -res._size;
     }
 
@@ -927,19 +914,28 @@ namespace arithmetic
 
     void GMPArithmetic::div(Giant& a, Giant& b, Giant& res)
     {
-        mpz_fdiv_q(mpz(res), mpz(a), mpz(b));
+        if (b == 1)
+            copy(a, res);
+        else
+            mpz_fdiv_q(mpz(res), mpz(a), mpz(b));
     }
 
     void GMPArithmetic::div(Giant& a, int32_t b, Giant& res)
     {
-        mpz_fdiv_q_ui(mpz(res), mpz(a), abs(b));
+        if (abs(b) == 1)
+            copy(a, res);
+        else
+            mpz_fdiv_q_ui(mpz(res), mpz(a), abs(b));
         if (b < 0)
             res._size = -res._size;
     }
 
     void GMPArithmetic::div(Giant& a, uint32_t b, Giant& res)
     {
-        mpz_fdiv_q_ui(mpz(res), mpz(a), b);
+        if (b == 1)
+            copy(a, res);
+        else
+            mpz_fdiv_q_ui(mpz(res), mpz(a), b);
     }
 
     void GMPArithmetic::mod(Giant& a, Giant& b, Giant& res)
