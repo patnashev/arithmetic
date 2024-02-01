@@ -822,10 +822,10 @@ namespace container
             return;
         std::string json = "[" + std::to_string(_buffer.size()) + "," + std::to_string(_id) + (_codec_json.empty() ? "" : ",") + (_codec_json.empty() ? "" : _codec_json) + "]\r\n";
         _stream.write(json.data(), json.size());
-        if (_ñontainer && _id > 0)
+        if (_container && _id > 0)
         {
-            auto& chunk = _ñontainer->_streams[_id].chunks.emplace_back();
-            chunk.offset = _ñontainer->_stream->position();
+            auto& chunk = _container->_streams[_id].chunks.emplace_back();
+            chunk.offset = _container->_stream->position();
             chunk.size = (int64_t)_buffer.size();
             if (!_codec_json.empty())
                 chunk.codec.reset(new JSON(std::move(_codec_json)));
@@ -1046,17 +1046,17 @@ namespace container
         _stream->write("[\"PK\",1,0]\r\n", 12);
     }
 
-    Packer::Packer(FileContainer& ñontainer) : _stream(ñontainer._stream), _next_id(ñontainer._next_stream_id), _index(std::move(ñontainer._index)), _ñontainer(&ñontainer)
+    Packer::Packer(FileContainer& container) : _stream(container._stream), _next_id(container._next_stream_id), _index(std::move(container._index)), _container(&container)
     {
-        if (!ñontainer._stream->can_write())
+        if (!container._stream->can_write())
         {
-            _ñontainer->_index = std::move(_index);
+            _container->_index = std::move(_index);
             throw std::runtime_error("Can't write to read-only stream.");
         }
 
-        int64_t pos = ñontainer._last_pos;
+        int64_t pos = container._last_pos;
 
-        for (auto stream = ñontainer._streams.begin(); stream != ñontainer._streams.end(); stream++)
+        for (auto stream = container._streams.begin(); stream != container._streams.end(); stream++)
         {
             if (stream->second.files.empty())
                 continue;
@@ -1080,15 +1080,15 @@ namespace container
             }
         }
 
-        ñontainer._stream->set_position(pos);
-        ñontainer._stream->set_length(-1);
+        container._stream->set_position(pos);
+        container._stream->set_length(-1);
 
-        if (ñontainer._error == container_error::EMPTY)
+        if (container._error == container_error::EMPTY)
             _stream->write("[\"\xD0\x9A\",1,0]\r\n", 12);
-        ñontainer._error = container_error::OK;
+        container._error = container_error::OK;
 
-        ñontainer._cur_file = nullptr;
-        ñontainer._cur_reader.reset();
+        container._cur_file = nullptr;
+        container._cur_reader.reset();
     }
 
     void Packer::close()
@@ -1102,12 +1102,12 @@ namespace container
             _file->close();
             _file.reset();
         }
-        if (_ñontainer)
+        if (_container)
         {
-            _ñontainer->_stream->flush();
-            _ñontainer->_stream->set_length(_ñontainer->_stream->position());
-            _ñontainer->_index = std::move(_index);
-            _ñontainer->_next_stream_id = _next_id;
+            _container->_stream->flush();
+            _container->_stream->set_length(_container->_stream->position());
+            _container->_index = std::move(_index);
+            _container->_next_stream_id = _next_id;
         }
     }
 
@@ -1168,8 +1168,8 @@ namespace container
             _json.parse("[]");
             _files.clear();
             _cur = 0;
-            if (_writer._packer._ñontainer != nullptr)
-                _writer._packer._ñontainer->_last_pos = _writer._packer._ñontainer->_stream->position();
+            if (_writer._packer._container != nullptr)
+                _writer._packer._container->_last_pos = _writer._packer._container->_stream->position();
         }
 
         void set_length(int64_t value) override { }
@@ -1287,8 +1287,8 @@ namespace container
         _streams.emplace_back(new Packer::Writer::Index(*this));
         ChunkedWriteStream* cs;
         _streams.emplace_back(cs = new ChunkedWriteStream(id, *_streams.back()));
-        if (packer._ñontainer)
-            cs->set_ñontainer(packer._ñontainer);
+        if (packer._container)
+            cs->set_container(packer._container);
     }
 
     void Packer::Writer::add_codec(const std::string& codec)
@@ -1318,17 +1318,17 @@ namespace container
     WriteStream* Packer::Writer::add_file(const std::string& filename, int64_t size)
     {
         FileDesc& file = _packer.index()[filename];
-        if (_packer._ñontainer && file.stream > 0)
+        if (_packer._container && file.stream > 0)
         {
-            auto& stream = _packer._ñontainer->_streams[file.stream];
+            auto& stream = _packer._container->_streams[file.stream];
             for (auto it = stream.files.begin(); it != stream.files.end(); )
                 if ((*it) == &file)
                     it = stream.files.erase(it);
                 else
                     it++;
-            for (auto it = _packer._ñontainer->_corrupted.begin(); it != _packer._ñontainer->_corrupted.end(); )
+            for (auto it = _packer._container->_corrupted.begin(); it != _packer._container->_corrupted.end(); )
                 if (it->name == filename)
-                    it = _packer._ñontainer->_corrupted.erase(it);
+                    it = _packer._container->_corrupted.erase(it);
                 else
                     it++;
         }
@@ -1358,8 +1358,8 @@ namespace container
         if (!file->md5.empty())
             index->set_value("md5", file->md5);
 
-        if (_packer._ñontainer)
-            _packer._ñontainer->_streams[_id].files.push_back(file);
+        if (_packer._container)
+            _packer._container->_streams[_id].files.push_back(file);
 
         return _streams.emplace_back(new Packer::Writer::Stream(*this, _streams.back().get(), file->size)).get();
     }
@@ -1497,13 +1497,13 @@ namespace container
     {
         while (!_streams.empty())
             _streams.pop_back();
-        std::vector<Chunk>& chunks = _ñontainer._streams[_stream_id].chunks;
+        std::vector<Chunk>& chunks = _container._streams[_stream_id].chunks;
         if (begin == chunks.end())
             return;
         auto end = begin;
         for (end++; end != chunks.end() && (!end->codec || end->codec->root().is_null()); end++)
             ;
-        _streams.emplace_back(new RawReadStream(*_ñontainer._stream, begin, end));
+        _streams.emplace_back(new RawReadStream(*_container._stream, begin, end));
         if (begin->codec && (begin->codec->root().is_string() || begin->codec->root().is_object()))
             add_codec(begin->codec->root());
         if (begin->codec && begin->codec->root().is_array())
@@ -1529,7 +1529,7 @@ namespace container
             }
             catch (const container_error&)
             {
-                _reader.ñontainer().on_corrupted(_file, _reader.stream_id());
+                _reader.container().on_corrupted(_file, _reader.stream_id());
                 throw;
             }
             if (!_file->md5.empty())
@@ -1552,7 +1552,7 @@ namespace container
             }
             catch (const container_error&)
             {
-                _reader.ñontainer().on_corrupted(_file, _reader.stream_id());
+                _reader.container().on_corrupted(_file, _reader.stream_id());
                 throw;
             }
             _pos += _reader.position() - pos;
@@ -1571,7 +1571,7 @@ namespace container
             }
             catch (const container_error&)
             {
-                _reader.ñontainer().on_corrupted(_file, _reader.stream_id());
+                _reader.container().on_corrupted(_file, _reader.stream_id());
                 throw;
             }
             _pos += count;
@@ -1589,7 +1589,7 @@ namespace container
 
                     if (_file->md5 != md5hash)
                     {
-                        _reader.ñontainer().on_corrupted(_file, _reader.stream_id());
+                        _reader.container().on_corrupted(_file, _reader.stream_id());
                         throw container_error("MD5 hash mismatch.");
                     }
                 }

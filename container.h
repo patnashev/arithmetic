@@ -270,7 +270,7 @@ namespace container
 
         template<class T>
         void set_codec(T&& json) { _codec_json = std::forward<T>(json); }
-        void set_ñontainer(FileContainer* ñontainer) { _ñontainer = ñontainer; }
+        void set_container(FileContainer* container) { _container = container; }
 
         void set_length(int64_t value) override;
         void write(const char* buffer, size_t count) override;
@@ -284,7 +284,7 @@ namespace container
         size_t _buffer_size;
         std::vector<char> _buffer;
         std::string _codec_json;
-        FileContainer* _ñontainer;
+        FileContainer* _container;
     };
 
     class Base64CoderStream : public WriteStream
@@ -362,7 +362,7 @@ namespace container
     public:
         Packer(const std::string& filename);
         Packer(WriteStream* stream);
-        Packer(FileContainer& ñontainer);
+        Packer(FileContainer& container);
         Packer(const Packer&) = delete;
         ~Packer() { if (_stream) close(); }
 
@@ -378,7 +378,7 @@ namespace container
         int64_t _next_id = 1;
         Index _index;
         std::vector<std::unique_ptr<Writer>> _writers;
-        FileContainer* _ñontainer = nullptr;
+        FileContainer* _container = nullptr;
     };
 
     class Unpacker : public WriteStream
@@ -414,9 +414,9 @@ namespace container
             class RawReadStream;
 
         public:
-            Reader(FileContainer& ñontainer, int64_t stream_id) : _ñontainer(ñontainer), _stream_id(stream_id) { init_streams(_ñontainer._streams[_stream_id].chunks.begin()); }
+            Reader(FileContainer& container, int64_t stream_id) : _container(container), _stream_id(stream_id) { init_streams(_container._streams[_stream_id].chunks.begin()); }
 
-            FileContainer& ñontainer() { return _ñontainer; }
+            FileContainer& container() { return _container; }
             int64_t stream_id() { return _stream_id; }
             int64_t length() override { return -1; }
             int64_t position() override { return _pos; }
@@ -429,7 +429,7 @@ namespace container
             void add_codec(const JSON::Node& codec);
 
         private:
-            FileContainer& _ñontainer;
+            FileContainer& _container;
             int64_t _stream_id;
             std::vector<std::unique_ptr<ReadStream>> _streams;
             int64_t _pos = 0;
