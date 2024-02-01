@@ -7,37 +7,22 @@
 #include "md5.h"
 #include "inputnum.h"
 #include "task.h"
+#include "container.h"
 #ifdef _WIN32
 #include "windows.h"
 #endif
 
 int File::FILE_APPID = 1;
 
-void Writer::write(int32_t value)
+void Writer::write(const char* ptr, size_t count)
 {
-    _buffer.insert(_buffer.end(), (char*)&value, 4 + (char*)&value);
-}
-
-void Writer::write(uint32_t value)
-{
-    _buffer.insert(_buffer.end(), (char*)&value, 4 + (char*)&value);
-}
-
-void Writer::write(uint64_t value)
-{
-    _buffer.insert(_buffer.end(), (char*)&value, 8 + (char*)&value);
-}
-
-void Writer::write(double value)
-{
-    _buffer.insert(_buffer.end(), (char*)&value, (char*)(&value + 1));
+    _buffer.insert(_buffer.end(), ptr, ptr + count);
 }
 
 void Writer::write(const std::string& value)
 {
-    int32_t len = (int32_t)value.size();
-    _buffer.insert(_buffer.end(), (char*)&len, 4 + (char*)&len);
-    _buffer.insert(_buffer.end(), (char*)value.data(), (char*)(value.data() + value.size()));
+    write((uint32_t)value.size());
+    write(value.data(), value.size());
 }
 
 void Writer::write(const arithmetic::Giant& value)
@@ -45,43 +30,36 @@ void Writer::write(const arithmetic::Giant& value)
     int32_t len = (int32_t)value.size();
     if (value < 0)
         len *= -1;
-    _buffer.insert(_buffer.end(), (char*)&len, 4 + (char*)&len);
-    _buffer.insert(_buffer.end(), (char*)value.data(), (char*)(value.data() + value.size()));
+    write(len);
+    write((const char*)value.data(), value.size()*sizeof(uint32_t));
 }
 
 void Writer::write(const arithmetic::SerializedGWNum& value)
 {
-    int32_t len = (int32_t)value.size();
-    _buffer.insert(_buffer.end(), (char*)&len, 4 + (char*)&len);
-    _buffer.insert(_buffer.end(), (char*)value.data(), (char*)(value.data() + value.size()));
-}
-
-void Writer::write(const char* ptr, int count)
-{
-    _buffer.insert(_buffer.end(), ptr, ptr + count);
+    write((uint32_t)value.size());
+    write((const char*)value.data(), value.size()*sizeof(uint32_t));
 }
 
 void Writer::write_text(const char* ptr)
 {
-    size_t count = strlen(ptr);
-    _buffer.insert(_buffer.end(), ptr, ptr + count);
+    write(ptr, strlen(ptr));
 }
 
 void Writer::write_text(const std::string& value)
 {
-    _buffer.insert(_buffer.end(), (char*)value.data(), (char*)(value.data() + value.length()));
+    write(value.data(), value.length());
 }
 
 void Writer::write_textline(const char* ptr)
 {
     write_text(ptr);
-    _buffer.insert(_buffer.end(), {'\r', '\n'});
+    write("\r\n", 2);
 }
 
 void Writer::write_textline(const std::string& value)
 {
     write_text(value);
-    _buffer.insert(_buffer.end(), { '\r', '\n' });
+    write("\r\n", 2);
 }
 
 std::vector<char> Writer::hash()
@@ -393,4 +371,75 @@ void File::write_textline(const std::string& value)
     std::unique_ptr<Writer> writer(get_writer());
     writer->write_textline(value);
     commit_writer(*writer);
+}
+
+File* FilePacked::add_child(const std::string& name, uint32_t fingerprint)
+{
+    _children.emplace_back(new FilePacked(_filename + "." + name, fingerprint, _container));
+    _children.back()->hash = hash;
+    return _children.back().get();
+}
+
+void FilePacked::read_buffer()
+{
+    if (!_buffer.empty())
+        return;
+
+    auto file = _container.read_file(_filename);
+    if (file == nullptr)
+        return;
+    _buffer.resize(file->size);
+    try
+    {
+        file->data->read(_buffer.data(), _buffer.size());
+    }
+    catch (const std::exception&)
+    {
+        _buffer.clear();
+    }
+}
+
+class FilePackedWriter : public Writer
+{
+public:
+    FilePackedWriter(FilePacked& file) : _packer(file.container()), _writer(_packer.add_writer())
+    {
+        _packer.md5 = true;// file.hash;
+        _stream = _writer.add_file(file.filename());
+    }
+    ~FilePackedWriter() { close(); }
+
+    void write(const char* ptr, size_t count) override
+    {
+        _stream->write(ptr, count);
+    }
+
+    void close()
+    {
+        if (_stream == nullptr)
+            return;
+        _stream->close();
+        _stream = nullptr;
+        _writer.close();
+        _packer.close();
+    }
+
+private:
+    container::Packer _packer;
+    container::Packer::Writer& _writer;
+    container::WriteStream* _stream = nullptr;
+};
+
+Writer* FilePacked::get_writer()
+{
+    return new FilePackedWriter(*this);
+}
+
+void FilePacked::commit_writer(Writer& writer)
+{
+    FilePackedWriter* f_writer = dynamic_cast<FilePackedWriter*>(&writer);
+    if (f_writer != nullptr)
+        f_writer->close();
+    else
+        FilePackedWriter(*this).write(writer.buffer().data(), writer.buffer().size());
 }

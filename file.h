@@ -16,15 +16,16 @@ public:
     Writer() { }
     Writer(std::vector<char>& buffer) : _buffer(buffer) { }
     Writer(std::vector<char>&& buffer) : _buffer(std::move(buffer)) { }
+    virtual ~Writer() { }
 
-    void write(int32_t value);
-    void write(uint32_t value);
-    void write(uint64_t value);
-    void write(double value);
+    virtual void write(const char* ptr, size_t count);
+
+    template<typename T, typename std::enable_if_t<std::is_arithmetic<T>::value, bool> = true>
+    void write(T value) { write((char*)&value, sizeof(T)); }
     void write(const std::string& value);
     void write(const arithmetic::Giant& value);
     void write(const arithmetic::SerializedGWNum& value);
-    void write(const char* ptr, int count);
+
     void write_text(const char* ptr);
     void write_text(const std::string& value);
     void write_textline(const char* ptr);
@@ -132,4 +133,25 @@ public:
     File* add_child(const std::string& /*name*/, uint32_t /*fingerprint*/) override { return _children.emplace_back(new FileEmpty()).get(); }
     void read_buffer() override { }
     void commit_writer(Writer& /*writer*/) override { }
+};
+
+namespace container
+{
+    class FileContainer;
+}
+
+class FilePacked : public File
+{
+public:
+    FilePacked(const std::string& filename, uint32_t fingerprint, container::FileContainer& container) : File(filename, fingerprint), _container(container) { }
+
+    container::FileContainer& container() { return _container; }
+
+    File* add_child(const std::string& name, uint32_t fingerprint) override;
+    void read_buffer() override;
+    Writer* get_writer() override;
+    void commit_writer(Writer& writer) override;
+
+private:
+    container::FileContainer& _container;
 };
