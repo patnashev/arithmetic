@@ -350,7 +350,7 @@ namespace arithmetic
         ~GWNumWrapper() { _gwnum = nullptr; }
         using GWNum::operator=;
         GWNum& operator = (GWNum&& a) noexcept override { *this = a; return *this; }
-        operator GWNum&&() = delete; // No effect, just a remainder
+        //operator GWNum&&() = delete; // No effect, just a remainder
     };
 }
 

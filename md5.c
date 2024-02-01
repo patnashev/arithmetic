@@ -324,7 +324,7 @@ void md5_raw_input (
 	MD5Final (digest, &context);
 
 	for (i = 0; i < 16; i++) {
-		sprintf (output, "%02x", digest[i]);
+		snprintf (output, 3, "%02x", digest[i]);
 		output += 2;
 	}
 }

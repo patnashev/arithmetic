@@ -45,8 +45,15 @@ namespace arithmetic
         static std::unique_ptr<PrimeList> _list65536;
     };
 
-    class PrimeIterator : public std::iterator<std::input_iterator_tag, int, int, const int*, int>
+    class PrimeIterator
     {
+    public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = int;
+        using difference_type = int;
+        using pointer = const int*;
+        using reference = int;
+
     public:
         PrimeIterator(PrimeList& list) : _list(list) { }
         PrimeIterator(const PrimeIterator& it) : _list(it._list), _cur(it._cur), _range(it._range), _range_pos(it._range_pos) { }

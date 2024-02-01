@@ -98,7 +98,7 @@ const char* from_chars(const char* str, T& value)
 }
 #else
 #include <cerrno>
-template<typename  T, typename std::enable_if_t<std::is_integral<T>::value && std::is_unsigned<T>::value, bool> = true>
+template<typename T, typename std::enable_if_t<std::is_integral<T>::value && std::is_unsigned<T>::value, bool> = true>
 const char* from_chars(const char* str, T& value)
 {
     char* str_end;
@@ -122,7 +122,7 @@ const char* from_chars(const char* str, T& value)
     value = (T)res;
     return str_end;
 }
-template<typename  T, typename std::enable_if_t<std::is_floating_point<T>::value, bool> = true>
+template<typename T, typename std::enable_if_t<std::is_floating_point<T>::value, bool> = true>
 const char* from_chars(const char* str, T& value)
 {
     char* str_end;
@@ -426,7 +426,6 @@ void ConfigExclusive::parse_args(int argc, char *argv[], int& cur)
         return;
     }
 
-    int last = cur;
     for (auto it = _objects.begin(); it != _objects.end(); it++)
     {
         (*it)->parse_args(argc, argv, cur);

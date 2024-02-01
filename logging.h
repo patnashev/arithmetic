@@ -21,7 +21,7 @@ public:
 
     std::vector<double>& costs() { return _costs; }
     double progress_stage() { return _cur_progress; }
-    double progress_total() { if (_cur_stage >= _costs.size()) return 1; double cost = 0; for (int i = 0; i < _cur_stage; cost += _costs[i], i++); return (cost + _costs[_cur_stage]*_cur_progress)/_total_cost; }
+    double progress_total() { if (_cur_stage >= _costs.size()) return 1; double cost = 0; for (int i = 0; i < _cur_stage; i++) cost += _costs[i]; return (cost + _costs[_cur_stage]*_cur_progress)/_total_cost; }
     double cost_total() { return _total_cost; }
     double time_total() { return _time_total + _time_stage; }
     double time_op() { return _time_op; }

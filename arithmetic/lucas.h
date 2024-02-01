@@ -143,7 +143,7 @@ namespace arithmetic
             
         }
         template<class T>
-        LucasUVArithmetic(GWArithmetic& gw, T&& D, bool negativeQ = false) : _gw(&gw), _negativeQ(negativeQ), _D(new GWNum(gw))
+        LucasUVArithmetic(GWArithmetic& gw, T&& D, bool negativeQ = false) : _gw(&gw), _D(new GWNum(gw)), _negativeQ(negativeQ)
         {
             *_D = std::forward<T>(D);
         }
@@ -198,23 +198,23 @@ namespace arithmetic
         using Arithmetic = LucasUVArithmetic;
 
     public:
-        LucasUV(LucasUVArithmetic& arithmetic) : GroupElement<LucasUVArithmetic, LucasUV>(arithmetic), _U(new GWNum(arithmetic.gw())), _V(new GWNum(arithmetic.gw()))
+        LucasUV(LucasUVArithmetic& arithmetic) : GroupElement<LucasUVArithmetic, LucasUV>(arithmetic), _U(new GWNum(arithmetic.gw())), _V(new GWNum(arithmetic.gw())), _parity(false)
         {
             //arithmetic.init(*this);
         }
         template<class T>
-        LucasUV(LucasUVArithmetic& arithmetic, T&& P) : GroupElement<LucasUVArithmetic, LucasUV>(arithmetic), _U(new GWNum(arithmetic.gw())), _V(new GWNum(arithmetic.gw()))
+        LucasUV(LucasUVArithmetic& arithmetic, T&& P) : GroupElement<LucasUVArithmetic, LucasUV>(arithmetic), _U(new GWNum(arithmetic.gw())), _V(new GWNum(arithmetic.gw())), _parity(true)
         {
             V() = std::forward<T>(P);
             arithmetic.init(V(), *this);
         }
         template<class TU, class TV>
-        LucasUV(LucasUVArithmetic& arithmetic, TU&& U, TV&& V, bool parity = true, bool halved = true) : GroupElement<LucasUVArithmetic, LucasUV>(arithmetic), _U(new GWNum(arithmetic.gw())), _V(new GWNum(arithmetic.gw()))
+        LucasUV(LucasUVArithmetic& arithmetic, TU&& U, TV&& V, bool parity, bool halved = false) : GroupElement<LucasUVArithmetic, LucasUV>(arithmetic), _U(new GWNum(arithmetic.gw())), _V(new GWNum(arithmetic.gw())), _parity(parity)
         {
             U() = std::forward<TU>(U);
             V() = std::forward<TV>(V);
             if (!halved)
-                arithmetic.init(U(), V(), *this);
+                arithmetic.init(U(), V(), parity, halved, *this);
         }
         ~LucasUV()
         {
