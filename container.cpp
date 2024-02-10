@@ -1113,6 +1113,7 @@ namespace container
         {
             _container->_stream->flush();
             _container->_stream->set_length(_container->_stream->position());
+            _container->_filesize = _container->_stream->length();
             _container->_index = std::move(_index);
             _container->_next_stream_id = _next_id;
         }
