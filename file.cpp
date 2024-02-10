@@ -385,6 +385,7 @@ void FilePacked::read_buffer()
     if (!_buffer.empty())
         return;
 
+    _container.reopen(true, false);
     auto file = _container.read_file(_filename);
     if (file == nullptr)
         return;
@@ -432,6 +433,7 @@ private:
 
 Writer* FilePacked::get_writer()
 {
+    _container.reopen(true, true);
     return new FilePackedWriter(*this);
 }
 
@@ -441,5 +443,9 @@ void FilePacked::commit_writer(Writer& writer)
     if (f_writer != nullptr)
         f_writer->close();
     else
+    {
+        _container.reopen(true, true);
         FilePackedWriter(*this).write(writer.buffer().data(), writer.buffer().size());
+    }
+    _container.close();
 }

@@ -606,15 +606,18 @@ namespace container
         return count;
     }
 
-    FileStream::FileStream(const std::string& filename, bool read, bool write) : _destroy(true), _read(read), _write(write)
+    void FileStream::open(const std::string& filename)
     {
-        _stream = fopen(filename.data(), read && write ? "a+b" : read ? "rb" : "wb");
+        if (_stream)
+            close();
+        _destroy = true;
+        _stream = fopen(filename.data(), _read && _write ? "a+b" : _read ? "rb" : "wb");
         if (!_stream)
         {
             _length = 0;
             return;
         }
-        if (read)
+        if (_read)
         {
             if (fseek((FILE*)_stream, 0, SEEK_END) == 0)
             {
@@ -631,14 +634,18 @@ namespace container
         }
     }
 
-    FileStream::FileStream(void* filestream, bool destroy, bool read, bool write) : _stream(filestream), _destroy(destroy), _read(read), _write(write)
+    void FileStream::open(void* filestream, bool destroy)
     {
+        if (_stream)
+            close();
+        _destroy = destroy;
+        _stream = filestream;
         if (!_stream)
         {
             _length = 0;
             return;
         }
-        if (read)
+        if (_read)
         {
     #ifdef _WIN32
             int64_t start = _ftelli64((FILE*)_stream);
@@ -1796,6 +1803,25 @@ namespace container
         {
             _file->close();
             _file.reset();
+        }
+    }
+
+    void FileContainer::reopen(bool read, bool write)
+    {
+        if (_filename.empty())
+            return;
+        if (_stream != nullptr)
+        {
+            if (_stream->can_read() == read && _stream->can_write() == write)
+                return;
+            close();
+        }
+        _file.reset(new FileStream(_filename, read, write));
+        _stream = _file.get();
+        if (_filesize != _stream->length())
+        {
+            _filesize = _stream->length();
+            _error = open();
         }
     }
 }

@@ -181,9 +181,13 @@ namespace container
     class FileStream : public ReadStream, public WriteStream
     {
     public:
-        FileStream(const std::string& filename, bool read = true, bool write = false);
-        FileStream(void* filestream, bool destroy = false, bool read = true, bool write = false);
+        FileStream(const std::string& filename, bool read = true, bool write = false) : _read(read), _write(write) { open(filename); }
+        FileStream(void* filestream, bool destroy = false, bool read = true, bool write = false) : _read(read), _write(write) { open(filestream, destroy); }
         FileStream(const FileStream&) = delete;
+
+        void open(const std::string& filename);
+        void open(void* filestream, bool destroy);
+        bool is_closed() { return !_stream; }
 
         bool can_read() { return _read; }
         int64_t length() override { return _length; }
@@ -199,10 +203,10 @@ namespace container
         void close() override;
 
     private:
-        void* _stream;
-        bool _destroy;
         bool _read;
         bool _write;
+        void* _stream = nullptr;
+        bool _destroy = false;
         int64_t _length = -1;
         int64_t _pos = 0;
     };
@@ -436,7 +440,7 @@ namespace container
         };
 
     public:
-        FileContainer(const std::string& filename, bool read = true, bool write = false) : _file(new FileStream(filename, read, write)), _stream(_file.get()) { _error = open(); }
+        FileContainer(const std::string& filename, bool read = true, bool write = false) : _filename(filename), _file(new FileStream(filename, read, write)), _stream(_file.get()), _filesize(_stream->length()) { _error = open(); }
         FileContainer(FileStream* stream) : _stream(stream) { _error = open(); }
         ~FileContainer() { close(); }
 
@@ -445,6 +449,9 @@ namespace container
 
         FileDesc* read_file(const std::string& filename) { if (!_index.contains(filename)) return nullptr; FileDesc* file = &_index[filename]; read_file(file); return file; }
         void read_file(FileDesc* file);
+
+        const std::string& filename() { return _filename; }
+        void reopen(bool read = true, bool write = false);
         void close();
 
     private:
@@ -456,8 +463,10 @@ namespace container
         void on_corrupted(FileDesc* file, int64_t stream_id);
 
     private:
+        std::string _filename;
         std::unique_ptr<FileStream> _file;
         FileStream* _stream;
+        int64_t _filesize;
 
         int _error = container_error::OK;
         Index _index;
