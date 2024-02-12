@@ -56,6 +56,8 @@ public:
     static const int LEVEL_WARNING = 3;
     static const int LEVEL_ERROR = 4;
     static const int LEVEL_RESULT = 5;
+    int level_result_success = LEVEL_WARNING;
+    int level_result_not_success = LEVEL_INFO;
 
 public:
     Logging(int level = LEVEL_INFO) : _level(level) { }

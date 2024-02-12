@@ -88,7 +88,7 @@ void Logging::error(const char* message...)
 
 void Logging::result(bool success, const char* message...)
 {
-    if (_level > (success ? LEVEL_WARNING : LEVEL_INFO))
+    if (_level > (success ? level_result_success : level_result_not_success))
         return;
     char buf[1000];
     va_list args;
