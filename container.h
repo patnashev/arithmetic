@@ -1,5 +1,9 @@
 #pragma once
 
+#if _WIN32 && !_WIN64
+typedef struct IUnknown IUnknown;
+#endif
+
 #include <memory>
 #include <vector>
 #include <string>

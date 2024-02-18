@@ -233,6 +233,7 @@ void InputTask::done()
 {
     _timer = (getHighResTimer() - _timer)/getHighResTimerFrequency();
     _logging->progress().update(1, ops());
+    _logging->debug("task time: %.3f s, ops: %d, time per op: %.3f ms.\n", _timer, ops(), _timer*1000/ops());
 }
 
 void InputTask::set_error_check(bool near, bool check)
