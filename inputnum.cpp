@@ -1017,7 +1017,7 @@ uint32_t InputNum::mod(uint32_t modulus)
             else
                 b = factor.first%modulus;
             uint64_t mult = 1;
-            for (uint32_t i = 1; i <= factor.second; i <<= 1)
+            for (uint32_t i = 1; i <= (uint32_t)factor.second; i <<= 1)
             {
                 if (i == 1)
                     mult = b;

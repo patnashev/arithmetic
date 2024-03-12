@@ -174,6 +174,9 @@ namespace arithmetic
         int max_small() { if (_D) return 0; return (int)_UV_small.size() - 1; }
 
     private:
+        void force_optimize(LucasUV& a);
+
+    private:
         GWArithmetic* _gw;
         std::unique_ptr<GWNum> _D;
         std::unique_ptr<GWNum> _invD;
