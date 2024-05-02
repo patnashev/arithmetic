@@ -1063,10 +1063,10 @@ namespace container
 
     Packer::Packer(FileContainer& container) : _stream(container._stream), _next_id(container._next_stream_id), _index(std::move(container._index)), _container(&container)
     {
-        if (!container._stream || !container._stream->can_write())
+        if (!container._stream || container._stream->is_closed() || !container._stream->can_write())
         {
             _container->_index = std::move(_index);
-            throw std::runtime_error("Can't write to read-only stream.");
+            throw std::runtime_error("Can't write to the stream.");
         }
 
         int64_t pos = container._last_pos;
@@ -1880,6 +1880,11 @@ namespace container
             close();
         }
         _file.reset(new FileStream(_filename, read, write));
+        if (_file->is_closed())
+        {
+            _file.reset();
+            return;
+        }
         _stream = _file.get();
         if (_filesize != _stream->length())
         {
