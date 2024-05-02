@@ -690,8 +690,9 @@ namespace container
             return;
         if (value == -1 && _pos < _length)
         {
-            fflush((FILE*)_stream);
-    #ifdef _WIN32
+            if (fflush((FILE*)_stream) != 0)
+                throw std::runtime_error("File flush failed.");
+#ifdef _WIN32
             int64_t cur = _ftelli64((FILE*)_stream);
             _chsize_s(_fileno((FILE*)_stream), cur);
             _fseeki64((FILE*)_stream, cur, SEEK_SET);
@@ -703,7 +704,8 @@ namespace container
         }
         if (value != -1 && ((_length != -1 && _length != value) || (_length == -1 && _pos > value)))
         {
-            fflush((FILE*)_stream);
+            if (fflush((FILE*)_stream) != 0)
+                throw std::runtime_error("File flush failed.");
     #ifdef _WIN32
             int64_t start = _ftelli64((FILE*)_stream) - _pos;
             _chsize_s(_fileno((FILE*)_stream), start + value);
@@ -777,7 +779,8 @@ namespace container
             return;
         if (_length != -1 && _pos + (int64_t)count > _length)
             count = (size_t)(_length - _pos);
-        fwrite(buffer, 1, count, (FILE*)_stream);
+        if (fwrite(buffer, 1, count, (FILE*)_stream) != count)
+            throw std::runtime_error("File write failed.");
         _pos += count;
     }
 
@@ -785,17 +788,16 @@ namespace container
     {
         if (!_stream)
             return;
-        fflush((FILE*)_stream);
+        if (fflush((FILE*)_stream) != 0)
+            throw std::runtime_error("File flush failed.");
     }
 
     void FileStream::close()
     {
         if (!_stream)
             return;
-        if (_destroy)
-            fclose((FILE*)_stream);
-        else
-            fflush((FILE*)_stream);
+        if ((_destroy ? fclose((FILE*)_stream) : fflush((FILE*)_stream)) != 0)
+            throw std::runtime_error("File close failed.");
         _stream = nullptr;
     }
 
