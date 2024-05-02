@@ -376,25 +376,25 @@ namespace container
         return count == 4;
     }
 
-    #ifdef CHARCONV
-    #include <charconv>
-    #endif
+#ifdef CHARCONV
+#include <charconv>
+#endif
     int64_t JSON::Node::value_int() const
     {
         auto [buffer, count] { value_buffer() };
         if (buffer[0] == '\"' && buffer[count - 1] == '\"')
             buffer++, count -= 2;
-    #ifdef CHARCONV
+#ifdef CHARCONV
         int64_t res;
         auto [ptr, ec] { std::from_chars(buffer, buffer + count, res) };
         if (ec != std::errc())
             throw std::out_of_range(std::string(buffer, count));
-    #else
+#else
         char* str_end;
         long long res = std::strtoll(buffer, &str_end, 10);
         if (errno == ERANGE || (str_end - buffer) != count)
             throw std::out_of_range(std::string(buffer, count));
-    #endif
+#endif
         return res;
     }
 
@@ -621,13 +621,13 @@ namespace container
         {
             if (fseek((FILE*)_stream, 0, SEEK_END) == 0)
             {
-    #ifdef _WIN32
+#ifdef _WIN32
                 _length = _ftelli64((FILE*)_stream);
                 _fseeki64((FILE*)_stream, 0, SEEK_SET);
-    #else
+#else
                 _length = ftello((FILE*)_stream);
                 fseeko((FILE*)_stream, 0, SEEK_SET);
-    #endif
+#endif
             }
             else
                 throw std::runtime_error("File random access failed.");
@@ -647,20 +647,20 @@ namespace container
         }
         if (_read)
         {
-    #ifdef _WIN32
+#ifdef _WIN32
             int64_t start = _ftelli64((FILE*)_stream);
-    #else
+#else
             int64_t start = ftello((FILE*)_stream);
-    #endif
+#endif
             if (fseek((FILE*)_stream, 0, SEEK_END) == 0)
             {
-    #ifdef _WIN32
+#ifdef _WIN32
                 _length = _ftelli64((FILE*)_stream) - start;
                 _fseeki64((FILE*)_stream, start, SEEK_SET);
-    #else
+#else
                 _length = ftello((FILE*)_stream) - start;
                 fseeko((FILE*)_stream, start, SEEK_SET);
-    #endif
+#endif
             }
             else
                 throw std::runtime_error("File random access failed.");
@@ -674,11 +674,11 @@ namespace container
         if (value < 0 || value > _length)
             throw std::out_of_range("Invalid file position.");
         if (
-    #ifdef _WIN32
-        _fseeki64((FILE*)_stream, value - _pos, SEEK_CUR)
-    #else
-        fseeko((FILE*)_stream, value - _pos, SEEK_CUR)
-    #endif
+#ifdef _WIN32
+            _fseeki64((FILE*)_stream, value - _pos, SEEK_CUR)
+#else
+            fseeko((FILE*)_stream, value - _pos, SEEK_CUR)
+#endif
             != 0)
             throw std::runtime_error("File random access failed.");
         _pos = value;
@@ -696,30 +696,30 @@ namespace container
             int64_t cur = _ftelli64((FILE*)_stream);
             _chsize_s(_fileno((FILE*)_stream), cur);
             _fseeki64((FILE*)_stream, cur, SEEK_SET);
-    #else
+#else
             int64_t cur = ftello((FILE*)_stream);
             ftruncate(fileno((FILE*)_stream), cur);
             fseeko((FILE*)_stream, cur, SEEK_SET);
-    #endif
+#endif
         }
         if (value != -1 && ((_length != -1 && _length != value) || (_length == -1 && _pos > value)))
         {
             if (fflush((FILE*)_stream) != 0)
                 throw std::runtime_error("File flush failed.");
-    #ifdef _WIN32
+#ifdef _WIN32
             int64_t start = _ftelli64((FILE*)_stream) - _pos;
             _chsize_s(_fileno((FILE*)_stream), start + value);
-    #else
+#else
             int64_t start = ftello((FILE*)_stream) - _pos;
             ftruncate(fileno((FILE*)_stream), start + value);
-    #endif
+#endif
             if (_pos > value)
                 _pos = value;
-    #ifdef _WIN32
+#ifdef _WIN32
             _fseeki64((FILE*)_stream, start + _pos, SEEK_SET);
-    #else
+#else
             fseeko((FILE*)_stream, start + _pos, SEEK_SET);
-    #endif
+#endif
         }
         _length = value;
     }
@@ -779,9 +779,10 @@ namespace container
             return;
         if (_length != -1 && _pos + (int64_t)count > _length)
             count = (size_t)(_length - _pos);
-        if (fwrite(buffer, 1, count, (FILE*)_stream) != count)
+        size_t written = fwrite(buffer, 1, count, (FILE*)_stream);
+        _pos += written;
+        if (written != count)
             throw std::runtime_error("File write failed.");
-        _pos += count;
     }
 
     void FileStream::flush()
@@ -796,9 +797,14 @@ namespace container
     {
         if (!_stream)
             return;
-        if ((_destroy ? fclose((FILE*)_stream) : fflush((FILE*)_stream)) != 0)
-            throw std::runtime_error("File close failed.");
+        int error;
+        if (_destroy)
+            error = fclose((FILE*)_stream);
+        else
+            error = fflush((FILE*)_stream);
         _stream = nullptr;
+        if (error != 0)
+            throw std::runtime_error("File close failed.");
     }
 
     int ChunkedWriteStream::MAX_BUFFER_SIZE = 16777200;
@@ -1057,7 +1063,7 @@ namespace container
 
     Packer::Packer(FileContainer& container) : _stream(container._stream), _next_id(container._next_stream_id), _index(std::move(container._index)), _container(&container)
     {
-        if (!container._stream->can_write())
+        if (!container._stream || !container._stream->can_write())
         {
             _container->_index = std::move(_index);
             throw std::runtime_error("Can't write to read-only stream.");
@@ -1089,29 +1095,54 @@ namespace container
             }
         }
 
-        container._stream->set_position(pos);
-        container._stream->set_length(-1);
+        try
+        {
+            container._stream->set_position(pos);
+            container._stream->set_length(-1);
 
-        if (container._error == container_error::EMPTY)
-            _stream->write("[\"\xD0\x9A\",1,0]\r\n", 12);
-        container._error = container_error::OK;
+            if (container._error == container_error::EMPTY)
+                _stream->write("[\"\xD0\x9A\",1,0]\r\n", 12);
+            container._error = container_error::OK;
+        }
+        catch (const std::exception& e)
+        {
+            on_error(e);
+        }
 
         container._cur_file = nullptr;
         container._cur_reader.reset();
     }
 
+    void Packer::on_error(const std::exception& e)
+    {
+        _stream = nullptr;
+        _file.reset();
+        if (_container && _container->_stream)
+        {
+            _container->_filesize = 0;
+            _container->_stream = nullptr;
+            _container->_file.reset();
+        }
+        throw e;
+    }
+
     void Packer::close()
     {
-        while (!_writers.empty())
-            _writers.back()->close();
-        _stream->write("[0,0]\r\n", 7);
-        _stream = nullptr;
-        if (_file)
+        if (!_stream)
+            return;
+        try
         {
-            _file->close();
+            while (!_writers.empty())
+                _writers.back()->close();
+            _stream->write("[0,0]\r\n", 7);
             _file.reset();
         }
-        if (_container)
+        catch (const std::exception& e)
+        {
+            on_error(e);
+        }
+        _stream = nullptr;
+        if (_container && _container->_stream)
         {
             _container->_stream->flush();
             _container->_stream->set_length(_container->_stream->position());
@@ -1186,19 +1217,46 @@ namespace container
 
         void write(const char* buffer, size_t count) override
         {
-            write_index();
-            _writer._packer._stream->write(buffer, count);
+            if (!_writer._packer._stream)
+                throw std::runtime_error("Invalid packer.");
+            try
+            {
+                write_index();
+                _writer._packer._stream->write(buffer, count);
+            }
+            catch (const std::exception& e)
+            {
+                _writer._packer.on_error(e);
+            }
         }
 
         void flush() override
         {
-            write_index();
-            _writer._packer._stream->flush();
+            if (!_writer._packer._stream)
+                throw std::runtime_error("Invalid packer.");
+            try
+            {
+                write_index();
+                _writer._packer._stream->flush();
+            }
+            catch (const std::exception& e)
+            {
+                _writer._packer.on_error(e);
+            }
         }
 
         void close() override
         {
-            write_index();
+            if (!_writer._packer._stream)
+                throw std::runtime_error("Invalid packer.");
+            try
+            {
+                write_index();
+            }
+            catch (const std::exception& e)
+            {
+                _writer._packer.on_error(e);
+            }
         }
 
     private:
@@ -1294,6 +1352,8 @@ namespace container
 
     Packer::Writer::Writer(Packer& packer, int64_t id) : _packer(packer), _id(id)
     {
+        if (!packer._stream)
+            throw std::runtime_error("Invalid packer.");
         _streams.emplace_back(new Packer::Writer::Index(*this));
         ChunkedWriteStream* cs;
         _streams.emplace_back(cs = new ChunkedWriteStream(id, *_streams.back()));
@@ -1318,6 +1378,8 @@ namespace container
 
     void Packer::Writer::add_file(const std::string& filename, const char* buffer, size_t count)
     {
+        if (!_packer._stream)
+            throw std::runtime_error("Invalid packer.");
         WriteStream* stream = add_file(filename, count);
         if (stream == nullptr)
             return;
@@ -1327,6 +1389,8 @@ namespace container
 
     WriteStream* Packer::Writer::add_file(const std::string& filename, int64_t size)
     {
+        if (!_packer._stream)
+            throw std::runtime_error("Invalid packer.");
         FileDesc& file = _packer.index()[filename];
         if (_packer._container && file.stream > 0)
         {
@@ -1802,11 +1866,7 @@ namespace container
     void FileContainer::close()
     {
         _stream = nullptr;
-        if (_file)
-        {
-            _file->close();
-            _file.reset();
-        }
+        _file.reset();
     }
 
     void FileContainer::reopen(bool read, bool write)

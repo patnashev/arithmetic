@@ -403,31 +403,68 @@ void FilePacked::read_buffer()
 class FilePackedWriter : public Writer
 {
 public:
-    FilePackedWriter(FilePacked& file) : _packer(file.container()), _writer(_packer.add_writer())
+    FilePackedWriter(FilePacked& file)
     {
-        _packer.md5 = true;// file.hash;
-        _stream = _writer.add_file(file.filename());
+        try
+        {
+            _packer.reset(new container::Packer(file.container()));
+            _packer->md5 = true;// file.hash;
+            _writer = &_packer->add_writer();
+            _stream = _writer->add_file(file.filename());
+        }
+        catch (const std::exception&)
+        {
+            _stream = nullptr;
+            try
+            {
+                _packer.reset();
+            }
+            catch (const std::exception&)
+            {
+            }
+        }
     }
     ~FilePackedWriter() { close(); }
 
     void write(const char* ptr, size_t count) override
     {
-        _stream->write(ptr, count);
+        if (_stream == nullptr)
+            return;
+        try
+        {
+            _stream->write(ptr, count);
+        }
+        catch (const std::exception&)
+        {
+            close();
+        }
     }
 
     void close()
     {
         if (_stream == nullptr)
             return;
-        _stream->close();
+        try
+        {
+            _stream->close();
+            _writer->close();
+        }
+        catch (const std::exception&)
+        {
+        }
+        try
+        {
+            _packer.reset();
+        }
+        catch (const std::exception&)
+        {
+        }
         _stream = nullptr;
-        _writer.close();
-        _packer.close();
     }
 
 private:
-    container::Packer _packer;
-    container::Packer::Writer& _writer;
+    std::unique_ptr<container::Packer> _packer;
+    container::Packer::Writer* _writer = nullptr;
     container::WriteStream* _stream = nullptr;
 };
 

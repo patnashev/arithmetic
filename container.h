@@ -188,6 +188,7 @@ namespace container
         FileStream(const std::string& filename, bool read = true, bool write = false) : _read(read), _write(write) { open(filename); }
         FileStream(void* filestream, bool destroy = false, bool read = true, bool write = false) : _read(read), _write(write) { open(filestream, destroy); }
         FileStream(const FileStream&) = delete;
+        ~FileStream() { close(); }
 
         void open(const std::string& filename);
         void open(void* filestream, bool destroy);
@@ -372,9 +373,10 @@ namespace container
         Packer(WriteStream* stream);
         Packer(FileContainer& container);
         Packer(const Packer&) = delete;
-        ~Packer() { if (_stream) close(); }
+        ~Packer() { close(); }
 
         Writer& add_writer() { _writers.emplace_back(new Writer(*this, _next_id++)); return *_writers.back(); }
+        void on_error(const std::exception& e);
         void close();
 
         Index& index() { return _index; }
