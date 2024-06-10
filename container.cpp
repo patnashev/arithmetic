@@ -1685,6 +1685,9 @@ namespace container
         JSON json;
         int error = container_error::OK;
 
+        if (!_stream || _stream->is_closed())
+            return container_error::EMPTY;
+
         _last_pos = _stream->position();
         if (!_stream->can_read() ||
             !_stream->readline(st, 32) ||
