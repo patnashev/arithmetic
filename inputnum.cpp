@@ -209,8 +209,11 @@ bool InputNum::parse(const std::string& s, bool c_required)
                 custom_k += "*" + recursive.gk().to_string();
             }
             gb = recursive.gb();
+            custom_b = recursive._custom_b;
             n = recursive._n;
+            multifactorial = recursive._multifactorial;
             gd = recursive.gd();
+            custom_d = recursive._custom_d;
             c = 1;
             cyclotomic_k = (cyclotomic == 6 ? -1 : 1)*(recursive.k() > 0 && recursive.k() < 1000 && recursive.d() == 1 ? recursive.k() : 0);
         }
@@ -239,8 +242,11 @@ bool InputNum::parse(const std::string& s, bool c_required)
                 custom_k = "*" + recursive.gk().to_string();
             }
             gb = recursive.gb();
+            custom_b = recursive._custom_b;
             n = recursive._n;
+            multifactorial = recursive._multifactorial;
             gd = recursive.gd();
+            custom_d = recursive._custom_d;
             c = 1;
             hex_k = (recursive.k() > 0 && recursive.k() < 32 && recursive.d() == 1 ? recursive.k() : 0)*recursive._c;
             if (type == KBNC)
@@ -259,10 +265,8 @@ bool InputNum::parse(const std::string& s, bool c_required)
                 std::string st = recursive.build_text();
                 custom_k = "(" + st.substr(0, st.size() - 2) + "/3" + st.substr(st.size() - 2) + ")" + custom_k;
             }
-#ifndef FORCE_HEX
             // Montgomery reduction is faster than k^6/27 * b^6n + 1
-            hex_k = 0;
-#endif
+            //hex_k = 0;
         }
         else
             return false;
@@ -1207,6 +1211,33 @@ void InputNum::print_info()
                     st += (!st.empty() ? "*" : "") + it->first.to_string() + (it->second/3 > 1 ? "^" + std::to_string(it->second/3) : "");
                 std::cout << "Algebraic factor: " << st << "+1" << std::endl;
             }
+        }
+    }
+    if (_type == KBNC && abs(_cyclotomic_k) == 1)
+    {
+        uint32_t d = _n;
+        while (d%3 == 0)
+            d /= 3;
+        if (_cyclotomic_k < 0)
+            while (!(d & 1))
+                d >>= 1;
+
+        if (d > 1)
+        {
+            d = _n/d;
+            std::string sb = !_custom_b.empty() ? _custom_b : _gb.to_string();
+            if (sb.size() > 30)
+            {
+                st = "";
+                st.append(sb, 0, 30/2);
+                st.append(3, '.');
+                st.append(sb, sb.size() - 30/2, 30/2);
+                sb = st;
+            }
+            else
+                st = sb;
+            st += "^" + std::to_string(2*d) + (_cyclotomic_k > 0 ? "+" : "-") + sb + (d > 1 ? "^" + std::to_string(d) : "") + "+1";
+            std::cout << "Algebraic factor: " << st << std::endl;
         }
     }
 
