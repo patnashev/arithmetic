@@ -5,6 +5,7 @@
 #endif
 
 #include <cctype>
+#include <cerrno>
 #include <cmath>
 #include <string.h>
 #include <stdio.h>
@@ -507,7 +508,7 @@ namespace container
         return success;
     }
 
-    void JSON::set_value(Node& node, nullptr_t value)
+    void JSON::set_value(Node& node, std::nullptr_t value)
     {
         set_json(node, "null");
     }

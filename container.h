@@ -10,6 +10,7 @@ typedef struct IUnknown IUnknown;
 #include <variant>
 #include <functional>
 #include <stdexcept>
+#include <cstddef>
 #include <deque>
 #include <set>
 #include <map>
@@ -69,7 +70,7 @@ namespace container
             const std::pair<std::vector<std::string>, std::vector<Node>>& flat_map() const { return std::get<Type::Object>(_value); }
 
         private:
-            std::variant<nullptr_t, std::pair<const char*, size_t>, std::vector<Node>, std::pair<std::vector<std::string>, std::vector<Node>>> _value;
+            std::variant<std::nullptr_t, std::pair<const char*, size_t>, std::vector<Node>, std::pair<std::vector<std::string>, std::vector<Node>>> _value;
         };
 
     public:
@@ -94,7 +95,7 @@ namespace container
 
         Node& root() { return _root; }
 
-        void set_value(Node& node, nullptr_t value);
+        void set_value(Node& node, std::nullptr_t value);
         void set_value(Node& node, bool value);
         void set_value(Node& node, int64_t value);
         void set_value(Node& node, double value);
