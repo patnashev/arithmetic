@@ -58,6 +58,8 @@ namespace arithmetic
     void GWState::setup(uint64_t k, uint64_t b, int n, int c)
     {
         init();
+        if (k >= (1ULL << 51) || b >= (1ULL << 32))
+            throw ArithmeticException();
         if (gwsetup(gwdata(), (double)k, (uint32_t)b, n, c))
             throw ArithmeticException();
         bit_length = (int)gwdata()->bit_length;
@@ -65,7 +67,9 @@ namespace arithmetic
             bit_length /= 2;
         giants.reset(GiantsArithmetic::alloc_gwgiants(gwdata(), (bit_length >> 5) + 10));
         N.reset(new Giant());
-        *N = (uint32_t)k*power(std::move(*N = (uint32_t)b), n) + c;
+        Giant tmp;
+        tmp.arithmetic().init((uint32_t*)&k, 2, tmp);
+        *N = tmp*power(std::move(*N = (uint32_t)b), n) + c;
         if (gwdata()->GENERAL_MOD)
             bit_length = N->bitlen();
         fingerprint = *N%3417905339UL;

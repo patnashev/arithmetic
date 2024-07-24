@@ -37,7 +37,7 @@ public:
 
     bool empty() const { return _gb == 0; }
     int type() { return _type; }
-    uint32_t k() { return _gk.size() == 1 ? *(_gk.data()) : 0; }
+    uint64_t k() { return _gk.size() == 2 && _gk.bitlen() < 52 ? *(uint64_t*)(_gk.data()) : _gk.size() == 1 ? *(_gk.data()) : 0; }
     uint32_t b() { return _gb.size() == 1 ? *(_gb.data()) : 0; }
     uint32_t n() { return _type == KBNC ? _n : 1; }
     uint32_t d() { return _gd.size() == 1 ? *(_gd.data()) : 0; }
