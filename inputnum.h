@@ -39,7 +39,7 @@ public:
     int type() { return _type; }
     uint64_t k() { return _gk.size() == 2 && _gk.bitlen() < 52 ? *(uint64_t*)(_gk.data()) : _gk.size() == 1 ? *(_gk.data()) : 0; }
     uint32_t b() { return _gb.size() == 1 ? *(_gb.data()) : 0; }
-    uint32_t n() { return _type == KBNC ? _n : 1; }
+    uint32_t n() { return _type == GENERIC ? 1 : _n; }
     uint32_t d() { return _gd.size() == 1 ? *(_gd.data()) : 0; }
     int32_t c() { return _c; }
     arithmetic::Giant& gk() { return _gk; }
@@ -62,6 +62,7 @@ public:
     std::vector<std::pair<arithmetic::Giant, int>>& factors() { return _factors; }
     arithmetic::Giant& cofactor() { return _cofactor; }
     std::vector<int> factorize_minus1(int depth);
+    void factorize_f_p();
 
     const std::string& input_text() { return _input_text; }
     const std::string& display_text() { return _display_text; }

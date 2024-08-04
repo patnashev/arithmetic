@@ -110,7 +110,7 @@ class SubLogging : public Logging
 public:
     SubLogging(Logging& parent, int level = LEVEL_WARNING) : Logging(level), _parent(parent) { progress().set_parent(&parent.progress()); }
 
-    virtual void report(const std::string& message, int level) override { _parent.report(message, level); }
+    virtual void report(const std::string& message, int level) override { _parent.report(_prefix.empty() ? message : _prefix + message, level); }
     virtual void report_param(const std::string& name, const std::string& value) override { Logging::report_param(name, value); _parent.report_param(name, value); }
     virtual void report_param(const std::string& name, int value) override { Logging::report_param(name, value); _parent.report_param(name, value); }
     virtual void report_param(const std::string& name, double value) override { Logging::report_param(name, value); _parent.report_param(name, value); }

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <functional>
 #include <stdlib.h>
+#include <map>
 #include "gwnum.h"
 #include "cpuid.h"
 #include "inputnum.h"
@@ -1092,6 +1093,56 @@ std::vector<int> InputNum::factorize_minus1(int depth)
     }
 
     return divisors;
+}
+
+void InputNum::factorize_f_p()
+{
+    if (_type != FACTORIAL && _type != PRIMORIAL)
+        return;
+    std::map<uint32_t, int> factors;
+    for (auto& f : _factors)
+        if (f.first.size() == 1)
+            factors[*f.first.data()] = f.second;
+
+    if (_type == FACTORIAL)
+    {
+        uint32_t i = _n%_multifactorial;
+        while (i < 2)
+            i += _multifactorial;
+        for (; i <= _n; i += _multifactorial)
+        {
+            uint32_t j = i;
+            for (auto it = PrimeIterator::get(); (*it)*(*it) <= (int)j; it++)
+                if (j%(*it) == 0)
+                {
+                    int& power = factors[*it];
+                    do
+                    {
+                        power++;
+                        j /= *it;
+                    } while (j%(*it) == 0);
+                }
+            if (j != 1)
+                factors[j]++;
+        }
+    }
+    if (_type == PRIMORIAL)
+    {
+        for (auto it = PrimeIterator::get(); *it <= (int)_n; it++)
+            factors[*it]++;
+    }
+
+    Giant tmp;
+    std::vector<std::pair<Giant, int>> new_factors;
+    for (auto& f : factors)
+    {
+        tmp = f.first;
+        new_factors.emplace_back(std::move(tmp), f.second);
+    }
+    for (auto& f : _factors)
+        if (f.first.size() > 1)
+            new_factors.emplace_back(std::move(f.first), f.second);
+    _factors = std::move(new_factors);
 }
 
 void InputNum::print_info()
