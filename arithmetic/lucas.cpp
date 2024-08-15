@@ -147,8 +147,33 @@ namespace arithmetic
 
     void LucasUVArithmetic::init_small(int index, LucasUV& res)
     {
-        if (abs(index) >= _UV_small.size())
+        if (!_D && abs(index) >= _UV_small.size())
             throw ArithmeticException();
+        if (_D && abs(index) > 1)
+            throw ArithmeticException();
+
+        if (index == 0)
+        {
+            init(res);
+            return;
+        }
+        if (_D)
+        {
+            if (!_half)
+            {
+                _half.reset(new GWNum(gw()));
+                *_half = ((gw().N() + 1) >> 1);
+            }
+            if (index > 0 || negativeQ())
+                res.U() = *_half;
+            else
+                res.U() = ((gw().N() - 1) >> 1);
+            gw().setmulbyconst(-1);
+            gw().mul(*_P, *_half, res.V(), GWMUL_FFT_S1 | GWMUL_FFT_S2 | GWMUL_STARTNEXTFFT | (index < 0 && negativeQ() ? GWMUL_MULBYCONST : 0));
+            res._DU.reset();
+            res._parity = true;
+            return;
+        }
 
         int U = _UV_small[abs(index)].U;
         int V = _UV_small[abs(index)].V;
@@ -191,22 +216,27 @@ namespace arithmetic
 
     void LucasUVArithmetic::init(LucasV& Vn, LucasV& Vn1, LucasUV& res)
     {
-        if (_UV_small.size() <= 1)
-            throw ArithmeticException();
-
         if (!_half)
         {
             _half.reset(new GWNum(gw()));
             *_half = ((gw().N() + 1) >> 1);
         }
-        gw().mul(Vn.V(), *_half, res.V(), GWMUL_FFT_S2);
+        gw().mul(Vn.V(), *_half, res.V(), GWMUL_FFT_S2 | GWMUL_STARTNEXTFFT_IF(_D));
 
         if (!res._DU)
             res._DU.reset(new GWNum(gw()));
-        *res._DU = res.V();
-        gwsmallmul(gw().gwdata(), _UV_small[1].V, **res._DU);
-        gw().unfft(Vn1.V(), Vn1.V());
-        gw().sub(Vn1.V(), *res._DU, *res._DU, GWADD_FORCE_NORMALIZE);
+        if (!_D)
+        {
+            *res._DU = res.V();
+            gwsmallmul(gw().gwdata(), _UV_small[1].V, **res._DU);
+            gw().unfft(Vn1.V(), Vn1.V());
+            gw().sub(Vn1.V(), *res._DU, *res._DU, GWADD_FORCE_NORMALIZE);
+        }
+        else
+        {
+            gw().setmulbyconst(-1);
+            gw().mulsub(res.V(), *_P, Vn1.V(), *res._DU, GWMUL_FFT_S2 | GWMUL_MULBYCONST | GWMUL_STARTNEXTFFT);
+        }
 
         if (!_invD)
         {
@@ -321,8 +351,16 @@ namespace arithmetic
 
     void LucasUVArithmetic::dbl_add_small(LucasUV& a, int index, LucasUV& res, int options)
     {
-        if (abs(index) >= _UV_small.size())
+        if (!_D && abs(index) >= _UV_small.size())
             throw ArithmeticException();
+        if (_D && abs(index) > 1)
+            throw ArithmeticException();
+
+        if (index == 0)
+        {
+            dbl(a, res, options);
+            return;
+        }
 
         gw().mul(a.V(), a.U(), res.U(), GWMUL_FFT_S1 | GWMUL_FFT_S2);
         if (!_half_fma)
@@ -340,38 +378,70 @@ namespace arithmetic
         else
             gw().mulsub(a.V(), a.V(), dynamic_cast<CarefulGWArithmetic*>(_gw) != nullptr ? *_half : *_half_fma, res.V(), 0);
 
-        if (!_tmp)
-            _tmp.reset(new GWNum(gw()));
-        *_tmp = res.U();
-        if (!_tmp2)
-            _tmp2.reset(new GWNum(gw()));
-        *_tmp2 = res.V();
-        gwsmallmul(gw().gwdata(), _UV_small[abs(index)].V, *res.U());
-        gwsmallmul(gw().gwdata(), _UV_small[abs(index)].U, **_tmp2);
-        gwsmallmul(gw().gwdata(), _UV_small[abs(index)].V, *res.V());
-        gwsmallmul(gw().gwdata(), _UV_small[abs(index)].DU, **_tmp);
-
-        if (index < 0 && negativeQ() && (index & 1))
-            gw().sub(*_tmp2, res.U(), res.U(), GWADD_FORCE_NORMALIZE);
-        else if (index < 0)
-            gw().sub(res.U(), *_tmp2, res.U(), GWADD_FORCE_NORMALIZE);
-        else
-            gw().add(res.U(), *_tmp2, res.U(), GWADD_FORCE_NORMALIZE);
-
-        if (options & LUCASADD_OPTIMIZE)
+        if (!_D)
         {
-            std::swap(_tmp2, res._DU);
-            force_optimize(res);
+            if (!_tmp)
+                _tmp.reset(new GWNum(gw()));
+            *_tmp = res.U();
+            if (!_tmp2)
+                _tmp2.reset(new GWNum(gw()));
+            *_tmp2 = res.V();
+            gwsmallmul(gw().gwdata(), _UV_small[abs(index)].V, *res.U());
+            gwsmallmul(gw().gwdata(), _UV_small[abs(index)].U, **_tmp2);
+            gwsmallmul(gw().gwdata(), _UV_small[abs(index)].V, *res.V());
+            gwsmallmul(gw().gwdata(), _UV_small[abs(index)].DU, **_tmp);
+
+            if (index < 0 && negativeQ() && (index & 1))
+                gw().sub(*_tmp2, res.U(), res.U(), GWADD_FORCE_NORMALIZE);
+            else if (index < 0)
+                gw().sub(res.U(), *_tmp2, res.U(), GWADD_FORCE_NORMALIZE);
+            else
+                gw().add(res.U(), *_tmp2, res.U(), GWADD_FORCE_NORMALIZE);
+
+            if (options & LUCASADD_OPTIMIZE)
+            {
+                std::swap(_tmp2, res._DU);
+                force_optimize(res);
+            }
+            else
+                res._DU.reset();
+
+            if (index < 0 && negativeQ() && (index & 1))
+                gw().sub(*_tmp, res.V(), res.V(), GWADD_FORCE_NORMALIZE);
+            else if (index < 0)
+                gw().sub(res.V(), *_tmp, res.V(), GWADD_FORCE_NORMALIZE);
+            else
+                gw().add(res.V(), *_tmp, res.V(), GWADD_FORCE_NORMALIZE);
         }
         else
-            res._DU.reset();
+        {
+            int optionsU = (options & LUCASADD_OPTIMIZE) ? (options | GWMUL_STARTNEXTFFT) : options;
+            if (!_tmp)
+                _tmp.reset(new GWNum(gw()));
+            std::swap(_tmp, res._U);
 
-        if (index < 0 && negativeQ() && (index & 1))
-            gw().sub(*_tmp, res.V(), res.V(), GWADD_FORCE_NORMALIZE);
-        else if (index < 0)
-            gw().sub(res.V(), *_tmp, res.V(), GWADD_FORCE_NORMALIZE);
-        else
-            gw().add(res.V(), *_tmp, res.V(), GWADD_FORCE_NORMALIZE);
+            if (index < 0 && negativeQ() && (index & 1))
+            {
+                gw().setmulbyconst(-1);
+                gw().mulsub(*_tmp, *_P, res.V(), res.U(), GWMUL_FFT_S1 | GWMUL_FFT_S2 | GWMUL_FFT_S3 | GWMUL_MULBYCONST | optionsU);
+            }
+            else if (index < 0)
+                gw().mulsub(*_tmp, *_P, res.V(), res.U(), GWMUL_FFT_S1 | GWMUL_FFT_S2 | GWMUL_FFT_S3 | optionsU);
+            else
+                gw().muladd(*_tmp, *_P, res.V(), res.U(), GWMUL_FFT_S1 | GWMUL_FFT_S2 | GWMUL_FFT_S3 | optionsU);
+
+            if (options & LUCASADD_OPTIMIZE)
+                force_optimize(res);
+            else
+                res._DU.reset();
+
+            if (index < 0 && negativeQ() && (index & 1))
+                gw().mulmulsub(*_tmp, *_D, res.V(), *_P, res.V(), options);
+            else if (index < 0)
+                gw().mulmulsub(res.V(), *_P, *_tmp, *_D, res.V(), options);
+            else
+                gw().mulmuladd(res.V(), *_P, *_tmp, *_D, res.V(), options);
+        }
 
         res._parity = (index & 1);
     }

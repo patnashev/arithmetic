@@ -115,17 +115,25 @@ namespace arithmetic
         static const int LUCASADD_NEGATIVE = 0x200000;
 
     public:
-        LucasUVArithmetic(GWArithmetic& gw, int P, bool negativeQ = false) : _gw(&gw), _negativeQ(negativeQ)
+        LucasUVArithmetic(GWArithmetic& gw, bool negativeQ = false) : _gw(&gw), _negativeQ(negativeQ)
         {
-            if (P < (GWSMALLMUL_MAX - 4)/P)
+        }
+        // necessary for init_small(), init(Vn, Vn1, res), add(), dbl_add_small()
+        template<class T>
+        LucasUVArithmetic(GWArithmetic& gw, T&& P, bool negativeQ = false) : _gw(&gw), _negativeQ(negativeQ)
+        {
+            Giant gP;
+            gP = P;
+            int intP = (gP.size() == 1 ? (int)*gP.data() : 0);
+            if (intP > 0 && intP < (GWSMALLMUL_MAX - 4)/intP)
             {
-                int D = P*P - (negativeQ ? -4 : 4);
+                int D = intP*intP - (negativeQ ? -4 : 4);
                 _UV_small.emplace_back(0, 2, 0);
-                _UV_small.emplace_back(1, P, D);
+                _UV_small.emplace_back(1, intP, D);
                 while (true)
                 {
-                    int U = (_UV_small.back().V + P*_UV_small.back().U)/2;
-                    int V = (P*_UV_small.back().V + D*_UV_small.back().U)/2;
+                    int U = (_UV_small.back().V + intP*_UV_small.back().U)/2;
+                    int V = (intP*_UV_small.back().V + D*_UV_small.back().U)/2;
                     if (U > GWSMALLMUL_MAX/D)
                         break;
                     _UV_small.emplace_back(U, V, D*U);
@@ -133,19 +141,13 @@ namespace arithmetic
             }
             else
             {
-                Giant tmp;
-                tmp = P;
-                tmp *= P;
-                tmp -= (negativeQ ? -4 : 4);
+                _P.reset(new GWNum(gw));
+                *_P = std::forward<T>(P);
                 _D.reset(new GWNum(gw));
-                *_D = tmp;
+                gw.carefully().setaddin(negativeQ ? 4 : -4);
+                gw.carefully().square(*_P, *_D, GWMUL_ADDINCONST);
             }
             
-        }
-        template<class T>
-        LucasUVArithmetic(GWArithmetic& gw, T&& D, bool negativeQ = false) : _gw(&gw), _D(new GWNum(gw)), _negativeQ(negativeQ)
-        {
-            *_D = std::forward<T>(D);
         }
         virtual ~LucasUVArithmetic() { }
 
@@ -171,13 +173,14 @@ namespace arithmetic
         GWArithmetic& gw() { return *_gw; }
         void set_gw(GWArithmetic& gw) { _gw = &gw; }
         bool negativeQ() { return _negativeQ; }
-        int max_small() { if (_D) return 0; return (int)_UV_small.size() - 1; }
+        int max_small() { if (_D) return 1; return (int)_UV_small.size() - 1; }
 
     private:
         void force_optimize(LucasUV& a);
 
     private:
         GWArithmetic* _gw;
+        std::unique_ptr<GWNum> _P;
         std::unique_ptr<GWNum> _D;
         std::unique_ptr<GWNum> _invD;
         std::unique_ptr<GWNum> _half;
