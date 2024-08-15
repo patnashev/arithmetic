@@ -194,7 +194,7 @@ namespace container
             }
             else
                 res += *buffer;
-        return std::move(res);
+        return res;
     }
 
     bool JSON::Node::parse(const char*& buffer, size_t& count)
@@ -1614,7 +1614,7 @@ namespace container
         int64_t length() override { return _file->size; }
         int64_t position() override { return _pos; }
 
-        void set_position(int64_t value)
+        void set_position(int64_t value) override
         {
             if (value < _pos)
                 throw std::out_of_range("Invalid position.");
@@ -1633,7 +1633,7 @@ namespace container
             _pos += _reader.position() - pos;
         }
 
-        size_t read(char* buffer, size_t count)
+        size_t read(char* buffer, size_t count) override
         {
             if (_pos >= _file->size)
                 return 0;
