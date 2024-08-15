@@ -16,6 +16,11 @@ public:
     static const int FACTORIAL = 3;
     static const int PRIMORIAL = 4;
 
+    static const int ALGEBRAIC_SIMPLE = 0;
+    static const int ALGEBRAIC_CYCLOTOMIC = 1; //     X^3 -+ 1 = (X^2 +- X + 1)(X -+ 1)
+    static const int ALGEBRAIC_QUAD = 2;       //  1/4 X^4 + 1 = (1/2 X^2 + X + 1)(1/2 X^2 - X + 1)
+    static const int ALGEBRAIC_HEX = 3;        // 1/27 x^6 + 1 = (1/3 X^2 + X + 1)(1/3 X^2 - X + 1)(1/3 X^2 + 1)
+
 public:
     InputNum() { _gk = 0; _gb = 0; _gd = 1; }
     InputNum(int k, int b, int n, int c) { init(k, b, n, c); }
@@ -23,9 +28,9 @@ public:
     InputNum(T&& b) { _type = GENERIC; _gk = 1; _gb = std::forward<T>(b); _n = 0; _gd = 1; _c = 0; process(); }
 
     template<class TK, class TB>
-    void init(TK&& k, TB&& b, int n, int c) { _type = KBNC; _gk = std::forward<TK>(k); _gb = std::forward<TB>(b); _n = n; _gd = 1; _c = c; _custom_k.clear(); _custom_b.clear(); _custom_d.clear(); _cyclotomic_k = 0; _hex_k = 0; process(); }
+    void init(TK&& k, TB&& b, int n, int c) { _type = KBNC; _gk = std::forward<TK>(k); _gb = std::forward<TB>(b); _n = n; _gd = 1; _c = c; _custom_k.clear(); _custom_b.clear(); _custom_d.clear(); _algebraic_type = ALGEBRAIC_SIMPLE; _algebraic_k = 0; process(); }
     template<class T>
-    void init(T&& b) { _type = GENERIC; _gk = 1; _gb = std::forward<T>(b); _n = 0; _gd = 1; _c = 0; _custom_k.clear(); _custom_b.clear(); _custom_d.clear(); _cyclotomic_k = 0; _hex_k = 0; process(); }
+    void init(T&& b) { _type = GENERIC; _gk = 1; _gb = std::forward<T>(b); _n = 0; _gd = 1; _c = 0; _custom_k.clear(); _custom_b.clear(); _custom_d.clear(); _algebraic_type = ALGEBRAIC_SIMPLE; _algebraic_k = 0; process(); }
     bool read(File& file);
     void write(File& file);
     bool parse(const std::string& s, bool c_required = true);
@@ -47,8 +52,8 @@ public:
     arithmetic::Giant& gd() { return _gd; }
     int gfn() { return _gfn; }
     int multifactorial() { return _multifactorial; }
-    int cyclotomic() { return _cyclotomic_k; }
-    int hex() { return _hex_k; }
+    int algebraic_type() { return _algebraic_type; }
+    int algebraic_k() { return _algebraic_k; }
     arithmetic::Giant value() { return _type == GENERIC ? _gb : _type != KBNC ? _gk*_gb/_gd + _c : _gk*power(_gb, _n)/_gd + _c; }
     uint32_t mod(uint32_t modulus);
     uint32_t fingerprint() { return mod(3417905339UL); }
@@ -89,6 +94,6 @@ private:
     std::string _custom_d;
     int _gfn = 0;
     int _multifactorial = 0;
-    int32_t _cyclotomic_k = 0;
-    int32_t _hex_k = 0;
+    int _algebraic_type = ALGEBRAIC_SIMPLE;
+    int32_t _algebraic_k = 0;
 };

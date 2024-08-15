@@ -168,8 +168,8 @@ bool InputNum::parse(const std::string& s, bool c_required)
     std::string custom_b;
     std::string custom_d;
     int multifactorial = 0;
-    int32_t cyclotomic_k = 0;
-    int32_t hex_k = 0;
+    int algebraic_type = ALGEBRAIC_SIMPLE;
+    int32_t algebraic_k = 0;
 
     for (it = s.begin(); it != s.end() && std::isspace(*it); it++);
     if (it != s.end() && *it == '\"')
@@ -216,7 +216,64 @@ bool InputNum::parse(const std::string& s, bool c_required)
             gd = recursive.gd();
             custom_d = recursive._custom_d;
             c = 1;
-            cyclotomic_k = (cyclotomic == 6 ? -1 : 1)*(recursive.k() > 0 && recursive.k() < 1000 && recursive.d() == 1 ? recursive.k() : 0);
+            if (recursive.k() > 0 && recursive.k() < 1000 && recursive.d() == 1)
+            {
+                algebraic_type = ALGEBRAIC_CYCLOTOMIC;
+                algebraic_k = (cyclotomic == 6 ? -1 : 1)*(int32_t)recursive.k();
+            }
+        }
+        else if (f == "Quad" && args.size() == 1)
+        {
+            bool neg = false;
+            if (!args[0].empty() && args[0][0] == '-')
+            {
+                neg = true;
+                args[0] = args[0].substr(1);
+            }
+            InputNum recursive;
+            if (!recursive.parse(args[0] + "+1"))
+                return false;
+            type = recursive.type();
+            gk = recursive.value();
+            gk -= 1;
+            if (gk%2 != 0)
+                return false;
+            gk /= 2;
+            recursive._c = (neg ? -1 : 1);
+            gk += recursive._c;
+            if (recursive.k() != 1)
+            {
+                gk *= recursive.gk();
+                custom_k = "*" + recursive.gk().to_string();
+            }
+            gb = recursive.gb();
+            custom_b = recursive._custom_b;
+            n = recursive._n;
+            multifactorial = recursive._multifactorial;
+            gd = recursive.gd();
+            custom_d = recursive._custom_d;
+            c = 1;
+            if (recursive.k() > 0 && recursive.k() < 100 && recursive.d() == 1)
+            {
+                algebraic_type = ALGEBRAIC_QUAD;
+                algebraic_k = (int32_t)recursive.k()*recursive._c;
+            }
+            if (type == KBNC)
+            {
+                if (recursive.gk()%2 == 0)
+                    recursive.gk() /= 2;
+                else
+                {
+                    recursive.gk() *= recursive.gb()/2;
+                    recursive._n--;
+                }
+                custom_k = "(" + recursive.build_text() + ")" + custom_k;
+            }
+            else if (type == FACTORIAL || type == PRIMORIAL)
+            {
+                std::string st = recursive.build_text();
+                custom_k = "(" + st.substr(0, st.size() - 2) + "/2" + st.substr(st.size() - 2) + ")" + custom_k;
+            }
         }
         else if (f == "Hex" && args.size() == 1)
         {
@@ -249,7 +306,11 @@ bool InputNum::parse(const std::string& s, bool c_required)
             gd = recursive.gd();
             custom_d = recursive._custom_d;
             c = 1;
-            hex_k = (recursive.k() > 0 && recursive.k() < 32 && recursive.d() == 1 ? recursive.k() : 0)*recursive._c;
+            if (recursive.k() > 0 && recursive.k() < 32 && recursive.d() == 1)
+            {
+                algebraic_type = ALGEBRAIC_HEX;
+                algebraic_k = (int32_t)recursive.k()*recursive._c;
+            }
             if (type == KBNC)
             {
                 if (recursive.gk()%3 == 0)
@@ -267,7 +328,8 @@ bool InputNum::parse(const std::string& s, bool c_required)
                 custom_k = "(" + st.substr(0, st.size() - 2) + "/3" + st.substr(st.size() - 2) + ")" + custom_k;
             }
             // Montgomery reduction is faster than k^6/27 * b^6n + 1
-            //hex_k = 0;
+            //algebraic_type = ALGEBRAIC_SIMPLE;
+            //algebraic_k = 0;
         }
         else
             return false;
@@ -455,8 +517,8 @@ bool InputNum::parse(const std::string& s, bool c_required)
     _custom_b = std::move(custom_b);
     _custom_d = std::move(custom_d);
     _multifactorial = multifactorial;
-    _cyclotomic_k = cyclotomic_k;
-    _hex_k = hex_k;
+    _algebraic_type = algebraic_type;
+    _algebraic_k = algebraic_k;
     process();
     return true;
 }
@@ -725,7 +787,7 @@ void InputNum::process()
         }
     }
 
-    if (_type == KBNC && _c == 1 && _gd == 1 && _cyclotomic_k == 0 && _hex_k == 0)
+    if (_type == KBNC && _c == 1 && _gd == 1 && _algebraic_type == ALGEBRAIC_SIMPLE)
     {
         if (_gk == 1 && _n > 1 && (_n & (_n - 1)) == 0)
             for (_gfn = 1; (1UL << _gfn) < _n; _gfn++);
@@ -735,17 +797,44 @@ void InputNum::process()
             tmp.power(_n);
             Giant cyclo_tmp = tmp - _gk;
             if (cyclo_tmp == 1)
-                _cyclotomic_k = -1;
-            if (cyclo_tmp == -1)
-                _cyclotomic_k = 1;
-            if (_gb%3 == 0)
+            {
+                _algebraic_type = ALGEBRAIC_CYCLOTOMIC;
+                _algebraic_k = -1;
+            }
+            else if (cyclo_tmp == -1)
+            {
+                _algebraic_type = ALGEBRAIC_CYCLOTOMIC;
+                _algebraic_k = 1;
+            }
+            else if (_gb%2 == 0)
+            {
+                tmp /= 2;
+                tmp -= _gk;
+                if (tmp == 1)
+                {
+                    _algebraic_type = ALGEBRAIC_QUAD;
+                    _algebraic_k = -1;
+                }
+                if (tmp == -1)
+                {
+                    _algebraic_type = ALGEBRAIC_QUAD;
+                    _algebraic_k = 1;
+                }
+            }
+            else if (_gb%3 == 0)
             {
                 tmp /= 3;
                 tmp -= _gk;
                 if (tmp == 1)
-                    _hex_k = -1;
+                {
+                    _algebraic_type = ALGEBRAIC_HEX;
+                    _algebraic_k = -1;
+                }
                 if (tmp == -1)
-                    _hex_k = 1;
+                {
+                    _algebraic_type = ALGEBRAIC_HEX;
+                    _algebraic_k = 1;
+                }
             }
         }
     }
@@ -823,7 +912,7 @@ void InputNum::process()
             }
         }
 
-        while (_gk%_gb == 0 && _cyclotomic_k == 0 && _hex_k == 0)
+        while (_gk%_gb == 0 && _algebraic_type == ALGEBRAIC_SIMPLE)
         {
             _gk /= _gb;
             _n++;
@@ -917,24 +1006,37 @@ void InputNum::setup(GWState& state)
     {
         state.setup(_gk*_gb/_gd + _c);
     }
-    else if ((_cyclotomic_k != 0 || _hex_k != 0) && b() != 0 && !state.force_mod_type)
+    else if (_algebraic_type != ALGEBRAIC_SIMPLE && b() != 0 && !state.force_mod_type)
     {
-        if (_cyclotomic_k != 0)
+        if (_algebraic_type == ALGEBRAIC_CYCLOTOMIC)
         {
-            uint32_t k = (uint32_t)abs(_cyclotomic_k);
-            state.known_factors = k*power(_gb, _n) + (_cyclotomic_k < 0 ? 1 : -1);
-            state.setup(k*k*k, b(), 3*_n, _cyclotomic_k < 0 ? 1 : -1);
+            uint32_t k = (uint32_t)abs(_algebraic_k);
+            state.known_factors = k*power(_gb, _n) + (_algebraic_k < 0 ? 1 : -1);
+            state.setup(k*k*k, b(), 3*_n, _algebraic_k < 0 ? 1 : -1);
         }
-        if (_hex_k != 0)
+        if (_algebraic_type == ALGEBRAIC_QUAD)
         {
-            Giant x = (-_hex_k)*power(_gb, _n);
+            Giant x = (-_algebraic_k)*power(_gb, _n);
+            x <<= 1;
+            state.known_factors = value() + x;
+            uint64_t k_squared = (uint64_t)(_algebraic_k*_algebraic_k);
+            if (k_squared%2 == 0)
+                state.setup(k_squared*k_squared/4, b(), 4*_n, 1);
+            else if (b()%4 == 0)
+                state.setup(k_squared*k_squared*b()/4, b(), 4*_n - 1, 1);
+            else
+                state.setup(k_squared*k_squared*b()*b()/4, b(), 4*_n - 2, 1);
+        }
+        if (_algebraic_type == ALGEBRAIC_HEX)
+        {
+            Giant x = (-_algebraic_k)*power(_gb, _n);
             Giant val = value() + x;
             state.known_factors = (val + std::move(x))*val;
-            uint64_t hex_k = (uint64_t)(_hex_k*_hex_k);
-            if (hex_k%3 == 0)
-                state.setup(hex_k*hex_k*hex_k/27, b(), 6*_n, 1);
+            uint64_t k_squared = (uint64_t)(_algebraic_k*_algebraic_k);
+            if (k_squared%3 == 0)
+                state.setup(k_squared*k_squared*k_squared/27, b(), 6*_n, 1);
             else
-                state.setup(hex_k*hex_k*hex_k*b()*b()*b()/27, b(), 6*_n - 3, 1);
+                state.setup(k_squared*k_squared*k_squared*b()*b()*b()/27, b(), 6*_n - 3, 1);
         }
         if (*state.N%3417905339UL != fingerprint())
             throw ArithmeticException();
@@ -942,8 +1044,8 @@ void InputNum::setup(GWState& state)
         {
             state.done();
             state.known_factors = 1;
-            _cyclotomic_k = 0;
-            _hex_k = 0;
+            _algebraic_type = ALGEBRAIC_SIMPLE;
+            _algebraic_k = 0;
             setup(state);
         }
         return;
@@ -1264,12 +1366,12 @@ void InputNum::print_info()
             }
         }
     }
-    if (_type == KBNC && abs(_cyclotomic_k) == 1)
+    if (_type == KBNC && _algebraic_type == ALGEBRAIC_CYCLOTOMIC && abs(_algebraic_k) == 1)
     {
         uint32_t d = _n;
         while (d%3 == 0)
             d /= 3;
-        if (_cyclotomic_k < 0)
+        if (_algebraic_k < 0)
             while (!(d & 1))
                 d >>= 1;
 
@@ -1287,7 +1389,7 @@ void InputNum::print_info()
             }
             else
                 st = sb;
-            st += "^" + std::to_string(2*d) + (_cyclotomic_k > 0 ? "+" : "-") + sb + (d > 1 ? "^" + std::to_string(d) : "") + "+1";
+            st += "^" + std::to_string(2*d) + (_algebraic_k > 0 ? "+" : "-") + sb + (d > 1 ? "^" + std::to_string(d) : "") + "+1";
             std::cout << "Algebraic factor: " << st << std::endl;
         }
     }
