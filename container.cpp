@@ -281,8 +281,7 @@ namespace container
         else
         {
             size_t len;
-            for (len = 0; len < count && !std::isspace(buffer[len]) && buffer[len] != ',' && buffer[len] != ']' && buffer[len] != '}'; len++)
-                ;
+            for (len = 0; len < count && !std::isspace(buffer[len]) && buffer[len] != ',' && buffer[len] != ']' && buffer[len] != '}'; len++);
             if (len == 0)
                 return false;
             if (len == 4 && strncmp(buffer, "null", 4) == 0)
@@ -324,8 +323,7 @@ namespace container
             buffer++, count--;
         if (count == 0 || count > 18)
             return false;
-        for (; count > 0 && std::isdigit(*buffer); buffer++, count--)
-            ;
+        for (; count > 0 && std::isdigit(*buffer); buffer++, count--);
         return count == 0;
     }
 
@@ -340,12 +338,10 @@ namespace container
             buffer++, count--;
         if (count == 0)
             return false;
-        for (; count > 0 && std::isdigit(*buffer); buffer++, count--)
-            ;
+        for (; count > 0 && std::isdigit(*buffer); buffer++, count--);
         if (count > 0 && *buffer == '.')
             buffer++, count--;
-        for (; count > 0 && std::isdigit(*buffer); buffer++, count--)
-            ;
+        for (; count > 0 && std::isdigit(*buffer); buffer++, count--);
         if (count > 0 && (*buffer == 'e' || *buffer == 'E'))
         {
             buffer++, count--;
@@ -355,8 +351,7 @@ namespace container
                 buffer++, count--;
             if (count == 0)
                 return false;
-            for (; count > 0 && std::isdigit(*buffer); buffer++, count--)
-                ;
+            for (; count > 0 && std::isdigit(*buffer); buffer++, count--);
         }
         return count == 0;
     }
@@ -1576,8 +1571,7 @@ namespace container
         if (begin == chunks.end())
             return;
         auto end = begin;
-        for (end++; end != chunks.end() && (!end->codec || end->codec->root().is_null()); end++)
-            ;
+        for (end++; end != chunks.end() && (!end->codec || end->codec->root().is_null()); end++);
         _streams.emplace_back(new RawReadStream(*_container._stream, begin, end));
         if (begin->codec && (begin->codec->root().is_string() || begin->codec->root().is_object()))
             add_codec(begin->codec->root());

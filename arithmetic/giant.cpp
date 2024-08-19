@@ -657,7 +657,17 @@ namespace arithmetic
     }
 
 #ifdef GMP
+#ifdef GMP_EMPTY
 #define mpz(x) ((mpz_ptr)&(x)._capacity)
+#else
+    mpz_ptr get_mpz(Giant& a, giant_struct& g)
+    {
+        if (g._data == nullptr)
+            a.arithmetic().alloc(a, 1);
+        return ((mpz_ptr)&g._capacity);
+    }
+#define mpz(x) get_mpz((Giant&)x, (giant_struct&)x)
+#endif
 
     void* realloc_func(void* block, size_t old_size, size_t size) { return realloc(block, size); }
     void free_func(void* block, size_t) { free(block); }
