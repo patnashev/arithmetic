@@ -94,7 +94,7 @@ public:
     std::vector<std::unique_ptr<File>>& children() { return _children; }
 
     bool read(TaskState& state);
-    void write(TaskState& state);
+    bool write(TaskState& state);
     void write_text(const std::string& value);
     void write_textline(const std::string& value);
 

@@ -307,7 +307,7 @@ void File::commit_writer(Writer& writer)
     if (!writeThrough(new_filename.data(), writer.buffer().data(), writer.buffer().size()))
     {
         remove(new_filename.data());
-        return;
+        throw std::runtime_error("File write failed.");
     }
     remove(_filename.data());
     rename(new_filename.data(), _filename.data());
@@ -351,12 +351,20 @@ bool File::read(TaskState& state)
     return true;
 }
 
-void File::write(TaskState& state)
+bool File::write(TaskState& state)
 {
-    std::unique_ptr<Writer> writer(get_writer(state.type(), state.version()));
-    state.write(*writer);
-    commit_writer(*writer);
+    try
+    {
+        std::unique_ptr<Writer> writer(get_writer(state.type(), state.version()));
+        state.write(*writer);
+        commit_writer(*writer);
+    }
+    catch (const std::exception&)
+    {
+        return false;
+    }
     state.set_written();
+    return true;
 }
 
 void File::write_text(const std::string& value)
@@ -414,14 +422,8 @@ public:
         }
         catch (const std::exception&)
         {
-            _stream = nullptr;
-            try
-            {
-                _packer.reset();
-            }
-            catch (const std::exception&)
-            {
-            }
+            cleanup();
+            throw;
         }
     }
     ~FilePackedWriter() { close(); }
@@ -437,6 +439,7 @@ public:
         catch (const std::exception&)
         {
             close();
+            throw;
         }
     }
 
@@ -451,7 +454,16 @@ public:
         }
         catch (const std::exception&)
         {
+            cleanup();
+            throw;
         }
+        cleanup();
+    }
+
+private:
+    void cleanup()
+    {
+        _stream = nullptr;
         try
         {
             _packer.reset();
@@ -459,7 +471,6 @@ public:
         catch (const std::exception&)
         {
         }
-        _stream = nullptr;
     }
 
 private:

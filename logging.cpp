@@ -201,13 +201,19 @@ void Logging::progress_save()
     if (_file_progress == nullptr)
         return;
     report_param("time_total", progress().time_total());
-    std::unique_ptr<Writer> writer(_file_progress->get_writer());
-    for (auto& pair : progress().params())
-        if (!pair.second.empty())
-        {
-            writer->write_text(pair.first);
-            writer->write_text("=");
-            writer->write_textline(pair.second);
-        }
-    _file_progress->commit_writer(*writer);
+    try
+    {
+        std::unique_ptr<Writer> writer(_file_progress->get_writer());
+        for (auto& pair : progress().params())
+            if (!pair.second.empty())
+            {
+                writer->write_text(pair.first);
+                writer->write_text("=");
+                writer->write_textline(pair.second);
+            }
+        _file_progress->commit_writer(*writer);
+    }
+    catch (const std::exception&)
+    {
+    }
 }

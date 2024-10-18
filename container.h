@@ -481,7 +481,7 @@ namespace container
 
         std::map<int64_t, ChunkStream> _streams;
         int64_t _next_stream_id = 1;
-        int64_t _last_pos;
+        int64_t _last_pos = 0;
 
         std::unique_ptr<Reader> _cur_reader;
         FileDesc* _cur_file = nullptr;
