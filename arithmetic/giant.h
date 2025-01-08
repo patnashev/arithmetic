@@ -22,6 +22,8 @@ namespace arithmetic
         virtual void move(Giant&& a, Giant& res) override;
         virtual void init(int32_t a, Giant& res) override;
         virtual void init(uint32_t a, Giant& res);
+        virtual void init(int64_t a, Giant& res);
+        virtual void init(uint64_t a, Giant& res);
         virtual void init(const std::string& a, Giant& res) override;
         virtual void init(uint32_t* data, int size, Giant& res);
         virtual void init(const GWNum& a, Giant& res);
@@ -38,8 +40,14 @@ namespace arithmetic
         virtual size_t digits(const Giant& a, int base);
         virtual void add(Giant& a, Giant& b, Giant& res) override;
         virtual void add(Giant& a, int32_t b, Giant& res) override;
+        virtual void add(Giant& a, uint32_t b, Giant& res);
+        virtual void add(Giant& a, int64_t b, Giant& res);
+        virtual void add(Giant& a, uint64_t b, Giant& res);
         virtual void sub(Giant& a, Giant& b, Giant& res) override;
         virtual void sub(Giant& a, int32_t b, Giant& res) override;
+        virtual void sub(Giant& a, uint32_t b, Giant& res);
+        virtual void sub(Giant& a, int64_t b, Giant& res);
+        virtual void sub(Giant& a, uint64_t b, Giant& res);
         virtual void neg(Giant& a, Giant& res) override;
         virtual void mul(Giant& a, Giant& b, Giant& res) override;
         virtual void mul(Giant& a, int32_t b, Giant& res) override;
@@ -99,6 +107,8 @@ namespace arithmetic
         virtual void move(Giant&& a, Giant& res) override;
         virtual void init(int32_t a, Giant& res) override;
         virtual void init(uint32_t a, Giant& res) override;
+        virtual void init(int64_t a, Giant& res) override;
+        virtual void init(uint64_t a, Giant& res) override;
         virtual void init(const std::string& a, Giant& res) override;
         virtual void init(uint32_t* data, int size, Giant& res) override;
         virtual void init(const GWNum& a, Giant& res) override;
@@ -113,8 +123,10 @@ namespace arithmetic
         virtual void substr(const Giant& a, int offset, int count, Giant& res) override;
         virtual void add(Giant& a, Giant& b, Giant& res) override;
         virtual void add(Giant& a, int32_t b, Giant& res) override;
+        virtual void add(Giant& a, uint32_t b, Giant& res) override;
         virtual void sub(Giant& a, Giant& b, Giant& res) override;
         virtual void sub(Giant& a, int32_t b, Giant& res) override;
+        virtual void sub(Giant& a, uint32_t b, Giant& res) override;
         virtual void neg(Giant& a, Giant& res) override;
         virtual void mul(Giant& a, Giant& b, Giant& res) override;
         virtual void mul(Giant& a, int32_t b, Giant& res) override;
@@ -222,11 +234,78 @@ namespace arithmetic
         int capacity() const;
         bool empty() const { return _data == nullptr; }
 
-        Giant& operator = (uint32_t a)
-        {
-            arithmetic().init(a, *this);
-            return *this;
+
+#define GIANT_INIT_ADD_SUB(TYPE) \
+        Giant& operator = (TYPE a)\
+        {\
+            arithmetic().init(a, *this);\
+            return *this;\
+        }\
+        Giant& operator += (TYPE a)\
+        {\
+            arithmetic().add(*this, a, *this);\
+            return *this;\
+        }\
+        friend Giant operator + (Giant& a, TYPE b)\
+        {\
+            Giant res(a.arithmetic());\
+            res.arithmetic().add(a, b, res);\
+            return res;\
+        }\
+        friend Giant operator + (TYPE a, Giant& b)\
+        {\
+            Giant res(b.arithmetic());\
+            res.arithmetic().add(b, a, res);\
+            return res;\
+        }\
+        friend Giant operator + (Giant&& a, TYPE b)\
+        {\
+            Giant res(std::move(a));\
+            res += b;\
+            return res;\
+        }\
+        friend Giant operator + (TYPE a, Giant&& b)\
+        {\
+            Giant res(std::move(b));\
+            res += a;\
+            return res;\
+        }\
+        Giant& operator -= (TYPE a)\
+        {\
+            arithmetic().sub(*this, a, *this);\
+            return *this;\
+        }\
+        friend Giant operator - (Giant& a, TYPE b)\
+        {\
+            Giant res(a.arithmetic());\
+            res.arithmetic().sub(a, b, res);\
+            return res;\
+        }\
+        friend Giant operator - (TYPE a, Giant& b)\
+        {\
+            Giant res(b.arithmetic());\
+            res.arithmetic().sub(b, a, res);\
+            return res;\
+        }\
+        friend Giant operator - (Giant&& a, TYPE b)\
+        {\
+            Giant res(std::move(a));\
+            res -= b;\
+            return res;\
+        }\
+        friend Giant operator - (TYPE a, Giant&& b)\
+        {\
+            Giant res(std::move(b));\
+            res -= a;\
+            return res;\
         }
+
+        using FieldElement<GiantsArithmetic, Giant>::operator+=;
+        using FieldElement<GiantsArithmetic, Giant>::operator-=;
+        GIANT_INIT_ADD_SUB(uint32_t)
+        GIANT_INIT_ADD_SUB(int64_t)
+        GIANT_INIT_ADD_SUB(uint64_t)
+
         Giant& operator *= (uint32_t a)
         {
             arithmetic().mul(*this, a, *this);
@@ -257,40 +336,7 @@ namespace arithmetic
             res *= a;
             return res;
         }
-        Giant& operator <<= (int a)
-        {
-            arithmetic().shiftleft(*this, a, *this);
-            return *this;
-        }
-        friend Giant operator << (Giant& a, int b)
-        {
-            Giant res(a.arithmetic());
-            res.arithmetic().shiftleft(a, b, res);
-            return res;
-        }
-        friend Giant operator << (Giant&& a, int b)
-        {
-            Giant res(std::move(a));
-            res <<= b;
-            return res;
-        }
-        Giant& operator >>= (int a)
-        {
-            arithmetic().shiftright(*this, a, *this);
-            return *this;
-        }
-        friend Giant operator >> (Giant& a, int b)
-        {
-            Giant res(a.arithmetic());
-            res.arithmetic().shiftright(a, b, res);
-            return res;
-        }
-        friend Giant operator >> (Giant&& a, int b)
-        {
-            Giant res(std::move(a));
-            res >>= b;
-            return res;
-        }
+
         Giant& operator /= (Giant&& a)
         {
             *this /= a;
@@ -334,6 +380,7 @@ namespace arithmetic
             res /= b;
             return res;
         }
+
         friend uint32_t operator % (Giant& a, uint32_t b)
         {
             uint32_t res;
@@ -344,6 +391,41 @@ namespace arithmetic
         {
             uint32_t res;
             a.arithmetic().mod(a, b, res);
+            return res;
+        }
+
+        Giant& operator <<= (int a)
+        {
+            arithmetic().shiftleft(*this, a, *this);
+            return *this;
+        }
+        friend Giant operator << (Giant& a, int b)
+        {
+            Giant res(a.arithmetic());
+            res.arithmetic().shiftleft(a, b, res);
+            return res;
+        }
+        friend Giant operator << (Giant&& a, int b)
+        {
+            Giant res(std::move(a));
+            res <<= b;
+            return res;
+        }
+        Giant& operator >>= (int a)
+        {
+            arithmetic().shiftright(*this, a, *this);
+            return *this;
+        }
+        friend Giant operator >> (Giant& a, int b)
+        {
+            Giant res(a.arithmetic());
+            res.arithmetic().shiftright(a, b, res);
+            return res;
+        }
+        friend Giant operator >> (Giant&& a, int b)
+        {
+            Giant res(std::move(a));
+            res >>= b;
             return res;
         }
         int bitlen() const { return arithmetic().bitlen(*this); }
@@ -358,7 +440,13 @@ namespace arithmetic
         {
             return a.arithmetic().log2(a); 
         }
+        friend double log2(Giant&& a)
+        {
+            return a.arithmetic().log2(a);
+        }
+
         size_t digits(int base = 10) { return arithmetic().digits(*this, base); }
+
         Giant& power(int32_t a)
         {
             arithmetic().power(*this, a, *this);
@@ -376,12 +464,14 @@ namespace arithmetic
             res.power(b);
             return res;
         }
+
         static Giant rnd(int bits)
         {
             Giant res;
             res.arithmetic().rnd(res, bits);
             return res;
         }
+
         friend int kronecker(Giant& a, Giant& b)
         {
             return a.arithmetic().kronecker(a, b);

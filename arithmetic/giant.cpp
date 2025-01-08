@@ -123,6 +123,18 @@ namespace arithmetic
         ultog(a, giant(res));
     }
 
+    void GiantsArithmetic::init(int64_t a, Giant& res)
+    {
+        alloc(res, 2);
+        slltog(a, giant(res));
+    }
+
+    void GiantsArithmetic::init(uint64_t a, Giant& res)
+    {
+        alloc(res, 2);
+        ulltog(a, giant(res));
+    }
+
     void GiantsArithmetic::init(const std::string& a, Giant& res)
     {
         alloc(res, ((int)a.length() + 8)/9);
@@ -331,6 +343,27 @@ namespace arithmetic
         sladdg(b, giant(res));
     }
 
+    void GiantsArithmetic::add(Giant& a, uint32_t b, Giant& res)
+    {
+        alloc(res, abs(a._size) + 1);
+        copy(a, res);
+        uladdg(b, giant(res));
+    }
+
+    void GiantsArithmetic::add(Giant& a, int64_t b, Giant& res)
+    {
+        Giant tmp(*this, 2);
+        init(b, tmp);
+        add(a, tmp, res);
+    }
+
+    void GiantsArithmetic::add(Giant& a, uint64_t b, Giant& res)
+    {
+        Giant tmp(*this, 2);
+        init(b, tmp);
+        add(a, tmp, res);
+    }
+
     void GiantsArithmetic::sub(Giant& a, Giant& b, Giant& res)
     {
         int capacity = abs(a._size) + 1;
@@ -346,6 +379,27 @@ namespace arithmetic
         alloc(res, abs(a._size) + 1);
         copy(a, res);
         sladdg(-b, giant(res));
+    }
+
+    void GiantsArithmetic::sub(Giant& a, uint32_t b, Giant& res)
+    {
+        alloc(res, abs(a._size) + 1);
+        copy(a, res);
+        ulsubg(b, giant(res));
+    }
+
+    void GiantsArithmetic::sub(Giant& a, int64_t b, Giant& res)
+    {
+        Giant tmp(*this, 2);
+        init(b, tmp);
+        sub(a, tmp, res);
+    }
+
+    void GiantsArithmetic::sub(Giant& a, uint64_t b, Giant& res)
+    {
+        Giant tmp(*this, 2);
+        init(b, tmp);
+        sub(a, tmp, res);
     }
 
     void GiantsArithmetic::neg(Giant& a, Giant& res)
@@ -756,6 +810,25 @@ namespace arithmetic
         mpz_set_ui(mpz(res), a);
     }
 
+    void GMPArithmetic::init(int64_t a, Giant& res)
+    {
+        alloc(res, 2);
+        if (a < 0)
+        {
+            a = -a;
+            mpz_import(mpz(res), 2, -1, 4, 0, 0, &a);
+            res._size = -res._size;
+        }
+        else
+            mpz_import(mpz(res), 2, -1, 4, 0, 0, &a);
+    }
+
+    void GMPArithmetic::init(uint64_t a, Giant& res)
+    {
+        alloc(res, 2);
+        mpz_import(mpz(res), 2, -1, 4, 0, 0, &a);
+    }
+
     void GMPArithmetic::init(const std::string& a, Giant& res)
     {
         alloc(res, ((int)a.length() + 8)/9 + 1);
@@ -888,6 +961,11 @@ namespace arithmetic
             mpz_sub_ui(mpz(res), mpz(a), -b);
     }
 
+    void GMPArithmetic::add(Giant& a, uint32_t b, Giant& res)
+    {
+        mpz_add_ui(mpz(res), mpz(a), b);
+    }
+
     void GMPArithmetic::sub(Giant& a, Giant& b, Giant& res)
     {
         mpz_sub(mpz(res), mpz(a), mpz(b));
@@ -899,6 +977,11 @@ namespace arithmetic
             mpz_add_ui(mpz(res), mpz(a), -b);
         else
             mpz_sub_ui(mpz(res), mpz(a), b);
+    }
+
+    void GMPArithmetic::sub(Giant& a, uint32_t b, Giant& res)
+    {
+        mpz_sub_ui(mpz(res), mpz(a), b);
     }
 
     void GMPArithmetic::neg(Giant& a, Giant& res)
