@@ -46,12 +46,12 @@ public:
     uint32_t b() { return _gb.size() == 1 ? *(_gb.data()) : 0; }
     uint32_t n() { return _type == GENERIC ? 1 : _n; }
     uint32_t d() { return _gd.size() == 1 ? *(_gd.data()) : 0; }
-    int32_t c() { return _c; }
+    int64_t c() { return _c; }
     arithmetic::Giant& gk() { return _gk; }
     arithmetic::Giant& gb() { return _gb; }
     arithmetic::Giant& gd() { return _gd; }
     int gfn() { return _gfn; }
-    int multifactorial() { return _multifactorial; }
+    uint32_t multifactorial() { return _multifactorial; }
     int algebraic_type() { return _algebraic_type; }
     int algebraic_k() { return _algebraic_k; }
     arithmetic::Giant value() { return _type == GENERIC ? _gb : _type != KBNC ? _gk*_gb/_gd + _c : _gk*power(_gb, _n)/_gd + _c; }
@@ -82,7 +82,7 @@ private:
     arithmetic::Giant _gb;
     uint32_t _n = 0;
     arithmetic::Giant _gd;
-    int32_t _c = 0;
+    int64_t _c = 0;
     std::vector<std::pair<arithmetic::Giant, int>> _b_factors;
     arithmetic::Giant _b_cofactor;
     std::vector<std::pair<arithmetic::Giant, int>> _factors;
@@ -93,7 +93,7 @@ private:
     std::string _custom_b;
     std::string _custom_d;
     int _gfn = 0;
-    int _multifactorial = 0;
+    uint32_t _multifactorial = 0;
     int _algebraic_type = ALGEBRAIC_SIMPLE;
     int32_t _algebraic_k = 0;
 };

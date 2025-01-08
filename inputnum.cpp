@@ -102,22 +102,36 @@ int get_prime(int n)
     return *primes;
 }
 
-template<class It, class T, typename std::enable_if_t<std::is_integral<T>::value, bool> = true>
-bool parse_digits(bool prime, const It& first, const It& last, T& value)
+template<class It>
+bool parse_digits(bool prime, const It& first, const It& last, uint32_t& value)
 {
     if (last == first || last - first > (prime ? 8 : 9))
         return false;
     if (prime)
         value = get_prime(stoi(std::string(first, last)));
     else
-        value = stoi(std::string(first, last));
+        value = stoul(std::string(first, last));
     if (value == 0)
         return false;
     return true;
 }
 
-template<class It, class T, typename std::enable_if_t<!std::is_integral<T>::value, bool> = true>
-bool parse_digits(bool prime, It& first, It& last, T& value)
+template<class It>
+bool parse_digits(bool prime, const It& first, const It& last, int64_t& value)
+{
+    if (last == first || last - first > (prime ? 8 : 18))
+        return false;
+    if (prime)
+        value = get_prime(stoi(std::string(first, last)));
+    else
+        value = stoll(std::string(first, last));
+    if (value == 0)
+        return false;
+    return true;
+}
+
+template<class It>
+bool parse_digits(bool prime, It& first, It& last, Giant& value)
 {
     if (last == first || (prime && last - first > 8))
         return false;
@@ -159,7 +173,7 @@ bool InputNum::parse(const std::string& s, bool c_required)
     int type = KBNC;
     Giant gk, gb, gd;
     uint32_t n = 0;
-    int32_t c = 0;
+    int64_t c = 0;
     Giant tmp;
     bool prime;
     std::string f;
@@ -167,7 +181,7 @@ bool InputNum::parse(const std::string& s, bool c_required)
     std::string custom_k;
     std::string custom_b;
     std::string custom_d;
-    int multifactorial = 0;
+    uint32_t multifactorial = 0;
     int algebraic_type = ALGEBRAIC_SIMPLE;
     int32_t algebraic_k = 0;
 
@@ -256,7 +270,7 @@ bool InputNum::parse(const std::string& s, bool c_required)
             if (recursive.k() > 0 && recursive.k() < 100 && recursive.d() == 1)
             {
                 algebraic_type = ALGEBRAIC_QUAD;
-                algebraic_k = (int32_t)recursive.k()*recursive._c;
+                algebraic_k = (int32_t)(recursive.k()*recursive._c);
             }
             if (type == KBNC)
             {
@@ -309,7 +323,7 @@ bool InputNum::parse(const std::string& s, bool c_required)
             if (recursive.k() > 0 && recursive.k() < 32 && recursive.d() == 1)
             {
                 algebraic_type = ALGEBRAIC_HEX;
-                algebraic_k = (int32_t)recursive.k()*recursive._c;
+                algebraic_k = (int32_t)(recursive.k()*recursive._c);
             }
             if (type == KBNC)
             {
@@ -1050,7 +1064,7 @@ void InputNum::setup(GWState& state)
         }
         return;
     }
-    else if (k() != 0 && b() != 0 && d() == 1)
+    else if (k() != 0 && b() != 0 && d() == 1 && abs(_c) < (1ULL << 30))
     {
         state.setup(k(), b(), _n, _c);
     }
@@ -1066,11 +1080,16 @@ int InputNum::bitlen()
 {
     if (_type == GENERIC)
         return _gb.bitlen();
-    else if (_type != KBNC)
-        return _gk.bitlen() + _gb.bitlen() - _gd.bitlen();
+    int res;
+    if (_type != KBNC)
+        res = _gk.bitlen() + _gb.bitlen() - _gd.bitlen();
     else if (b() == 2)
-        return _gk.bitlen() + _n - _gd.bitlen() + 1;
-    return (int)std::ceil(log2(_gk) + log2(_gb)*_n - log2(_gd));
+        res = _gk.bitlen() + _n - _gd.bitlen() + (_c > 0 ? 1 : -1);
+    else
+        res = (int)std::ceil(log2(_gk) + log2(_gb)*_n - log2(_gd));
+    if (res < 19)
+        res = (int)std::ceil(log2(value()));
+    return res;
 }
 
 uint64_t InputNum::parse_numeral(const std::string& s)
@@ -1148,7 +1167,7 @@ uint32_t InputNum::mod(uint32_t modulus)
         result += _c;
     else
     {
-        uint32_t c = (uint32_t)(-_c);
+        uint32_t c = (uint32_t)((-_c)%modulus);
         if (result < c)
             result += (uint64_t)modulus << 31;
         result -= c;

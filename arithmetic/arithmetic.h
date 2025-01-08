@@ -27,7 +27,7 @@ namespace arithmetic
         }
 
         void init();
-        void setup(uint64_t k, uint64_t b, int n, int c);
+        void setup(uint64_t k, uint64_t b, uint64_t n, int64_t c);
         void setup(const Giant& g);
         void setup(int bitlen);
         void clone(GWState& state);
