@@ -97,9 +97,7 @@ int get_prime(int n)
 {
     if (n == 0)
         return 1;
-    PrimeIterator primes = PrimeIterator::get();
-    for (int i = 1; i < n; i++, primes++);
-    return *primes;
+    return *PrimeIterator::get(n - 1);
 }
 
 template<class It>
@@ -1084,10 +1082,10 @@ int InputNum::bitlen()
     if (_type != KBNC)
         res = _gk.bitlen() + _gb.bitlen() - _gd.bitlen();
     else if (b() == 2)
-        res = _gk.bitlen() + _n - _gd.bitlen() + (_c > 0 ? 1 : -1);
+        res = _gk.bitlen() + _n - _gd.bitlen() + (_c > 0 || _gk != 1 ? 1 : 0);
     else
         res = (int)std::ceil(log2(_gk) + log2(_gb)*_n - log2(_gd));
-    if (res < 19)
+    if (res <= 32)
         res = (int)std::ceil(log2(value()));
     return res;
 }
