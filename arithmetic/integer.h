@@ -64,17 +64,29 @@ namespace arithmetic
         }
 
         static PrimeIterator get() { return PrimeIterator(PrimeList::primes_16bit()); }
+        static PrimeIterator get(size_t pos) { PrimeIterator res(PrimeList::primes_16bit()); res += pos; return res; }
+        static PrimeIterator find(int prime);
         static const PrimeIterator& max();
+
+        PrimeIterator& operator+=(ptrdiff_t offset);
 
         void sieve_range(uint64_t start, uint64_t end, std::vector<uint64_t>& list);
 
-        PrimeIterator& operator++();
-        void operator++(int);
-        PrimeIterator& operator+=(int offset);
+        PrimeIterator& operator++() { return (*this) += 1; }
+        void operator++(int) { (*this) += 1; }
+        friend PrimeIterator operator+(const PrimeIterator& it, ptrdiff_t offset) { PrimeIterator res(it); res += offset; return res; }
+        PrimeIterator& operator-=(ptrdiff_t offset) { return (*this) += -offset; }
+        PrimeIterator& operator--() { return (*this) += -1; }
+        void operator--(int) { (*this) += -1; }
+        friend PrimeIterator operator-(const PrimeIterator& it, ptrdiff_t offset) { PrimeIterator res(it); res += -offset; return res; }
+
         bool operator==(const PrimeIterator& other) const { return _cur == other._cur; }
         bool operator!=(const PrimeIterator& other) const { return !(*this == other); }
         int operator*() const { return _cur < _list.size() ? _list[_cur] : _range[_cur - _range_pos]; }
         size_t pos() const { return _cur; }
+
+    private:
+        void init_range(size_t range_num);
 
     private:
         PrimeList& _list;
