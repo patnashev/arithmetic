@@ -1085,8 +1085,8 @@ int InputNum::bitlen()
         res = _gk.bitlen() + _n - _gd.bitlen() + (_c > 0 || _gk != 1 ? 1 : 0);
     else
         res = (int)std::ceil(log2(_gk) + log2(_gb)*_n - log2(_gd));
-    if (res <= 32)
-        res = (int)std::ceil(log2(value()));
+    if (res <= 64)
+        res = value().bitlen();
     return res;
 }
 
