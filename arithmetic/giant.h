@@ -31,6 +31,7 @@ namespace arithmetic
         virtual void to_GWNum(const Giant& a, GWNum& res);
         virtual int cmp(const Giant& a, const Giant& b) override;
         virtual int cmp(const Giant& a, int32_t b) override;
+        virtual int cmp(const Giant& a, uint32_t b);
         virtual void shiftleft(Giant& a, int b, Giant& res);
         virtual void shiftright(Giant& a, int b, Giant& res);
         virtual int bitlen(const Giant& a);
@@ -116,6 +117,7 @@ namespace arithmetic
         virtual void to_GWNum(const Giant& a, GWNum& res) override;
         virtual int cmp(const Giant& a, const Giant& b) override;
         virtual int cmp(const Giant& a, int32_t b) override;
+        virtual int cmp(const Giant& a, uint32_t b) override;
         virtual void shiftleft(Giant& a, int b, Giant& res) override;
         virtual void shiftright(Giant& a, int b, Giant& res) override;
         virtual int bitlen(const Giant& a) override;
@@ -305,6 +307,67 @@ namespace arithmetic
         GIANT_INIT_ADD_SUB(uint32_t)
         GIANT_INIT_ADD_SUB(int64_t)
         GIANT_INIT_ADD_SUB(uint64_t)
+
+        friend bool operator == (const Giant& a, uint32_t b)
+        {
+            return a.arithmetic().cmp(a, b) == 0;
+        }
+
+        friend bool operator != (const Giant& a, uint32_t b)
+        {
+            return a.arithmetic().cmp(a, b) != 0;
+        }
+
+        friend bool operator > (const Giant& a, uint32_t b)
+        {
+            return a.arithmetic().cmp(a, b) > 0;
+        }
+
+        friend bool operator < (const Giant& a, uint32_t b)
+        {
+            return a.arithmetic().cmp(a, b) < 0;
+        }
+
+        friend bool operator >= (const Giant& a, uint32_t b)
+        {
+            return a.arithmetic().cmp(a, b) >= 0;
+        }
+
+        friend bool operator <= (const Giant& a, uint32_t b)
+        {
+            return a.arithmetic().cmp(a, b) <= 0;
+        }
+
+        friend bool operator == (uint32_t a, const Giant& b)
+        {
+            return b.arithmetic().cmp(b, a) == 0;
+        }
+
+        friend bool operator != (uint32_t a, const Giant& b)
+        {
+            return b.arithmetic().cmp(b, a) != 0;
+        }
+
+        friend bool operator > (uint32_t a, const Giant& b)
+        {
+            return b.arithmetic().cmp(b, a) < 0;
+        }
+
+        friend bool operator < (uint32_t a, const Giant& b)
+        {
+            return b.arithmetic().cmp(b, a) > 0;
+        }
+
+        friend bool operator >= (uint32_t a, const Giant& b)
+        {
+            return b.arithmetic().cmp(b, a) <= 0;
+        }
+
+        friend bool operator <= (uint32_t a, const Giant& b)
+        {
+            return b.arithmetic().cmp(b, a) >= 0;
+        }
+
 
         Giant& operator *= (uint32_t a)
         {

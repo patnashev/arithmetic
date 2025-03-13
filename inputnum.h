@@ -68,6 +68,7 @@ public:
     arithmetic::Giant& cofactor() { return _cofactor; }
     std::vector<int> factorize_minus1(int depth);
     void factorize_f_p();
+    std::vector<int> factorize_small();
 
     const std::string& input_text() { return _input_text; }
     const std::string& display_text() { return _display_text; }

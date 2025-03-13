@@ -624,7 +624,7 @@ void factorize(Giant& N, std::vector<std::pair<arithmetic::Giant, int>>& factors
                     for (power = 1, tmp /= i*2 + 1; tmp%(i*2 + 1) == 0; power++, tmp /= i*2 + 1);
                     add_factor(factors, i*2 + 1, power);
                 }
-            if (tmp > 1 && (uint32_t)tmp.bitlen() <= 2*(s - 1 + (j + 5 < s ? j + 5 : s)))
+            if (tmp > 1 && (uint32_t)tmp.bitlen() <= 2*(s + (j + 5 < s ? j + 5 : s)))
             {
                 add_factor(factors, tmp, 1);
                 tmp = 1;
@@ -1264,6 +1264,33 @@ void InputNum::factorize_f_p()
     _factors = std::move(new_factors);
 }
 
+std::vector<int> InputNum::factorize_small()
+{
+    bool trial_test = (bitlen() <= 40);
+    Giant N;
+    if (trial_test)
+        N = value();
+    else
+        N = ((std::move(N) = 2) << 61) - 1;
+
+    std::vector<std::pair<arithmetic::Giant, int>> factors;
+    arithmetic::Giant cofactor;
+    if (trial_test)
+        factorize(N, factors, cofactor);
+    else
+        factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { bool res = (mod(p) == 0); if (res) x *= p; return res; });
+
+    std::vector<int> res;
+    for (auto& factor : factors)
+    {
+        if (factor.first.bitlen() < 32)
+            res.push_back((int)factor.first.data()[0]);
+        else
+            res.push_back(0);
+    }
+    return res;
+}
+
 void InputNum::print_info()
 {
     if (_type == ZERO)
@@ -1280,6 +1307,8 @@ void InputNum::print_info()
     factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { return mod(p) == 0; });
     if (factors.empty())
         std::cout << "No small factors." << std::endl;
+    else if (factors[0].first == N)
+        std::cout << N.to_string() << " is prime." << std::endl;
     else
     {
         std::cout << "Small factors:";

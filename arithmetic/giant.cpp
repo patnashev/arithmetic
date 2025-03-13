@@ -244,6 +244,17 @@ namespace arithmetic
         return val > b ? 1 : val < b ? -1 : 0;
     }
 
+    int GiantsArithmetic::cmp(const Giant& a, uint32_t b)
+    {
+        if (a._size > 1)
+            return 1;
+        if (a._size < 0)
+            return -1;
+        if (a._size == 0)
+            return 0 < b ? -1 : 0;
+        return a.data()[0] > b ? 1 : a.data()[0] < b ? -1 : 0;
+    }
+
     void GiantsArithmetic::shiftleft(Giant& a, int b, Giant& res)
     {
         alloc(res, abs(a._size) + (b + 31)/32);
@@ -903,6 +914,15 @@ namespace arithmetic
         if (b == 0)
             return a._size > 0 ? 1 : a._size < 0 ? -1 : 0;
         return mpz_cmp_si(mpz(a), b);
+    }
+
+    int GMPArithmetic::cmp(const Giant& a, uint32_t b)
+    {
+        if (a._size == 0)
+            return 0 < b ? -1 : 0;
+        if (b == 0)
+            return a._size > 0 ? 1 : a._size < 0 ? -1 : 0;
+        return mpz_cmp_ui(mpz(a), b);
     }
 
     void GMPArithmetic::shiftleft(Giant& a, int b, Giant& res)
