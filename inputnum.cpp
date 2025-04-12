@@ -1254,10 +1254,11 @@ void InputNum::factorize_f_p()
     Giant tmp;
     std::vector<std::pair<Giant, int>> new_factors;
     for (auto& f : factors)
-    {
-        tmp = f.first;
-        new_factors.emplace_back(std::move(tmp), f.second);
-    }
+        if (f.second != 0)
+        {
+            tmp = f.first;
+            new_factors.emplace_back(std::move(tmp), f.second);
+        }
     for (auto& f : _factors)
         if (f.first.size() > 1)
             new_factors.emplace_back(std::move(f.first), f.second);
