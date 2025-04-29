@@ -21,6 +21,19 @@ public:
     static const int ALGEBRAIC_QUAD = 2;       //  1/4 X^4 + 1 = (1/2 X^2 + X + 1)(1/2 X^2 - X + 1)
     static const int ALGEBRAIC_HEX = 3;        // 1/27 x^6 + 1 = (1/3 X^2 + X + 1)(1/3 X^2 - X + 1)(1/3 X^2 + 1)
 
+    struct ParseResult
+    {
+    public:
+        ParseResult(bool success_) : success(success_) { }
+        ParseResult(bool success_, int pos_, std::string message_) : success(success_), pos(pos_), message(message_) { }
+        explicit operator bool() const { return success; }
+        bool operator !() const { return !success; }
+
+        bool success;
+        int pos;
+        std::string message;
+    };
+
 public:
     InputNum() { _gk = 0; _gb = 0; _gd = 1; }
     InputNum(int k, int b, int n, int c) { init(k, b, n, c); }
@@ -33,7 +46,7 @@ public:
     void init(T&& b) { _type = GENERIC; _gk = 1; _gb = std::forward<T>(b); _n = 0; _gd = 1; _c = 0; _custom_k.clear(); _custom_b.clear(); _custom_d.clear(); _algebraic_type = ALGEBRAIC_SIMPLE; _algebraic_k = 0; process(); }
     bool read(File& file);
     void write(File& file);
-    bool parse(const std::string& s, bool c_required = true);
+    ParseResult parse(const std::string& s, bool c_required = true);
     void setup(arithmetic::GWState& state);
     void print_info();
 
@@ -67,14 +80,14 @@ public:
     std::vector<std::pair<arithmetic::Giant, int>>& factors() { return _factors; }
     arithmetic::Giant& cofactor() { return _cofactor; }
     std::vector<int> factorize_minus1(int depth);
-    void factorize_f_p();
     std::vector<int> factorize_small();
+    void expand_factors();
 
     const std::string& input_text() { return _input_text; }
     const std::string& display_text() { return _display_text; }
 
 private:
-    void process();
+    void process(bool factored = false);
     std::string build_text(int max_len = -1);
 
 private:

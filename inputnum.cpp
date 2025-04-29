@@ -46,501 +46,16 @@ void InputNum::write(File& file)
     file.commit_writer(*writer);
 }
 
-template<class It>
-void iterate_digits(bool& prime, It& it, It& first, const It& last)
-{
-    prime = it != last && *it == 'p';
-    if (prime)
-        it++;
-    for (first = it; it != last && std::isdigit(*it); it++);
-}
-
-template<class It>
-void iterate_func(std::string& f, It& it, const It& last)
-{
-    f.clear();
-    It it_s;
-    for (it_s = it; it != last && std::isalpha(*it); it++);
-    if (it != last && *it == '(')
-        f = std::string(it_s, it);
-    else
-        it = it_s;
-}
-
-template<class It>
-void iterate_args(std::string& f, std::vector<std::string>& args, It& it, const It& last)
-{
-    args.clear();
-    if (f.empty())
-        f = "()";
-    it++;
-    while (it != last && *it != ')')
-    {
-        int recursion = 0;
-        It it_s = it;
-        for (it_s = it; it != last && (recursion > 0 || (*it != ')' && *it != ',')); it++)
-        {
-            if (*it == '(')
-                recursion++;
-            if (*it == ')')
-                recursion--;
-        }
-        args.emplace_back(it_s, it);
-        if (*it == ',')
-            it++;
-    }
-    if (it != last && *it == ')')
-        it++;
-}
-
-int get_prime(int n)
-{
-    if (n == 0)
-        return 1;
-    return *PrimeIterator::get(n - 1);
-}
-
-template<class It>
-bool parse_digits(bool prime, const It& first, const It& last, uint32_t& value)
-{
-    if (last == first || last - first > (prime ? 8 : 9))
-        return false;
-    if (prime)
-        value = get_prime(stoi(std::string(first, last)));
-    else
-        value = stoul(std::string(first, last));
-    if (value == 0)
-        return false;
-    return true;
-}
-
-template<class It>
-bool parse_digits(bool prime, const It& first, const It& last, int64_t& value)
-{
-    if (last == first || last - first > (prime ? 8 : 18))
-        return false;
-    if (prime)
-        value = get_prime(stoi(std::string(first, last)));
-    else
-        value = stoll(std::string(first, last));
-    if (value == 0)
-        return false;
-    return true;
-}
-
-template<class It>
-bool parse_digits(bool prime, It& first, It& last, Giant& value)
-{
-    if (last == first || (prime && last - first > 8))
-        return false;
-    if (prime)
-        value = get_prime(stoi(std::string(first, last)));
-    else
-        value = std::string(first, last);
-    if (value == 0)
-        return false;
-    return true;
-}
-
-bool parse_func(const std::string& f, const std::vector<std::string>& args, Giant& value, std::string& custom_val)
-{
-    if (f == "()")
-    {
-        if (args.size() > 1)
-            return false;
-        InputNum recursive;
-        if (!recursive.parse(args[0], false))
-            return false;
-        value = recursive.value();
-        custom_val = "(" + recursive.input_text() + ")";
-    }
-    else
-    {
-        custom_val = f;
-        for (auto it_a = args.begin(); it_a != args.end(); it_a++)
-            custom_val += (it_a == args.begin() ? "(" : ",") + *it_a;
-        custom_val += ")";
-        return false; // not implemented
-    }
-    return true;
-}
-
-bool InputNum::parse(const std::string& s, bool c_required)
-{
-    std::string::const_iterator it, it_s;
-    int type = KBNC;
-    Giant gk, gb, gd;
-    uint32_t n = 0;
-    int64_t c = 0;
-    Giant tmp;
-    bool prime;
-    std::string f;
-    std::vector<std::string> args;
-    std::string custom_k;
-    std::string custom_b;
-    std::string custom_d;
-    uint32_t multifactorial = 0;
-    int algebraic_type = ALGEBRAIC_SIMPLE;
-    int32_t algebraic_k = 0;
-
-    for (it = s.begin(); it != s.end() && std::isspace(*it); it++);
-    if (it != s.end() && *it == '\"')
-        it++;
-
-    iterate_func(f, it, s.end());
-    if (!f.empty() || (it != s.end() && *it == '('))
-        iterate_args(f, args, it, s.end());
-    else
-        iterate_digits(prime, it, it_s, s.end());
-
-    if (!f.empty() && (it == s.end() || *it == '\"'))
-    {
-        if (f == "Phi" && args.size() == 2)
-        {
-            int cyclotomic = stoi(args[0]);
-            if (cyclotomic != 3 && cyclotomic != 6)
-                return false;
-            if (!args[1].empty() && args[1][0] == '-')
-            {
-                cyclotomic = (cyclotomic == 3 ? 6 : 3);
-                args[1] = args[1].substr(1);
-            }
-            InputNum recursive;
-            if (!recursive.parse(args[1] + "+1"))
-                return false;
-            type = recursive.type();
-            gk = recursive.value();
-            custom_k = "(" + recursive.input_text() + ")";
-            if (cyclotomic == 6)
-            {
-                gk -= 2;
-                custom_k[custom_k.size() - 3] = '-';
-            }
-            if (recursive.k() != 1)
-            {
-                gk *= recursive.gk();
-                custom_k += "*" + recursive.gk().to_string();
-            }
-            gb = recursive.gb();
-            custom_b = recursive._custom_b;
-            n = recursive._n;
-            multifactorial = recursive._multifactorial;
-            gd = recursive.gd();
-            custom_d = recursive._custom_d;
-            c = 1;
-            if (recursive.k() > 0 && recursive.k() < 1000 && recursive.d() == 1)
-            {
-                algebraic_type = ALGEBRAIC_CYCLOTOMIC;
-                algebraic_k = (cyclotomic == 6 ? -1 : 1)*(int32_t)recursive.k();
-            }
-        }
-        else if (f == "Quad" && args.size() == 1)
-        {
-            bool neg = false;
-            if (!args[0].empty() && args[0][0] == '-')
-            {
-                neg = true;
-                args[0] = args[0].substr(1);
-            }
-            InputNum recursive;
-            if (!recursive.parse(args[0] + "+1"))
-                return false;
-            type = recursive.type();
-            gk = recursive.value();
-            gk -= 1;
-            if (gk%2 != 0)
-                return false;
-            gk /= 2;
-            recursive._c = (neg ? -1 : 1);
-            gk += recursive._c;
-            if (recursive.k() != 1)
-            {
-                gk *= recursive.gk();
-                custom_k = "*" + recursive.gk().to_string();
-            }
-            gb = recursive.gb();
-            custom_b = recursive._custom_b;
-            n = recursive._n;
-            multifactorial = recursive._multifactorial;
-            gd = recursive.gd();
-            custom_d = recursive._custom_d;
-            c = 1;
-            if (recursive.k() > 0 && recursive.k() < 100 && recursive.d() == 1)
-            {
-                algebraic_type = ALGEBRAIC_QUAD;
-                algebraic_k = (int32_t)(recursive.k()*recursive._c);
-            }
-            if (type == KBNC)
-            {
-                if (recursive.gk()%2 == 0)
-                    recursive.gk() /= 2;
-                else
-                {
-                    recursive.gk() *= recursive.gb()/2;
-                    recursive._n--;
-                }
-                custom_k = "(" + recursive.build_text() + ")" + custom_k;
-            }
-            else if (type == FACTORIAL || type == PRIMORIAL)
-            {
-                std::string st = recursive.build_text();
-                custom_k = "(" + st.substr(0, st.size() - 2) + "/2" + st.substr(st.size() - 2) + ")" + custom_k;
-            }
-        }
-        else if (f == "Hex" && args.size() == 1)
-        {
-            bool neg = false;
-            if (!args[0].empty() && args[0][0] == '-')
-            {
-                neg = true;
-                args[0] = args[0].substr(1);
-            }
-            InputNum recursive;
-            if (!recursive.parse(args[0] + "+1"))
-                return false;
-            type = recursive.type();
-            gk = recursive.value();
-            gk -= 1;
-            if (gk%3 != 0)
-                return false;
-            gk /= 3;
-            recursive._c = (neg ? -1 : 1);
-            gk += recursive._c;
-            if (recursive.k() != 1)
-            {
-                gk *= recursive.gk();
-                custom_k = "*" + recursive.gk().to_string();
-            }
-            gb = recursive.gb();
-            custom_b = recursive._custom_b;
-            n = recursive._n;
-            multifactorial = recursive._multifactorial;
-            gd = recursive.gd();
-            custom_d = recursive._custom_d;
-            c = 1;
-            if (recursive.k() > 0 && recursive.k() < 32 && recursive.d() == 1)
-            {
-                algebraic_type = ALGEBRAIC_HEX;
-                algebraic_k = (int32_t)(recursive.k()*recursive._c);
-            }
-            if (type == KBNC)
-            {
-                if (recursive.gk()%3 == 0)
-                    recursive.gk() /= 3;
-                else
-                {
-                    recursive.gk() *= recursive.gb()/3;
-                    recursive._n--;
-                }
-                custom_k = "(" + recursive.build_text() + ")" + custom_k;
-            }
-            else if (type == FACTORIAL || type == PRIMORIAL)
-            {
-                std::string st = recursive.build_text();
-                custom_k = "(" + st.substr(0, st.size() - 2) + "/3" + st.substr(st.size() - 2) + ")" + custom_k;
-            }
-            // Montgomery reduction is faster than k^6/27 * b^6n + 1
-            //algebraic_type = ALGEBRAIC_SIMPLE;
-            //algebraic_k = 0;
-        }
-        else
-            return false;
-    }
-    else
-    {
-        gk = 1;
-        while (it != s.end() && *it == '*')
-        {
-            tmp = 1;
-            std::string tmp_k;
-            if (!f.empty())
-            {
-                if (!parse_func(f, args, gk == 1 ? gk : tmp, gk == 1 ? custom_k : tmp_k))
-                    return false;
-            }
-            else if (!parse_digits(prime, it_s, it, gk == 1 ? gk : tmp))
-                return false;
-            if (tmp != 1)
-            {
-                if (!custom_k.empty() || !tmp_k.empty())
-                {
-                    if (custom_k.empty())
-                        custom_k = gk.to_string();
-                    if (tmp_k.empty())
-                        tmp_k = tmp.to_string();
-                    custom_k += "*";
-                    custom_k += tmp_k;
-                }
-                gk *= tmp;
-            }
-
-            it++;
-            iterate_func(f, it, s.end());
-            if (!f.empty() || (it != s.end() && *it == '('))
-                iterate_args(f, args, it, s.end());
-            else
-                iterate_digits(prime, it, it_s, s.end());
-        }
-
-        if (it == s.end() || *it == '\"' || *it == '^' || *it == '+' || *it == '-' || *it == '/')
-        {
-            if (!f.empty())
-            {
-                if (!parse_func(f, args, gb, custom_b))
-                    return false;
-            }
-            else if (!parse_digits(prime, it_s, it, gb))
-                return false;
-
-            if (it != s.end() && *it == '^')
-            {
-                iterate_digits(prime, ++it, it_s, s.end());
-                if (!parse_digits(prime, it_s, it, n))
-                    return false;
-            }
-            else
-                n = 1;
-        }
-        else if (*it == '!')
-        {
-            type = FACTORIAL;
-            if (!parse_digits(prime, it_s, it, n))
-                return false;
-            for (multifactorial = 1, it++; it != s.end() && *it == '!'; it++, multifactorial++);
-            if (multifactorial == 1)
-            {
-                iterate_digits(prime, it, it_s, s.end());
-                if (it != it_s && !parse_digits(prime, it_s, it, multifactorial))
-                    return false;
-            }
-            gb = 1;
-            tmp = 1;
-            uint32_t i = n%multifactorial;
-            while (i < 2)
-                i += multifactorial;
-            for (; i <= n; i += multifactorial)
-            {
-                tmp *= i;
-                if (tmp.size() > 8192 || i == n)
-                {
-                    gb *= tmp;
-                    tmp = 1;
-                }
-            }
-        }
-        else if (*it == '#')
-        {
-            type = PRIMORIAL;
-            if (it == it_s || it - it_s > (prime ? 8 : 9))
-                return false;
-            n = stoi(std::string(it_s, it));
-            it++;
-            gb = 1;
-            tmp = 1;
-            int last = 1;
-            PrimeIterator primes = PrimeIterator::get();
-            for (uint32_t i = 0; prime ? i < n : *primes <= (int)n; i++, primes++)
-            {
-                last = *primes;
-                tmp *= last;
-                if (tmp.size() > 8192)
-                {
-                    gb *= tmp;
-                    tmp = 1;
-                }
-            }
-            n = last;
-            if (tmp != 1)
-                gb *= tmp;
-        }
-        else
-            return false;
-
-        gd = 1;
-        while (it != s.end() && *it == '/')
-        {
-            it++;
-            iterate_func(f, it, s.end());
-            if (!f.empty() || (it != s.end() && *it == '('))
-                iterate_args(f, args, it, s.end());
-            else
-                iterate_digits(prime, it, it_s, s.end());
-
-            tmp = 1;
-            std::string tmp_d;
-            if (!f.empty())
-            {
-                if (!parse_func(f, args, gd == 1 ? gd : tmp, gd == 1 ? custom_d : tmp_d))
-                    return false;
-            }
-            else if (!parse_digits(prime, it_s, it, gd == 1 ? gd : tmp))
-                return false;
-            if (tmp != 1)
-            {
-                if (!custom_d.empty() || !tmp_d.empty())
-                {
-                    if (custom_d.empty())
-                        custom_d = gd.to_string();
-                    if (tmp_d.empty())
-                        tmp_d = tmp.to_string();
-                    custom_d += "/";
-                    custom_d += tmp_d;
-                }
-                gd *= tmp;
-            }
-        }
-        if (gd > 1 && gk*(type == KBNC ? power(gb, n) : gb)%gd != 0)
-            return false;
-
-        if (it != s.end() && (*it == '+' || *it == '-'))
-        {
-            bool minus = (*it == '-');
-            iterate_digits(prime, ++it, it_s, s.end());
-            if (!parse_digits(prime, it_s, it, c))
-                return false;
-            if (minus)
-                c = -c;
-        }
-        else if (type == KBNC && gk == 1 && n == 1)
-        {
-            type = GENERIC;
-            n = 0;
-            gb /= gd;
-            if (!custom_b.empty() && custom_d.empty())
-                custom_d = gd.to_string();
-            gd = 1;
-        }
-        else if (c_required)
-            return false;
-    }
-    if (it != s.end() && *it == '\"')
-        it++;
-    for (; it != s.end() && std::isspace(*it); it++);
-    if (it != s.end())
-        return false;
-
-    _type = type;
-    _gk = std::move(gk);
-    _gb = std::move(gb);
-    _n = n;
-    _gd = std::move(gd);
-    _c = c;
-    _custom_k = std::move(custom_k);
-    _custom_b = std::move(custom_b);
-    _custom_d = std::move(custom_d);
-    _multifactorial = multifactorial;
-    _algebraic_type = algebraic_type;
-    _algebraic_k = algebraic_k;
-    process();
-    return true;
-}
-
 void add_factor(std::vector<std::pair<arithmetic::Giant, int>>& factors, const Giant& factor, int power)
 {
     auto it = factors.begin();
     for (; it != factors.end() && it->first != factor; it++);
     if (it != factors.end())
+    {
         it->second += power;
+        if (it->second == 0)
+            factors.erase(it);
+    }
     else
         factors.emplace_back(factor, power);
 }
@@ -632,7 +147,12 @@ void factorize(Giant& N, std::vector<std::pair<arithmetic::Giant, int>>& factors
         }
     }
     if (tmp > 1)
-        cofactor = std::move(tmp);
+    {
+        if (cofactor.empty())
+            cofactor = std::move(tmp);
+        else
+            cofactor *= tmp;
+    }
 
 /*    if (_b_cofactor)
     {
@@ -748,53 +268,618 @@ void factorize(Giant& N, std::vector<std::pair<arithmetic::Giant, int>>& factors
     }*/
 }
 
-void InputNum::process()
+class Expr
 {
-    _factors.clear();
-    if (!_cofactor.empty())
-        _cofactor.arithmetic().free(_cofactor);
-    _b_factors.clear();
-    if (!_b_cofactor.empty())
-        _b_cofactor.arithmetic().free(_b_cofactor);
+public:
+    Expr() { }
 
-    if (_type != KBNC)
+    void clear()
     {
-        /*Giant tmp;
-        _b_factors.reserve(_n);
-        PrimeIterator primes = PrimeIterator::get();
-        for (i = 0; i < _n; i++, primes++)
+        str_func.clear();
+        args.clear();
+        error_pos = -1;
+        error_msg.clear();
+    }
+
+    bool iterate(const std::string& str, std::string::const_iterator& it)
+    {
+        clear();
+        pos = (int)(it - str.begin());
+        if (it == str.end())
+            return false;
+
+        std::string::const_iterator it_s;
+        if (std::isdigit(*it))
         {
-            tmp = *primes;
-            _b_factors.emplace_back(tmp, 1);
-        }*/
+            for (it_s = it; it != str.end() && std::isdigit(*it); it++);
+            args.emplace_back((int)(it_s - str.begin()), std::string(it_s, it));
+            return true;
+        }
+        if (std::isalpha(*it))
+        {
+            for (it_s = it; it != str.end() && std::isalpha(*it); it++);
+            str_func = std::string(it_s, it);
+            if (it == str.end())
+                return true;
+            if (std::isdigit(*it))
+            {
+                for (it_s = it; it != str.end() && std::isdigit(*it); it++);
+                args.emplace_back((int)(it_s - str.begin()), std::string(it_s, it));
+                return true;
+            }
+        }
+        if (*it == '(')
+        {
+            if (str_func.empty())
+                str_func = "()";
+            while (it != str.end() && *it != ')')
+            {
+                it++;
+                int recursion = 0;
+                for (it_s = it; it != str.end() && (recursion > 0 || (*it != ')' && *it != ',')); it++)
+                {
+                    if (*it == '(')
+                        recursion++;
+                    if (*it == ')')
+                        recursion--;
+                }
+                args.emplace_back((int)(it_s - str.begin()), std::string(it_s, it));
+            }
+            if (it != str.end() && *it == ')')
+                it++;
+            return true;
+        }
+        return false;
+    }
+
+    bool evaluate(bool factorize = true)
+    {
+        value = 0;
+        str_value.clear();
+        if (factorize)
+        {
+            factors.clear();
+            cofactor.arithmetic().free(cofactor);
+        }
+
+        if (str_func.empty())
+        {
+            if (args.size() != 1 || str_args(0).empty())
+                return error(pos, "value expected");
+            value = str_args(0);
+            if (factorize)
+                ::factorize(value, factors, cofactor);
+        }
+        else if (str_func == "p")
+        {
+            if (args.size() != 1 || str_args(0).empty())
+                return error(pos, "prime index expected");
+            std::string::const_iterator it;
+            for (it = str_args(0).begin(); it != str_args(0).end() && std::isdigit(*it); it++);
+            if (it != str_args(0).end())
+            {
+                InputNum recursive;
+                InputNum::ParseResult res = recursive.parse(str_args(0), false);
+                if (!res)
+                    return error(args[0].first + res.pos, res.message);
+                value = recursive.value();
+            }
+            else
+                value = str_args(0);
+            if (value > 105097565)
+                return error(args[0].first, "prime index too big");
+            if (value == 0)
+                value = 1;
+            else
+            {
+                value = *PrimeIterator::get(value.data()[0] - 1);
+                if (factorize)
+                    ::add_factor(factors, value, 1);
+            }
+        }
+        else if (str_func == "()")
+        {
+            if (args.size() != 1 || str_args(0).empty())
+                return error(pos, "expression expected");
+            InputNum recursive;
+            InputNum::ParseResult res = recursive.parse(str_args(0), false);
+            if (!res)
+                return error(args[0].first + res.pos, res.message);
+            value = recursive.value();
+            str_value = "(" + recursive.input_text() + ")";
+            if (factorize)
+            {
+                if (recursive.c() == 0)
+                {
+                    factors = std::move(recursive.factors());
+                    cofactor = std::move(recursive.cofactor());
+                }
+                else
+                    ::factorize(value, factors, cofactor);
+            }
+        }
+        else
+            return error(pos, "unknown function");
+        if (value.empty() || value == 0)
+            return error(pos, "zero value");
+
+        return true;
+    }
+
+    void merge_factors(std::vector<std::pair<arithmetic::Giant, int>>& factors_, Giant& cofactor_, int power)
+    {
+        for (auto& factor : factors)
+            ::add_factor(factors_, factor.first, factor.second*power);
+        if (!cofactor.empty())
+        {
+            cofactor.power(abs(power));
+            if (power < 0)
+            {
+                if (cofactor_.empty() || cofactor_%cofactor != 0)
+                    throw ArithmeticException();
+                cofactor_ /= cofactor;
+            }
+            else if (!cofactor_.empty())
+                cofactor_ *= cofactor;
+            else
+                cofactor_ = cofactor;
+        }
+    }
+
+    std::string& str_args(int index) { return args[index].second; }
+
+private:
+    bool error(int pos, const char* msg) { error_pos = pos; error_msg = msg; return false; }
+    bool error(int pos, std::string& msg) { error_pos = pos; error_msg = std::move(msg); return false; }
+
+public:
+    int pos;
+    std::string str_func;
+    std::vector<std::pair<int, std::string>> args;
+    
+    Giant value;
+    std::string str_value;
+
+    std::vector<std::pair<arithmetic::Giant, int>> factors;
+    Giant cofactor;
+
+    int error_pos;
+    std::string error_msg;
+};
+
+Giant factorial(Giant& factor)
+{
+    uint32_t n = factor.data()[0];
+    uint32_t multifactorial = factor.data()[1];
+    Giant res, tmp;
+    res = 1;
+    tmp = 1;
+    uint32_t i = n%multifactorial;
+    while (i < 2)
+        i += multifactorial;
+    for (; i <= n; i += multifactorial)
+    {
+        tmp *= i;
+        if (tmp.size() > 8192 || i == n)
+        {
+            res *= tmp;
+            tmp = 1;
+        }
+    }
+    return res;
+}
+
+Giant primorial(Giant& factor)
+{
+    int n = (int)factor.data()[0];
+    Giant res, tmp;
+    res = 1;
+    tmp = 1;
+    int last = 1;
+    PrimeIterator primes = PrimeIterator::get();
+    for (uint32_t i = 0; *primes <= (int)n; i++, primes++)
+    {
+        last = *primes;
+        tmp *= last;
+        if (tmp.size() > 8192)
+        {
+            res *= tmp;
+            tmp = 1;
+        }
+    }
+    if (tmp != 1)
+        res *= tmp;
+    factor.data()[0] = last;
+    return res;
+}
+
+InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
+{
+    std::string::const_iterator it;
+    Expr expr;
+    Giant tmp;
+
+    int type = KBNC;
+    Giant gk, gb, gd;
+    uint32_t n = 0;
+    int64_t c = 0;
+    std::string custom_k;
+    std::string custom_b;
+    std::string custom_d;
+    uint32_t multifactorial = 0;
+    int algebraic_type = ALGEBRAIC_SIMPLE;
+    int32_t algebraic_k = 0;
+    std::vector<std::pair<arithmetic::Giant, int>> factors;
+    Giant cofactor;
+    std::vector<std::pair<arithmetic::Giant, int>> b_factors;
+    Giant b_cofactor;
+
+    for (it = s.begin(); it != s.end() && std::isspace(*it); it++);
+    if (it != s.end() && *it == '\"')
+        it++;
+
+    expr.iterate(s, it);
+    if (!expr.str_func.empty() && expr.str_func != "p" /*&& expr.str_func != "()"*/ && (it == s.end() || *it == '\"'))
+    {
+        if (expr.str_func == "Phi") // (X +- 1)*X + 1
+        {
+            if (expr.args.size() != 2)
+                return InputNum::ParseResult(false, expr.pos, "two arguments expected");
+            int cyclotomic = stoi(expr.str_args(0));
+            if (cyclotomic != 3 && cyclotomic != 6)
+                return InputNum::ParseResult(false, expr.args[0].first, "only 3 and 6 are supported");
+            if (!expr.str_args(1).empty() && expr.str_args(1)[0] == '-')
+            {
+                cyclotomic = (cyclotomic == 3 ? 6 : 3);
+                expr.str_args(1) = expr.str_args(1).substr(1);
+            }
+            InputNum recursive;
+            InputNum::ParseResult res = recursive.parse(expr.str_args(1) + "+1");
+            if (!res)
+                return InputNum::ParseResult(false, expr.args[1].first + res.pos, res.message);
+            type = recursive.type();
+            gk = recursive.value();
+            custom_k = "(" + recursive.input_text() + ")";
+            if (cyclotomic == 6)
+            {
+                gk -= 2;
+                custom_k[custom_k.size() - 3] = '-';
+            }
+            factors = std::move(recursive.factors());
+            cofactor = std::move(recursive.cofactor());
+            b_factors = std::move(recursive.b_factors());
+            b_cofactor = std::move(recursive.b_cofactor());
+            ::factorize(gk, factors, cofactor);
+            if (recursive.k() != 1)
+            {
+                gk *= recursive.gk();
+                custom_k += "*" + recursive.gk().to_string();
+            }
+            gb = recursive.gb();
+            custom_b = recursive._custom_b;
+            n = recursive._n;
+            multifactorial = recursive._multifactorial;
+            gd = recursive.gd();
+            custom_d = recursive._custom_d;
+            c = 1;
+            if (recursive.k() > 0 && recursive.k() < 1000 && recursive.d() == 1)
+            {
+                algebraic_type = ALGEBRAIC_CYCLOTOMIC;
+                algebraic_k = (cyclotomic == 6 ? -1 : 1)*(int32_t)recursive.k();
+            }
+        }
+        else if (expr.str_func == "Quad" || // (1/2 X +- 1)*X + 1
+                 expr.str_func == "Hex")    // (1/3 X +- 1)*X + 1
+        {
+            if (expr.args.size() != 1)
+                return InputNum::ParseResult(false, expr.pos, "one argument expected");
+            bool neg = false;
+            if (!expr.str_args(0).empty() && expr.str_args(0)[0] == '-')
+            {
+                neg = true;
+                expr.str_args(0) = expr.str_args(0).substr(1);
+            }
+            int divisor = (expr.str_func == "Quad" ? 2 : 3);
+            InputNum recursive;
+            InputNum::ParseResult res = recursive.parse(expr.str_args(0) + "+1");
+            if (!res)
+                return InputNum::ParseResult(false, expr.args[0].first + res.pos, res.message);
+            type = recursive.type();
+            gk = recursive.value();
+            gk -= 1;
+            if (gk%divisor != 0)
+                return InputNum::ParseResult(false, expr.args[0].first, "should be divisible by " + std::to_string(divisor));
+            gk /= divisor;
+            recursive._c = (neg ? -1 : 1);
+            gk += recursive._c;
+            factors = std::move(recursive.factors());
+            cofactor = std::move(recursive.cofactor());
+            b_factors = std::move(recursive.b_factors());
+            b_cofactor = std::move(recursive.b_cofactor());
+            ::factorize(gk, factors, cofactor);
+            if (recursive.k() != 1)
+            {
+                gk *= recursive.gk();
+                custom_k = "*" + recursive.gk().to_string();
+            }
+            gb = recursive.gb();
+            custom_b = recursive._custom_b;
+            n = recursive._n;
+            multifactorial = recursive._multifactorial;
+            gd = recursive.gd();
+            custom_d = recursive._custom_d;
+            c = 1;
+            if (expr.str_func == "Quad" && recursive.k() > 0 && recursive.k() < 100 && recursive.d() == 1)
+            {
+                algebraic_type = ALGEBRAIC_QUAD;
+                algebraic_k = (int32_t)(recursive.k()*recursive._c);
+            }
+            if (expr.str_func == "Hex" && recursive.k() > 0 && recursive.k() < 32 && recursive.d() == 1)
+            {
+                algebraic_type = ALGEBRAIC_HEX;
+                algebraic_k = (int32_t)(recursive.k()*recursive._c);
+            }
+            if (type == KBNC)
+            {
+                if (recursive.gk()%divisor == 0)
+                    recursive.gk() /= divisor;
+                else
+                {
+                    recursive.gk() *= recursive.gb()/divisor;
+                    recursive._n--;
+                }
+                custom_k = "(" + recursive.build_text() + ")" + custom_k;
+            }
+            else if (type == FACTORIAL || type == PRIMORIAL)
+            {
+                std::string st = recursive.build_text();
+                custom_k = "(" + st.substr(0, st.size() - 2) + "/" + std::to_string(divisor) + st.substr(st.size() - 2) + ")" + custom_k;
+            }
+        }
+        else
+            return InputNum::ParseResult(false, expr.pos, "unknown function");
     }
     else
     {
-        factorize(_gb, _b_factors, _b_cofactor);
-    }
-    
-    if (_type != GENERIC)
-    {
-        factorize(_gk, _factors, _cofactor);
-        for (auto& factor : _b_factors)
-            ::add_factor(_factors, factor.first, factor.second*_n);
-        std::sort(_factors.begin(), _factors.end(), [](std::pair<arithmetic::Giant, int>& a, std::pair<arithmetic::Giant, int>& b) { return a.first < b.first; });
-        if (!_b_cofactor.empty() && !_cofactor.empty())
-            _cofactor *= power(_b_cofactor, _n);
-        else if (!_b_cofactor.empty())
-            _cofactor = power(_b_cofactor, _n);
-        if (_gd > 1)
+        gk = 1;
+        while (it != s.end() && *it == '*')
         {
-            std::vector<std::pair<arithmetic::Giant, int>> factors;
-            arithmetic::Giant cofactor;
-            factorize(_gd, factors, cofactor);
-            for (auto& factor : factors)
-                ::add_factor(_factors, factor.first, -factor.second);
-            if (!cofactor.empty())
+            if (!expr.evaluate())
+                return InputNum::ParseResult(false, expr.error_pos, expr.error_msg);
+            if (gk == 1)
             {
-                if (_cofactor.empty() || _cofactor%cofactor != 0)
-                    throw ArithmeticException();
-                _cofactor /= cofactor;
+                gk = std::move(expr.value);
+                custom_k = std::move(expr.str_value);
+                expr.merge_factors(factors, cofactor, 1);
+            }
+            else
+            {
+                if (!custom_k.empty() || !expr.str_value.empty())
+                {
+                    if (custom_k.empty())
+                        custom_k = gk.to_string();
+                    if (expr.str_value.empty())
+                        expr.str_value = expr.value.to_string();
+                    custom_k += "*";
+                    custom_k += expr.str_value;
+                }
+                gk *= expr.value;
+                expr.merge_factors(factors, cofactor, 1);
+            }
+
+            it++;
+            expr.iterate(s, it);
+        }
+
+        if (it == s.end() || *it == '\"' || *it == '^' || *it == '+' || *it == '-' || *it == '/')
+        {
+            if (!expr.evaluate())
+                return InputNum::ParseResult(false, expr.error_pos, expr.error_msg);
+            gb = std::move(expr.value);
+            custom_b = std::move(expr.str_value);
+            expr.merge_factors(b_factors, b_cofactor, 1);
+
+            if (it != s.end() && *it == '^')
+            {
+                it++;
+                expr.iterate(s, it);
+                if (!expr.evaluate(false))
+                    return InputNum::ParseResult(false, expr.error_pos, expr.error_msg);
+                if (expr.value.size() > 1)
+                    return InputNum::ParseResult(false, expr.pos, "exponent too big");
+                n = expr.value.data()[0];
+                expr.merge_factors(factors, cofactor, (int)n);
+            }
+            else
+                n = 1;
+        }
+        else if (*it == '!')
+        {
+            type = FACTORIAL;
+            if (!expr.evaluate(false))
+                return InputNum::ParseResult(false, expr.error_pos, expr.error_msg);
+            if (expr.value.size() > 1)
+                return InputNum::ParseResult(false, expr.pos, "factorial too big");
+            n = expr.value.data()[0];
+            it++;
+            for (multifactorial = 1; it != s.end() && *it == '!'; it++, multifactorial++);
+            if (multifactorial == 1 && expr.iterate(s, it))
+            {
+                if (!expr.evaluate(false))
+                    return InputNum::ParseResult(false, expr.error_pos, expr.error_msg);
+                if (expr.value > n)
+                    return InputNum::ParseResult(false, expr.pos, "multifactorial step too big");
+                multifactorial = expr.value.data()[0];
+            }
+
+            Giant factor;
+            factor = ((uint64_t)multifactorial << 32) + n;
+            factor.arithmetic().neg(factor, factor);
+            gb = factorial(factor);
+            ::add_factor(factors, factor, 1);
+        }
+        else if (*it == '#')
+        {
+            type = PRIMORIAL;
+            if (!expr.evaluate(false))
+                return InputNum::ParseResult(false, expr.error_pos, expr.error_msg);
+            if (expr.value.bitlen() > 31)
+                return InputNum::ParseResult(false, expr.pos, "primorial too big");
+            it++;
+
+            Giant factor;
+            factor.arithmetic().neg(expr.value, factor);
+            gb = primorial(factor);
+            n = factor.data()[0];
+            ::add_factor(factors, factor, 1);
+        }
+        else
+            return InputNum::ParseResult(false, (int)(it - s.begin()), "unexpected symbol");
+
+        gd = 1;
+        while (it != s.end() && *it == '/')
+        {
+            it++;
+            expr.iterate(s, it);
+
+            if (!expr.evaluate())
+                return InputNum::ParseResult(false, expr.error_pos, expr.error_msg);
+            if (gd == 1)
+            {
+                gd = std::move(expr.value);
+                custom_d = std::move(expr.str_value);
+                expr.merge_factors(factors, cofactor, -1);
+            }
+            else
+            {
+                if (!custom_d.empty() || !expr.str_value.empty())
+                {
+                    if (custom_d.empty())
+                        custom_d = gd.to_string();
+                    if (expr.str_value.empty())
+                        expr.str_value = expr.value.to_string();
+                    custom_d += "/";
+                    custom_d += expr.str_value;
+                }
+                gd *= expr.value;
+                expr.merge_factors(factors, cofactor, -1);
+            }
+        }
+        if (gd > 1 && gk*(type == KBNC ? power(gb, n) : gb)%gd != 0)
+            return InputNum::ParseResult(false, (int)(it - s.begin()), "not divisible by D");
+
+        if (it != s.end() && (*it == '+' || *it == '-'))
+        {
+            bool minus = (*it == '-');
+            it++;
+            expr.iterate(s, it);
+            if (!expr.evaluate(false))
+                return InputNum::ParseResult(false, expr.error_pos, expr.error_msg);
+            if (expr.value.bitlen() > 63)
+                return InputNum::ParseResult(false, expr.pos, "C too big");
+            if (expr.value.size() == 1)
+                c = expr.value.data()[0];
+            if (expr.value.size() == 2)
+                c = *(int64_t*)expr.value.data();
+            if (minus)
+                c = -c;
+        }
+        else if (type == KBNC && gk == 1 && n == 1)
+        {
+            type = GENERIC;
+            n = 0;
+            if (gd > 1)
+            {
+                gb /= gd;
+                if (!custom_b.empty() && custom_d.empty())
+                    custom_d = gd.to_string();
+                gd = 1;
+            }
+        }
+        else if (c_required)
+            return InputNum::ParseResult(false, (int)(it - s.begin()), "C expected");
+    }
+    if (it != s.end() && *it == '\"')
+        it++;
+    for (; it != s.end() && std::isspace(*it); it++);
+    if (it != s.end())
+        return InputNum::ParseResult(false, (int)(it - s.begin()), "excess symbols");
+
+    _type = type;
+    _gk = std::move(gk);
+    _gb = std::move(gb);
+    _n = n;
+    _gd = std::move(gd);
+    _c = c;
+    _custom_k = std::move(custom_k);
+    _custom_b = std::move(custom_b);
+    _custom_d = std::move(custom_d);
+    _multifactorial = multifactorial;
+    _algebraic_type = algebraic_type;
+    _algebraic_k = algebraic_k;
+    _factors = std::move(factors);
+    _cofactor = std::move(cofactor);
+    _b_factors = std::move(b_factors);
+    _b_cofactor = std::move(b_cofactor);
+    std::sort(_factors.begin(), _factors.end(), [](std::pair<arithmetic::Giant, int>& a, std::pair<arithmetic::Giant, int>& b) { return (a.second > 0 && b.second < 0) || a.first < b.first; });
+
+    process(true);
+    return InputNum::ParseResult(true);
+}
+
+void InputNum::process(bool factored)
+{
+    if (!factored)
+    {
+        _factors.clear();
+        if (!_cofactor.empty())
+            _cofactor.arithmetic().free(_cofactor);
+        _b_factors.clear();
+        if (!_b_cofactor.empty())
+            _b_cofactor.arithmetic().free(_b_cofactor);
+
+        if (_type != GENERIC)
+        {
+            factorize(_gk, _factors, _cofactor);
+            if (_type == KBNC)
+            {
+                factorize(_gb, _b_factors, _b_cofactor);
+                for (auto& factor : _b_factors)
+                    ::add_factor(_factors, factor.first, factor.second*_n);
+            }
+            if (_type == FACTORIAL)
+            {
+                Giant factorial;
+                factorial = ((uint64_t)_multifactorial << 32) + _n;
+                factorial.arithmetic().neg(factorial, factorial);
+                ::add_factor(_factors, factorial, 1);
+            }
+            if (_type == PRIMORIAL)
+            {
+                Giant primorial;
+                primorial = _n;
+                primorial.arithmetic().neg(primorial, primorial);
+                ::add_factor(_factors, primorial, 1);
+            }
+
+            std::sort(_factors.begin(), _factors.end(), [](std::pair<arithmetic::Giant, int>& a, std::pair<arithmetic::Giant, int>& b) { return a.first < b.first; });
+            if (!_b_cofactor.empty() && !_cofactor.empty())
+                _cofactor *= power(_b_cofactor, _n);
+            else if (!_b_cofactor.empty())
+                _cofactor = power(_b_cofactor, _n);
+            if (_gd > 1)
+            {
+                std::vector<std::pair<arithmetic::Giant, int>> factors;
+                arithmetic::Giant cofactor;
+                factorize(_gd, factors, cofactor);
+                for (auto& factor : factors)
+                    ::add_factor(_factors, factor.first, -factor.second);
+                if (!cofactor.empty())
+                {
+                    if (_cofactor.empty() || _cofactor%cofactor != 0)
+                        throw ArithmeticException();
+                    _cofactor /= cofactor;
+                }
             }
         }
     }
@@ -1198,7 +1283,8 @@ std::vector<int> InputNum::factorize_minus1(int depth)
         s++;
     Giant minus1 = value() - 1;
     std::vector<std::pair<arithmetic::Giant, int>> factors;
-    factorize(minus1, factors, minus1, [&](Giant& x, uint32_t p) { return mod(p) == 1; }, s);
+    Giant cofactor;
+    factorize(minus1, factors, cofactor, [&](Giant& x, uint32_t p) { return mod(p) == 1; }, s);
 
     std::vector<int> divisors;
     for (auto& factor : factors)
@@ -1214,42 +1300,54 @@ std::vector<int> InputNum::factorize_minus1(int depth)
     return divisors;
 }
 
-void InputNum::factorize_f_p()
+void InputNum::expand_factors()
 {
-    if (_type != FACTORIAL && _type != PRIMORIAL)
+    bool f_p_exist = false;
+    for (auto& f : _factors)
+        if (f.first < 0)
+            f_p_exist = true;
+    if (!f_p_exist)
         return;
+
     std::map<uint32_t, int> factors;
     for (auto& f : _factors)
-        if (f.first.size() == 1)
+        if (f.first > 0 && f.first.size() == 1)
             factors[*f.first.data()] = f.second;
 
-    if (_type == FACTORIAL)
-    {
-        uint32_t i = _n%_multifactorial;
-        while (i < 2)
-            i += _multifactorial;
-        for (; i <= _n; i += _multifactorial)
+    for (auto& f : _factors)
+        if (f.first < 0)
         {
-            uint32_t j = i;
-            for (auto it = PrimeIterator::get(); (*it)*(*it) <= (int)j; it++)
-                if (j%(*it) == 0)
+            if (f.first.size() == 2)
+            {
+                uint32_t n = f.first.data()[0];
+                uint32_t multifactorial = f.first.data()[1];
+                uint32_t i = n%multifactorial;
+                while (i < 2)
+                    i += multifactorial;
+                for (; i <= n; i += multifactorial)
                 {
-                    int& power = factors[*it];
-                    do
-                    {
-                        power++;
-                        j /= *it;
-                    } while (j%(*it) == 0);
+                    uint32_t j = i;
+                    for (auto it = PrimeIterator::get(); (*it)*(*it) <= (int)j; it++)
+                        if (j%(*it) == 0)
+                        {
+                            int& power = factors[*it];
+                            do
+                            {
+                                power += f.second;
+                                j /= *it;
+                            } while (j%(*it) == 0);
+                        }
+                    if (j != 1)
+                        factors[j] += f.second;
                 }
-            if (j != 1)
-                factors[j]++;
+            }
+            if (f.first.size() == 1)
+            {
+                uint32_t n = f.first.data()[0];
+                for (auto it = PrimeIterator::get(); *it <= (int)n; it++)
+                    factors[*it] += f.second;
+            }
         }
-    }
-    if (_type == PRIMORIAL)
-    {
-        for (auto it = PrimeIterator::get(); *it <= (int)_n; it++)
-            factors[*it]++;
-    }
 
     Giant tmp;
     std::vector<std::pair<Giant, int>> new_factors;
@@ -1260,7 +1358,7 @@ void InputNum::factorize_f_p()
             new_factors.emplace_back(std::move(tmp), f.second);
         }
     for (auto& f : _factors)
-        if (f.first.size() > 1)
+        if (f.first > 0 && f.first.size() > 1)
             new_factors.emplace_back(std::move(f.first), f.second);
     _factors = std::move(new_factors);
 }
@@ -1303,9 +1401,14 @@ void InputNum::print_info()
 
     std::cout << display_text() << ", " << N.bitlen() << " bits, " << N.digits() << " digits." << std::endl;
 
+    bool mod_available = true;
+    for (auto& factor : _factors)
+        if (factor.first < 0)
+            mod_available = false;
+
     std::vector<std::pair<arithmetic::Giant, int>> factors;
     arithmetic::Giant cofactor;
-    factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { return mod(p) == 0; });
+    factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { return mod_available ? mod(p) == 0 : x%p == 0; });
     if (factors.empty())
         std::cout << "No small factors." << std::endl;
     else if (factors[0].first == N)
@@ -1452,49 +1555,57 @@ void InputNum::print_info()
     else
     {
         N -= 1;
-        factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { return mod(p) == 1; });
+        factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { return mod_available ? mod(p) == 1 : x%p == 0; });
         N += 1;
     }
-    if (factors.empty() && (_c != 1 || (_type != FACTORIAL && _type != PRIMORIAL)))
+    if (factors.empty())
         std::cout << "No small factors of N-1." << std::endl;
     else
     {
         tmp = 1;
         st.clear();
-        if (_c == 1 && _type == FACTORIAL)
-        {
-            tmp = _gb;
-            st = std::to_string(_n);
-            if (_multifactorial <= 3)
-                st.append(_multifactorial, '!');
-            else
-                st.append(1, '!').append(std::to_string(_multifactorial));
-        }
-        if (_c == 1 && _type == PRIMORIAL)
-        {
-            tmp = _gb;
-            st = std::to_string(_n) + "#";
-        }
         for (auto& factor : factors)
         {
-            if (factor.second == 0)
-                continue;
             if (!st.empty())
                 st += " ";
             if (factor.second < 0)
                 st += "/";
-            st += factor.first.to_string();
-            if (abs(factor.second) > 1)
+            Giant value;
+            if (factor.first < 0 && factor.first.size() == 2)
             {
-                st += "^";
-                st += std::to_string(abs(factor.second));
+                st += std::to_string(factor.first.data()[0]);
+                int multifactorial = factor.first.data()[1];
+                if (multifactorial <= 3)
+                    st.append(multifactorial, '!');
+                else
+                    st.append(1, '!').append(std::to_string(multifactorial));
+                if (!cofactor.empty())
+                    value = factorial(factor.first);
+            }
+            else if (factor.first < 0 && factor.first.size() == 1)
+            {
+                st += std::to_string(factor.first.data()[0]) + "#";
+                if (!cofactor.empty())
+                    value = primorial(factor.first);
+            }
+            else
+            {
+                st += factor.first.to_string();
+                if (!cofactor.empty())
+                    value = factor.first;
             }
             if (!cofactor.empty())
             {
+                value.power(abs(factor.second));
                 if (factor.second > 0)
-                    tmp *= power(factor.first, factor.second);
+                    tmp *= value;
                 else
-                    tmp /= power(factor.first, -factor.second);
+                    tmp /= value;
+            }
+            if (abs(factor.second) != 1)
+            {
+                st += "^";
+                st += std::to_string(abs(factor.second));
             }
         }
         std::cout << "Factors of N-1";
@@ -1520,49 +1631,57 @@ void InputNum::print_info()
     else
     {
         N += 1;
-        factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { return mod(p) == p - 1; });
+        factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { return mod_available ? mod(p) == p - 1 : x%p == 0; });
         N -= 1;
     }
-    if (factors.empty() && (_c != -1 || (_type != FACTORIAL && _type != PRIMORIAL)))
+    if (factors.empty())
         std::cout << "No small factors of N+1." << std::endl;
     else
     {
         tmp = 1;
         st.clear();
-        if (_c == -1 && _type == FACTORIAL)
-        {
-            tmp = _gb;
-            st = std::to_string(_n);
-            if (_multifactorial <= 3)
-                st.append(_multifactorial, '!');
-            else
-                st.append(1, '!').append(std::to_string(_multifactorial));
-        }
-        if (_c == -1 && _type == PRIMORIAL)
-        {
-            tmp = _gb;
-            st = std::to_string(_n) + "#";
-        }
         for (auto& factor : factors)
         {
-            if (factor.second == 0)
-                continue;
             if (!st.empty())
                 st += " ";
             if (factor.second < 0)
                 st += "/";
-            st += factor.first.to_string();
-            if (abs(factor.second) > 1)
+            Giant value;
+            if (factor.first < 0 && factor.first.size() == 2)
             {
-                st += "^";
-                st += std::to_string(abs(factor.second));
+                st += std::to_string(factor.first.data()[0]);
+                int multifactorial = factor.first.data()[1];
+                if (multifactorial <= 3)
+                    st.append(multifactorial, '!');
+                else
+                    st.append(1, '!').append(std::to_string(multifactorial));
+                if (!cofactor.empty())
+                    value = factorial(factor.first);
+            }
+            else if (factor.first < 0 && factor.first.size() == 1)
+            {
+                st += std::to_string(factor.first.data()[0]) + "#";
+                if (!cofactor.empty())
+                    value = primorial(factor.first);
+            }
+            else
+            {
+                st += factor.first.to_string();
+                if (!cofactor.empty())
+                    value = factor.first;
             }
             if (!cofactor.empty())
             {
+                value.power(abs(factor.second));
                 if (factor.second > 0)
-                    tmp *= power(factor.first, factor.second);
+                    tmp *= value;
                 else
-                    tmp /= power(factor.first, -factor.second);
+                    tmp /= value;
+            }
+            if (abs(factor.second) != 1)
+            {
+                st += "^";
+                st += std::to_string(abs(factor.second));
             }
         }
         std::cout << "Factors of N+1";

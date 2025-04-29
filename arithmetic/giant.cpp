@@ -141,7 +141,7 @@ namespace arithmetic
         ctog(a.data(), giant(res));
     }
 
-    void GiantsArithmetic::init(uint32_t* data, int size, Giant& res)
+    void GiantsArithmetic::init(const uint32_t* data, int size, Giant& res)
     {
         if (size == 0)
         {
@@ -782,17 +782,9 @@ namespace arithmetic
             free(res);
             return;
         }
-        if (a._size == 0)
-        {
-            init(0, res);
-            return;
-        }
-        int size = a.size();
-        res.arithmetic().alloc(res, size);
-        memcpy(res._data, a._data, size*4);
-        if (GMP_NUMB_BITS == 64 && (size & 1))
-            res.data()[size] = 0;
-        res._size = (size*32 + GMP_NUMB_BITS - 1)/GMP_NUMB_BITS;
+        init(a.data(), a.size(), res);
+        if (a._size < 0)
+            res._size = -res._size;
     }
 
     void GMPArithmetic::move(Giant&& a, Giant& res)
@@ -846,7 +838,7 @@ namespace arithmetic
         mpz_set_str(mpz(res), a.data(), 10);
     }
 
-    void GMPArithmetic::init(uint32_t* data, int size, Giant& res)
+    void GMPArithmetic::init(const uint32_t* data, int size, Giant& res)
     {
         if (size == 0)
         {

@@ -25,7 +25,7 @@ namespace arithmetic
         virtual void init(int64_t a, Giant& res);
         virtual void init(uint64_t a, Giant& res);
         virtual void init(const std::string& a, Giant& res) override;
-        virtual void init(uint32_t* data, int size, Giant& res);
+        virtual void init(const uint32_t* data, int size, Giant& res);
         virtual void init(const GWNum& a, Giant& res);
         virtual std::string to_string(const Giant& a);
         virtual void to_GWNum(const Giant& a, GWNum& res);
@@ -111,7 +111,7 @@ namespace arithmetic
         virtual void init(int64_t a, Giant& res) override;
         virtual void init(uint64_t a, Giant& res) override;
         virtual void init(const std::string& a, Giant& res) override;
-        virtual void init(uint32_t* data, int size, Giant& res) override;
+        virtual void init(const uint32_t* data, int size, Giant& res) override;
         virtual void init(const GWNum& a, Giant& res) override;
         virtual std::string to_string(const Giant& a) override;
         virtual void to_GWNum(const Giant& a, GWNum& res) override;
