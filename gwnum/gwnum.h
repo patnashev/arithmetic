@@ -14,9 +14,9 @@
 |
 | MULTI-THREAD WARNING: You CAN perform gwnum operations in different
 | threads IF AND ONLY IF each uses a different gwhandle structure
-| initialized by gwinit.
+| initialized by gwinit or gwclone.
 | 
-|  Copyright 2002-2023 Mersenne Research, Inc.  All rights reserved.
+|  Copyright 2002-2025 Mersenne Research, Inc.  All rights reserved.
 +---------------------------------------------------------------------*/
 
 #ifndef _GWNUM_H
@@ -55,9 +55,9 @@ typedef gwnum *gwarray;
 /* are new prime95 versions without any changes in the gwnum code.  This version number is also embedded in the assembly code and */
 /* gwsetup verifies that the version numbers match.  This prevents bugs from accidentally linking in the wrong gwnum library. */
 
-#define GWNUM_VERSION		"30.19"
-#define GWNUM_MAJOR_VERSION	30
-#define GWNUM_MINOR_VERSION	19
+#define GWNUM_VERSION		"31.3"
+#define GWNUM_MAJOR_VERSION	31
+#define GWNUM_MINOR_VERSION	3
 
 /* Error codes returned by the three gwsetup routines */
 
@@ -892,105 +892,6 @@ long gwtobinarylongs (
 	unsigned long arraylen);/* Maximum size of the array */
 
 /*---------------------------------------------------------------------+
-|          SPECIAL ECM ROUTINE FOR GMP-ECM USING GWNUM LIBRARY         |
-+---------------------------------------------------------------------*/
-
-/* Return codes */
-#define ES1_SUCCESS		0	/* Success, but no factor */
-#define ES1_FACTOR_FOUND	1	/* Success, factor found */
-#define ES1_CANNOT_DO_IT	2	/* This k,b,n,c cannot be handled */
-#define ES1_MEMORY		3	/* Out of memory */
-#define ES1_INTERRUPT		4	/* Execution interrupted */
-#define ES1_CANNOT_DO_QUICKLY	5	/* Requires 3-multiply reduction */
-#define ES1_HARDWARE_ERROR	6	/* An error was detected, most likely a hardware error. */
-
-/* Option codes */
-#define ES1_DO_SLOW_CASE	0x1	/* Set this if ecmStage1 should do slow 3-multiply reduction cases. */
-
-/* INPUTS:
-
-Input number (3 possibilities):
-
-1) k,b,n,c set and num_being_factored_array = NULL.  k*b^n+c is factored.
-2) k,b,n,c zero and num_being_factored_array set.  num_being_factored is
-   worked on using generic 3-multiply reduction
-3) k,b,n,c set and num_being_factored_array set.  num_being_factored is
-   worked on - it must be a factor of k*b^n+c.
-
-A_array, B1 are required
-
-B1_done is optional.  Use it to resume a stage 1 calculation.
-
-x_array, z_array is the starting point.  If z_array is not given, then
-z is assumed to be one.
-
-stop_check_proc is optional
-
-options are defined above
-
-
-   OUTPUTS:
-
-On success:
-
-   if z_array is NULL, then x_array is set to normalized point
-   else x_array, z_array is set to the unnormalized point
-
-On factor found:
-
-   x_array is set to the factor found
-
-On interrupt:
-
-   B1_done is set to the last prime below B1 that was processed.
-   If z_array != NULL (preferred) then x_array and z_array are set to the
-current point.  The (x,z) point is not normalized because it will
-be slow for large numbers.  This is unacceptable during system shutdown.
-Caller must allocate x and z arrays large enough to hold any k*b^n+c value.
-   If z_array == NULL, then a normalized x is returned. Caller must allocate
-x array large enough to hold any value less than num_being_factored.
-
-*/
-
-int gwnum_ecmStage1_u32 (
-	double	k,			/* K in K*B^N+C */
-	unsigned long b,		/* B in K*B^N+C */
-	unsigned long n,		/* N in K*B^N+C */
-	signed long c,			/* C in K*B^N+C */
-	uint32_t *num_being_factored_array, /* Number to factor */
-	unsigned long num_being_factored_array_len,
-	uint64_t B1,			/* Stage 1 bound */
-	uint64_t *B1_done,		/* Stage 1 that is already done */
-	uint32_t *A_array,		/* A - caller derives it from sigma */
-	unsigned long A_array_len,
-	uint32_t *x_array,		/* X value of point */
-	unsigned long *x_array_len,
-	uint32_t *z_array,		/* Z value of point */
-	unsigned long *z_array_len,
-	int	(*stop_check_proc)(int),/* Ptr to proc that returns TRUE */
-					/* if user interrupts processing */
-	unsigned long options);
-
-int gwnum_ecmStage1_u64 (
-	double	k,			/* K in K*B^N+C */
-	unsigned long b,		/* B in K*B^N+C */
-	unsigned long n,		/* N in K*B^N+C */
-	signed long c,			/* C in K*B^N+C */
-	uint64_t *num_being_factored_array, /* Number to factor */
-	unsigned long num_being_factored_array_len,
-	uint64_t B1,			/* Stage 1 bound */
-	uint64_t *B1_done,		/* Stage 1 that is already done */
-	uint64_t *A_array,		/* A - caller derives it from sigma */
-	unsigned long A_array_len,
-	uint64_t *x_array,		/* X value of point */
-	unsigned long *x_array_len,
-	uint64_t *z_array,		/* Z value of point */
-	unsigned long *z_array_len,
-	int	(*stop_check_proc)(int),/* Ptr to proc that returns TRUE */
-					/* if user interrupts processing */
-	unsigned long options);
-
-/*---------------------------------------------------------------------+
 |                             GWNUM INTERNALS                          |
 +---------------------------------------------------------------------*/
 
@@ -1091,10 +992,10 @@ struct gwhandle_struct {
 	giant	GW_MODULUS;		/* In general purpose mod case, operations are modulo this number */
 	gwnum	GW_MODULUS_FFT;		/* In Barrett general purpose mod case, this is  the FFT of GW_MODULUS */
 	gwnum	GW_RECIP_FFT;		/* In Barrett general purpose mod case, FFT of shifted reciprocal of GW_MODULUS */
-	unsigned long GW_ZEROWORDSLOW;	/* In Barrett general purpose mod case, count of words to zero during copy step of a general purpose mod */
+	gwnum	BARRETT_MASK_LO;	/* Mask to zero lower words of an FFT */
+	gwnum	BARRETT_MASK_HI;	/* Mask to zero upper words of an FFT */
 	unsigned long GW_GEN_MOD_MAX;	/* In Barrett general purpose mod case, maximum number of words we can safely allow in a GENERAL_MOD number */
 	unsigned long GW_GEN_MOD_MAX_OFFSET; /* In Barrett general purpose mod case, offset to the GW_GEN_MOD_MAX word */
-	unsigned long saved_copyz_n;	/* In Barrett general purpose mod case, used to reduce COPYZERO calculations */
 	gwnum	N_Q;			/* In MMGW general purpose mod case, this is GW_MODULUS pre-FFTed for negacyclic use. */
 	gwnum	Np_R;			/* In MMGW general purpose mod case, this is inverse of R=2^n-1 pre-FFTed for cyclic use. */
 	gwnum	R2_4;			/* In MMGW general purpose mod case, this is inverse of R^2/4 for faster gianttogw. */
@@ -1142,8 +1043,8 @@ struct gwhandle_struct {
 	gwnum	*gwnum_alloc;		/* Array of allocated gwnums */
 	unsigned int gwnum_alloc_count; /* Count of allocated gwnums */
 	unsigned int gwnum_alloc_array_size; /* Size of gwnum_alloc array */
-	gwnum	*gwnum_free;		/* Array of available gwnums */
-	unsigned int gwnum_free_count;	/* Count of available gwnums */
+	gwnum	gwnum_free;		/* Linked list of cached free gwnums */
+	unsigned int gwnum_free_count;	/* Count of cached free gwnums */
 	unsigned int gwnum_max_free_count; /* Count of free gwnums that should be cached (default is 10) */
 	gwarray	array_list;		/* List of arrays allocated by gwalloc_array */
 	size_t	GW_BIGBUF_SIZE;		/* Size of the optional buffer */
@@ -1190,8 +1091,10 @@ struct gwhandle_struct {
 					/* be identical) results of another FFT implementation. */
 	int	qa_picked_nth_fft;	/* Internal hack returning which FFT implementation was selected */
 	int	careful_count;		/* Count of gwsquare and gwmul3 calls to convert into gwmul3_carefully calls */
+	intptr_t ZPAD_SUB7_OFFSET[7];	/* Offsets to the lowest 7 words */
+	intptr_t ZPAD_COPY7_OFFSET[7];	/* Offsets to the 7 words around the halfway point */
 	double	ZPAD_COPY7_ADJUST[7];	/* Adjustments for copying the 7 words around the halfway point of a zero pad FFT. */
-	double	ZPAD_0_6_ADJUST[7];	/* Adjustments for ZPAD0_6 in a r4dwpn FFT */
+	double	ZPAD0_6_ADJUST[7];	/* Adjustments for ZPAD0_6 in a r4dwpn FFT */
 	unsigned long wpn_count;	/* Count of r4dwpn pass 1 blocks that use the same ttp/ttmp grp multipliers */
 	gwatomic clone_count;		/* How many times this gwhandle has been cloned */
 	gwhandle *clone_of;		/* If this is a cloned gwhandle, this points to the gwhandle that was cloned */
@@ -1203,23 +1106,16 @@ struct gwhandle_struct {
 	gwhandle *parent_gwdata;	/* The parent gwdata of the cyclic and negacyclic gwdata */
 };
 
-/* A psuedo declaration for our big numbers.  The actual pointers to */
-/* these big numbers are to the data array.  The 96 bytes prior to the data contain: */
+/* A psuedo declaration for gwnum numbers.  A gwnum pointer points to the FFT data array.  The bytes prior to the FFT data contain: */
 /* data-4:  float containing number of unnormalized adds that have been done.  After a certain number of unnormalized adds, */
 /*	    the next add must be normalized to avoid overflow errors during a multiply. */
 /* data-8:  Four unused bytes. */
 /* data-16: double containing the product of the two sums of the input FFT values. */
-/* data-24: double containing the sum of the output FFT values.  These two */
-/*	    values can be used as a sanity check when multiplying numbers. */
-/*	    The two values should be "reasonably close" to one another. */
+/* data-24: Unused.  Formerly a double containing the sum of the output FFT values. */
 /* data-28: Flag indicating gwnum value has been partially FFTed. */
 /* data-32: Allocation flags - used to free memory when done. */
 /* data-88: Seven doubles (input FFT values near the halfway point when doing a zero-padded FFT). */
 /* data-192: Thirteen doubles only used by the polymult library for zero-padded FFTs */
-/* typedef struct { */
-/*	char	pad[96];	   Used to track unnormalized add/sub and original address */
-/*	double	data[512];	   The big number broken into chunks.  This array is variably sized. */
-/* } *gwnum; */
 #define GW_SMALL_HEADER_SIZE	32	/* Number of data bytes before a gwnum ptr when not using zero-padded FFTs */
 #define GW_ZPAD_HEADER_SIZE	96	/* Number of data bytes before a gwnum ptr when using zero-padded FFTs */
 #define GW_LARGE_HEADER_SIZE	192	/* Number of data bytes before a gwnum ptr when using zero-padded FFTs and polymult */
