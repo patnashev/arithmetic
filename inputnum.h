@@ -35,15 +35,15 @@ public:
     };
 
 public:
-    InputNum() { _gk = 0; _gb = 0; _gd = 1; }
+    InputNum() { _gk = 0; _gb = 0; _gd = 1; _gf = 1; }
     InputNum(int k, int b, int n, int c) { init(k, b, n, c); }
     template<class T>
-    InputNum(T&& b) { _type = GENERIC; _gk = 1; _gb = std::forward<T>(b); _n = 0; _gd = 1; _c = 0; process(); }
+    InputNum(T&& b) { _type = GENERIC; _gk = 1; _gb = std::forward<T>(b); _n = 0; _gd = 1; _c = 0; _gf = 1; process(); }
 
     template<class TK, class TB>
-    void init(TK&& k, TB&& b, int n, int c) { _type = KBNC; _gk = std::forward<TK>(k); _gb = std::forward<TB>(b); _n = n; _gd = 1; _c = c; _custom_k.clear(); _custom_b.clear(); _custom_d.clear(); _algebraic_type = ALGEBRAIC_SIMPLE; _algebraic_k = 0; process(); }
+    void init(TK&& k, TB&& b, int n, int c) { _type = KBNC; _gk = std::forward<TK>(k); _gb = std::forward<TB>(b); _n = n; _gd = 1; _c = c; _gf = 1; _custom_k.clear(); _custom_b.clear(); _custom_d.clear(); _custom_f.clear(); _algebraic_type = ALGEBRAIC_SIMPLE; _algebraic_k = 0; process(); }
     template<class T>
-    void init(T&& b) { _type = GENERIC; _gk = 1; _gb = std::forward<T>(b); _n = 0; _gd = 1; _c = 0; _custom_k.clear(); _custom_b.clear(); _custom_d.clear(); _algebraic_type = ALGEBRAIC_SIMPLE; _algebraic_k = 0; process(); }
+    void init(T&& b) { _type = GENERIC; _gk = 1; _gb = std::forward<T>(b); _n = 0; _gd = 1; _c = 0; _gf = 1; _custom_k.clear(); _custom_b.clear(); _custom_d.clear(); _custom_f.clear(); _algebraic_type = ALGEBRAIC_SIMPLE; _algebraic_k = 0; process(); }
     bool read(File& file);
     void write(File& file);
     ParseResult parse(const std::string& s, bool c_required = true);
@@ -54,20 +54,22 @@ public:
     static uint64_t parse_numeral(const std::string& s);
 
     bool empty() const { return _gb == 0; }
-    int type() { return _type; }
+    int type() { return _gf == 1 ? _type : GENERIC; }
     uint64_t k() { return _gk.size() == 2 && _gk.bitlen() < 52 ? *(uint64_t*)(_gk.data()) : _gk.size() == 1 ? *(_gk.data()) : 0; }
     uint32_t b() { return _gb.size() == 1 ? *(_gb.data()) : 0; }
     uint32_t n() { return _type == GENERIC ? 1 : _n; }
     uint32_t d() { return _gd.size() == 1 ? *(_gd.data()) : 0; }
-    int64_t c() { return _c; }
+    int64_t c() { return _gf == 1 ? _c : 0; }
+    uint32_t f() { return _gf.size() == 1 ? *(_gf.data()) : 0; }
     arithmetic::Giant& gk() { return _gk; }
     arithmetic::Giant& gb() { return _gb; }
     arithmetic::Giant& gd() { return _gd; }
+    arithmetic::Giant& gf() { return _gf; }
     int gfn() { return _gfn; }
     uint32_t multifactorial() { return _multifactorial; }
     int algebraic_type() { return _algebraic_type; }
     int algebraic_k() { return _algebraic_k; }
-    arithmetic::Giant value() { return _type == GENERIC ? _gb : _type != KBNC ? _gk*_gb/_gd + _c : _gk*power(_gb, _n)/_gd + _c; }
+    arithmetic::Giant value() { return _type == GENERIC ? _gb : _type != KBNC ? (_gk*_gb/_gd + _c)/_gf : (_gk*power(_gb, _n)/_gd + _c)/_gf; }
     uint32_t mod(uint32_t modulus);
     uint32_t fingerprint() { return mod(3417905339UL); }
 
@@ -97,6 +99,7 @@ private:
     uint32_t _n = 0;
     arithmetic::Giant _gd;
     int64_t _c = 0;
+    arithmetic::Giant _gf;
     std::vector<std::pair<arithmetic::Giant, int>> _b_factors;
     arithmetic::Giant _b_cofactor;
     std::vector<std::pair<arithmetic::Giant, int>> _factors;
@@ -106,6 +109,7 @@ private:
     std::string _custom_k;
     std::string _custom_b;
     std::string _custom_d;
+    std::string _custom_f;
     int _gfn = 0;
     uint32_t _multifactorial = 0;
     int _algebraic_type = ALGEBRAIC_SIMPLE;

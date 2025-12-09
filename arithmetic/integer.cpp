@@ -15,6 +15,27 @@ namespace arithmetic
         return b;
     }
 
+    uint32_t inv(uint32_t a, uint32_t n)
+    {
+        uint32_t b = n;
+        uint32_t ia = 1;
+        uint32_t ib = 0;
+        int sign = -1;
+        while (a)
+        {
+            std::swap(a, b);
+            uint32_t q = a/b;
+            a = a%b;
+            std::swap(ia, ib);
+            ia += q*ib;
+            sign = -sign;
+        }
+        if (b != 1)
+            return 0;
+        else
+            return sign > 0 ? ib : (n - ib);
+    }
+
     bool is_prime(uint32_t a)
     {
         for (auto it = PrimeIterator::get(); (uint32_t)*it*(uint32_t)(*it) <= a; it++)

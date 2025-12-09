@@ -9,6 +9,9 @@ namespace arithmetic
     uint32_t gcd(uint32_t a, uint32_t b);
     inline int gcd(int a, int b) { return (int)gcd((uint32_t)a, (uint32_t)b); }
 
+    uint32_t inv(uint32_t a, uint32_t n);
+    inline int inv(int a, int n) { return (int)inv((uint32_t)a, (uint32_t)n); }
+
     bool is_prime(uint32_t a);
     inline bool is_prime(int a) { return is_prime((uint32_t)a); }
 

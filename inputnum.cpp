@@ -271,81 +271,17 @@ void factorize(Giant& N, std::vector<std::pair<arithmetic::Giant, int>>& factors
 class Expr
 {
 public:
-    Expr() { }
-
-    void clear()
+    Expr()
     {
-        str_func.clear();
-        args.clear();
-        error_pos = -1;
-        error_msg.clear();
-    }
-
-    bool iterate(const std::string& str, std::string::const_iterator& it)
-    {
-        clear();
-        pos = (int)(it - str.begin());
-        if (it == str.end())
-            return false;
-
-        std::string::const_iterator it_s;
-        if (std::isdigit(*it))
-        {
-            for (it_s = it; it != str.end() && std::isdigit(*it); it++);
-            args.emplace_back((int)(it_s - str.begin()), std::string(it_s, it));
-            return true;
-        }
-        if (std::isalpha(*it))
-        {
-            for (it_s = it; it != str.end() && std::isalpha(*it); it++);
-            str_func = std::string(it_s, it);
-            if (it == str.end())
-                return true;
-            if (std::isdigit(*it))
-            {
-                for (it_s = it; it != str.end() && std::isdigit(*it); it++);
-                args.emplace_back((int)(it_s - str.begin()), std::string(it_s, it));
-                return true;
-            }
-        }
-        if (*it == '(')
-        {
-            if (str_func.empty())
-                str_func = "()";
-            while (it != str.end() && *it != ')')
-            {
-                it++;
-                int recursion = 0;
-                for (it_s = it; it != str.end() && (recursion > 0 || (*it != ')' && *it != ',')); it++)
-                {
-                    if (*it == '(')
-                        recursion++;
-                    if (*it == ')')
-                        recursion--;
-                }
-                args.emplace_back((int)(it_s - str.begin()), std::string(it_s, it));
-            }
-            if (it != str.end() && *it == ')')
-                it++;
-            return true;
-        }
-        return false;
+        value = 0;
     }
 
     bool evaluate(bool factorize = true)
     {
-        value = 0;
-        str_value.clear();
-        if (factorize)
-        {
-            factors.clear();
-            cofactor.arithmetic().free(cofactor);
-        }
-
         if (str_func.empty())
         {
             if (args.size() != 1 || str_args(0).empty())
-                return error(pos, "value expected");
+                return error(0, "value expected");
             value = str_args(0);
             if (factorize)
                 ::factorize(value, factors, cofactor);
@@ -353,7 +289,7 @@ public:
         else if (str_func == "p")
         {
             if (args.size() != 1 || str_args(0).empty())
-                return error(pos, "prime index expected");
+                return error(0, "prime index expected");
             std::string::const_iterator it;
             for (it = str_args(0).begin(); it != str_args(0).end() && std::isdigit(*it); it++);
             if (it != str_args(0).end())
@@ -380,7 +316,7 @@ public:
         else if (str_func == "()")
         {
             if (args.size() != 1 || str_args(0).empty())
-                return error(pos, "expression expected");
+                return error(0, "expression expected");
             InputNum recursive;
             InputNum::ParseResult res = recursive.parse(str_args(0), false);
             if (!res)
@@ -399,9 +335,9 @@ public:
             }
         }
         else
-            return error(pos, "unknown function");
+            return error(0, "unknown function");
         if (value.empty() || value == 0)
-            return error(pos, "zero value");
+            return error(0, "zero value");
 
         return true;
     }
@@ -433,7 +369,6 @@ private:
     bool error(int pos, std::string& msg) { error_pos = pos; error_msg = std::move(msg); return false; }
 
 public:
-    int pos;
     std::string str_func;
     std::vector<std::pair<int, std::string>> args;
     
@@ -443,8 +378,82 @@ public:
     std::vector<std::pair<arithmetic::Giant, int>> factors;
     Giant cofactor;
 
-    int error_pos;
+    int error_pos = -1;
     std::string error_msg;
+};
+
+class Token
+{
+public:
+    Token() { }
+
+    bool iterate(const std::string& str, std::string::const_iterator& it)
+    {
+        pos = (int)(it - str.begin());
+        if (it == str.end())
+            return false;
+        if (*it == '+' || *it == '-' || *it == '*' || *it == '/' || *it == '^' || *it == '!' || *it == '#')
+        {
+            oper = *it;
+            it++;
+            return true;
+        }
+
+        std::string::const_iterator it_pos = it;
+        std::string::const_iterator it_s;
+        if (std::isdigit(*it))
+        {
+            expr.reset(new Expr());
+            for (it_s = it; it != str.end() && std::isdigit(*it); it++);
+            expr->args.emplace_back((int)(it_s - it_pos), std::string(it_s, it));
+            return true;
+        }
+        if (std::isalpha(*it))
+        {
+            expr.reset(new Expr());
+            for (it_s = it; it != str.end() && std::isalpha(*it); it++);
+            expr->str_func = std::string(it_s, it);
+            if (it == str.end())
+                return true;
+            if (std::isdigit(*it))
+            {
+                for (it_s = it; it != str.end() && std::isdigit(*it); it++);
+                expr->args.emplace_back((int)(it_s - it_pos), std::string(it_s, it));
+                return true;
+            }
+        }
+        if (*it == '(')
+        {
+            if (!expr)
+            {
+                expr.reset(new Expr());
+                expr->str_func = "()";
+            }
+            while (it != str.end() && *it != ')')
+            {
+                it++;
+                int recursion = 0;
+                for (it_s = it; it != str.end() && (recursion > 0 || (*it != ')' && *it != ',')); it++)
+                {
+                    if (*it == '(')
+                        recursion++;
+                    if (*it == ')')
+                        recursion--;
+                }
+                expr->args.emplace_back((int)(it_s - it_pos), std::string(it_s, it));
+            }
+            if (it != str.end() && *it == ')')
+                it++;
+            return true;
+        }
+
+        return false;
+    }
+
+public:
+    int pos = 0;
+    char oper = 0;
+    std::unique_ptr<Expr> expr;
 };
 
 Giant factorial(Giant& factor)
@@ -476,10 +485,9 @@ Giant primorial(Giant& factor)
     res = 1;
     tmp = 1;
     int last = 1;
-    PrimeIterator primes = PrimeIterator::get();
-    for (uint32_t i = 0; *primes <= (int)n; i++, primes++)
+    for (auto it = PrimeIterator::get(); *it <= n; it++)
     {
-        last = *primes;
+        last = *it;
         tmp *= last;
         if (tmp.size() > 8192)
         {
@@ -495,8 +503,6 @@ Giant primorial(Giant& factor)
 
 InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
 {
-    std::string::const_iterator it;
-    Expr expr;
     Giant tmp;
 
     int type = KBNC;
@@ -514,29 +520,136 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
     std::vector<std::pair<arithmetic::Giant, int>> b_factors;
     Giant b_cofactor;
 
-    for (it = s.begin(); it != s.end() && std::isspace(*it); it++);
-    if (it != s.end() && *it == '\"')
-        it++;
-
-    expr.iterate(s, it);
-    if (!expr.str_func.empty() && expr.str_func != "p" /*&& expr.str_func != "()"*/ && (it == s.end() || *it == '\"'))
+    std::vector<Token> tokens;
+    std::string::const_iterator its;
+    for (its = s.begin(); its != s.end() && std::isspace(*its); its++);
+    if (its != s.end() && *its == '\"')
+        its++;
+    while (its != s.end())
     {
-        if (expr.str_func == "Phi") // (X +- 1)*X + 1
+        Token token;
+        if (!token.iterate(s, its))
+            break;
+        tokens.push_back(std::move(token));
+    }
+    if (its != s.end() && *its == '\"')
+        its++;
+    for (; its != s.end() && std::isspace(*its); its++);
+    if (its != s.end())
+        return InputNum::ParseResult(false, (int)(its - s.begin()), "excess symbols");
+
+    auto it = tokens.begin();
+    if (it == tokens.end())
+        return InputNum::ParseResult(false, 0, "no value");
+    auto it_next = it + 1;
+
+    if (it->expr && it->expr->str_func == "()")
+    {
+        bool bf = false;
+        auto itF = it_next;
+        while (itF != tokens.end() && itF->oper == '/')
         {
-            if (expr.args.size() != 2)
-                return InputNum::ParseResult(false, expr.pos, "two arguments expected");
-            int cyclotomic = stoi(expr.str_args(0));
+            itF++;
+            if (itF == tokens.end() || !itF->expr)
+            {
+                bf = false;
+                break;
+            }
+            bf = true;
+            itF++;
+        }
+        if (itF != tokens.end())
+            bf = false;
+        if (bf)
+        {
+            InputNum recursive;
+            InputNum::ParseResult res = recursive.parse(it->expr->str_args(0));
+            if (!res)
+                return InputNum::ParseResult(false, it->pos + it->expr->args[0].first + res.pos, res.message);
+            it++;
+
+            Giant gf;
+            std::string custom_f;
+            while (it != tokens.end())
+            {
+                it++;
+                if (!it->expr->evaluate(false))
+                    return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
+                if (gf.empty())
+                {
+                    gf = std::move(it->expr->value);
+                    custom_f = std::move(it->expr->str_value);
+                }
+                else
+                {
+                    if (!custom_f.empty() || !it->expr->str_value.empty())
+                    {
+                        if (custom_f.empty())
+                            custom_f = gf.to_string();
+                        if (it->expr->str_value.empty())
+                            it->expr->str_value = it->expr->value.to_string();
+                        custom_f += "/";
+                        custom_f += it->expr->str_value;
+                    }
+                    gf *= it->expr->value;
+                }
+                it++;
+            }
+            if (recursive.value()%gf != 0)
+                return InputNum::ParseResult(false, (int)s.size(), "not divisible");
+
+            _type = recursive._type;
+            _gk = std::move(recursive._gk);
+            _gb = std::move(recursive._gb);
+            _n = recursive._n;
+            _gd = std::move(recursive._gd);
+            _c = recursive._c;
+            _custom_k = std::move(recursive._custom_k);
+            _custom_b = std::move(recursive._custom_b);
+            _custom_d = std::move(recursive._custom_d);
+            _multifactorial = recursive._multifactorial;
+            _algebraic_type = recursive._algebraic_type;
+            _algebraic_k = recursive._algebraic_k;
+            _factors = std::move(recursive._factors);
+            _cofactor = std::move(recursive._cofactor);
+            _b_factors = std::move(recursive._b_factors);
+            _b_cofactor = std::move(recursive._b_cofactor);
+
+            _input_text = "(" + recursive._input_text + ")/" + (!custom_f.empty() ? custom_f : gf.to_string());
+            if (recursive._gf != 1 && (!custom_f.empty() || !recursive._custom_f.empty()))
+            {
+                if (custom_f.empty())
+                    custom_f = gf.to_string();
+                if (recursive._custom_f.empty())
+                    recursive._custom_f = recursive._gf.to_string();
+                custom_f = recursive._custom_f + "/" + custom_f;
+            }
+            _gf = std::move(gf)*recursive._gf;
+            _custom_f = std::move(custom_f);
+            _display_text = build_text(30);
+
+            return InputNum::ParseResult(true);
+        }
+    }
+
+    if (it->expr && !it->expr->str_func.empty() && it->expr->str_func != "p" && (it_next == tokens.end()))
+    {
+        if (it->expr->str_func == "Phi") // (X +- 1)*X + 1
+        {
+            if (it->expr->args.size() != 2)
+                return InputNum::ParseResult(false, it->pos, "two arguments expected");
+            int cyclotomic = stoi(it->expr->str_args(0));
             if (cyclotomic != 3 && cyclotomic != 6)
-                return InputNum::ParseResult(false, expr.args[0].first, "only 3 and 6 are supported");
-            if (!expr.str_args(1).empty() && expr.str_args(1)[0] == '-')
+                return InputNum::ParseResult(false, it->pos + it->expr->args[0].first, "only 3 and 6 are supported");
+            if (!it->expr->str_args(1).empty() && it->expr->str_args(1)[0] == '-')
             {
                 cyclotomic = (cyclotomic == 3 ? 6 : 3);
-                expr.str_args(1) = expr.str_args(1).substr(1);
+                it->expr->str_args(1) = it->expr->str_args(1).substr(1);
             }
             InputNum recursive;
-            InputNum::ParseResult res = recursive.parse(expr.str_args(1) + "+1");
+            InputNum::ParseResult res = recursive.parse(it->expr->str_args(1) + "+1");
             if (!res)
-                return InputNum::ParseResult(false, expr.args[1].first + res.pos, res.message);
+                return InputNum::ParseResult(false, it->pos + it->expr->args[1].first + res.pos, res.message);
             type = recursive.type();
             gk = recursive.value();
             custom_k = "(" + recursive.input_text() + ")";
@@ -568,27 +681,27 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
                 algebraic_k = (cyclotomic == 6 ? -1 : 1)*(int32_t)recursive.k();
             }
         }
-        else if (expr.str_func == "Quad" || // (1/2 X +- 1)*X + 1
-                 expr.str_func == "Hex")    // (1/3 X +- 1)*X + 1
+        else if (it->expr->str_func == "Quad" || // (1/2 X +- 1)*X + 1
+                 it->expr->str_func == "Hex")    // (1/3 X +- 1)*X + 1
         {
-            if (expr.args.size() != 1)
-                return InputNum::ParseResult(false, expr.pos, "one argument expected");
+            if (it->expr->args.size() != 1)
+                return InputNum::ParseResult(false, it->pos, "one argument expected");
             bool neg = false;
-            if (!expr.str_args(0).empty() && expr.str_args(0)[0] == '-')
+            if (!it->expr->str_args(0).empty() && it->expr->str_args(0)[0] == '-')
             {
                 neg = true;
-                expr.str_args(0) = expr.str_args(0).substr(1);
+                it->expr->str_args(0) = it->expr->str_args(0).substr(1);
             }
-            int divisor = (expr.str_func == "Quad" ? 2 : 3);
+            int divisor = (it->expr->str_func == "Quad" ? 2 : 3);
             InputNum recursive;
-            InputNum::ParseResult res = recursive.parse(expr.str_args(0) + "+1");
+            InputNum::ParseResult res = recursive.parse(it->expr->str_args(0) + "+1");
             if (!res)
-                return InputNum::ParseResult(false, expr.args[0].first + res.pos, res.message);
+                return InputNum::ParseResult(false, it->pos + it->expr->args[0].first + res.pos, res.message);
             type = recursive.type();
             gk = recursive.value();
             gk -= 1;
             if (gk%divisor != 0)
-                return InputNum::ParseResult(false, expr.args[0].first, "should be divisible by " + std::to_string(divisor));
+                return InputNum::ParseResult(false, it->pos + it->expr->args[0].first, "should be divisible by " + std::to_string(divisor));
             gk /= divisor;
             recursive._c = (neg ? -1 : 1);
             gk += recursive._c;
@@ -609,12 +722,12 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
             gd = recursive.gd();
             custom_d = recursive._custom_d;
             c = 1;
-            if (expr.str_func == "Quad" && recursive.k() > 0 && recursive.k() < 100 && recursive.d() == 1)
+            if (it->expr->str_func == "Quad" && recursive.k() > 0 && recursive.k() < 100 && recursive.d() == 1)
             {
                 algebraic_type = ALGEBRAIC_QUAD;
                 algebraic_k = (int32_t)(recursive.k()*recursive._c);
             }
-            if (expr.str_func == "Hex" && recursive.k() > 0 && recursive.k() < 32 && recursive.d() == 1)
+            if (it->expr->str_func == "Hex" && recursive.k() > 0 && recursive.k() < 32 && recursive.d() == 1)
             {
                 algebraic_type = ALGEBRAIC_HEX;
                 algebraic_k = (int32_t)(recursive.k()*recursive._c);
@@ -637,80 +750,108 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
             }
         }
         else
-            return InputNum::ParseResult(false, expr.pos, "unknown function");
+            return InputNum::ParseResult(false, it->pos, "unknown function");
+        it++;
     }
     else
     {
         gk = 1;
-        while (it != s.end() && *it == '*')
+        while (it_next != tokens.end() && it_next->oper == '*' && it->expr)
         {
-            if (!expr.evaluate())
-                return InputNum::ParseResult(false, expr.error_pos, expr.error_msg);
+            if (!it->expr->evaluate())
+                return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
             if (gk == 1)
             {
-                gk = std::move(expr.value);
-                custom_k = std::move(expr.str_value);
-                expr.merge_factors(factors, cofactor, 1);
+                gk = std::move(it->expr->value);
+                custom_k = std::move(it->expr->str_value);
+                it->expr->merge_factors(factors, cofactor, 1);
             }
             else
             {
-                if (!custom_k.empty() || !expr.str_value.empty())
+                if (!custom_k.empty() || !it->expr->str_value.empty())
                 {
                     if (custom_k.empty())
                         custom_k = gk.to_string();
-                    if (expr.str_value.empty())
-                        expr.str_value = expr.value.to_string();
+                    if (it->expr->str_value.empty())
+                        it->expr->str_value = it->expr->value.to_string();
                     custom_k += "*";
-                    custom_k += expr.str_value;
+                    custom_k += it->expr->str_value;
                 }
-                gk *= expr.value;
-                expr.merge_factors(factors, cofactor, 1);
+                gk *= it->expr->value;
+                it->expr->merge_factors(factors, cofactor, 1);
             }
 
-            it++;
-            expr.iterate(s, it);
+            it_next++;
+            it = it_next;
+            if (it_next != tokens.end())
+                it_next++;
         }
 
-        if (it == s.end() || *it == '\"' || *it == '^' || *it == '+' || *it == '-' || *it == '/')
-        {
-            if (!expr.evaluate())
-                return InputNum::ParseResult(false, expr.error_pos, expr.error_msg);
-            gb = std::move(expr.value);
-            custom_b = std::move(expr.str_value);
-            expr.merge_factors(b_factors, b_cofactor, 1);
+        if (it == tokens.end())
+            return InputNum::ParseResult(false, (int)s.size(), "unexpected end");
+        if (!it->expr)
+            return InputNum::ParseResult(false, it->pos, "unexpected operator");
+        if (it_next != tokens.end() && it_next->expr)
+            return InputNum::ParseResult(false, it_next->pos, "unexpected value");
 
-            if (it != s.end() && *it == '^')
-            {
+        if (it_next == tokens.end() || it_next->oper == '^' || it_next->oper == '+' || it_next->oper == '-' || it_next->oper == '/')
+        {
+            if (!it->expr->evaluate())
+                return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
+            gb = std::move(it->expr->value);
+            custom_b = std::move(it->expr->str_value);
+            it->expr->merge_factors(b_factors, b_cofactor, 1);
+            Expr* b_expr = it->expr.get();
+            it++;
+            if (it != tokens.end())
                 it++;
-                expr.iterate(s, it);
-                if (!expr.evaluate(false))
-                    return InputNum::ParseResult(false, expr.error_pos, expr.error_msg);
-                if (expr.value.size() > 1)
-                    return InputNum::ParseResult(false, expr.pos, "exponent too big");
-                n = expr.value.data()[0];
-                expr.merge_factors(factors, cofactor, (int)n);
+
+            if (it_next != tokens.end() && it_next->oper == '^')
+            {
+                if (it == tokens.end())
+                    return InputNum::ParseResult(false, (int)s.size(), "unexpected end");
+                if (!it->expr)
+                    return InputNum::ParseResult(false, it->pos, "unexpected operator");
+                if (!it->expr->evaluate(false))
+                    return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
+                if (it->expr->value.size() > 1)
+                    return InputNum::ParseResult(false, it->pos, "exponent too big");
+                n = it->expr->value.data()[0];
+
+                it++;
+                it_next = it;
+                if (it != tokens.end())
+                    it++;
             }
             else
                 n = 1;
+            b_expr->merge_factors(factors, cofactor, (int)n);
         }
-        else if (*it == '!')
+        else if (it_next->oper == '!')
         {
             type = FACTORIAL;
-            if (!expr.evaluate(false))
-                return InputNum::ParseResult(false, expr.error_pos, expr.error_msg);
-            if (expr.value.size() > 1)
-                return InputNum::ParseResult(false, expr.pos, "factorial too big");
-            n = expr.value.data()[0];
-            it++;
-            for (multifactorial = 1; it != s.end() && *it == '!'; it++, multifactorial++);
-            if (multifactorial == 1 && expr.iterate(s, it))
+            if (!it->expr->evaluate(false))
+                return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
+            if (it->expr->value.size() > 1)
+                return InputNum::ParseResult(false, it->pos, "factorial too big");
+            n = it->expr->value.data()[0];
+
+            it_next++;
+            for (multifactorial = 1; it_next != tokens.end() && it_next->oper == '!'; it_next++, multifactorial++);
+            it = it_next;
+            if (multifactorial == 1 && it != tokens.end() && it->expr)
             {
-                if (!expr.evaluate(false))
-                    return InputNum::ParseResult(false, expr.error_pos, expr.error_msg);
-                if (expr.value > n)
-                    return InputNum::ParseResult(false, expr.pos, "multifactorial step too big");
-                multifactorial = expr.value.data()[0];
+                if (!it->expr->evaluate(false))
+                    return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
+                if (it->expr->value > n)
+                    return InputNum::ParseResult(false, it->pos, "multifactorial step too big");
+                multifactorial = it->expr->value.data()[0];
+
+                it++;
+                it_next = it;
             }
+            if (it != tokens.end())
+                it++;
 
             Giant factor;
             factor = ((uint64_t)multifactorial << 32) + n;
@@ -718,92 +859,105 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
             gb = factorial(factor);
             ::add_factor(factors, factor, 1);
         }
-        else if (*it == '#')
+        else if (it_next->oper == '#')
         {
             type = PRIMORIAL;
-            if (!expr.evaluate(false))
-                return InputNum::ParseResult(false, expr.error_pos, expr.error_msg);
-            if (expr.value.bitlen() > 31)
-                return InputNum::ParseResult(false, expr.pos, "primorial too big");
-            it++;
+            if (!it->expr->evaluate(false))
+                return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
+            if (it->expr->value.bitlen() > 31)
+                return InputNum::ParseResult(false, it->pos, "primorial too big");
 
             Giant factor;
-            factor.arithmetic().neg(expr.value, factor);
+            factor.arithmetic().neg(it->expr->value, factor);
             gb = primorial(factor);
             n = factor.data()[0];
             ::add_factor(factors, factor, 1);
+
+            it_next++;
+            it = it_next;
+            if (it != tokens.end())
+                it++;
         }
         else
-            return InputNum::ParseResult(false, (int)(it - s.begin()), "unexpected symbol");
+            return InputNum::ParseResult(false, it_next->pos, "unexpected symbol");
+
+        if (it_next != tokens.end())
+        {
+            if (it_next->expr)
+                return InputNum::ParseResult(false, it_next->pos, "unexpected value");
+            if (it == tokens.end())
+                return InputNum::ParseResult(false, (int)s.size(), "unexpected end");
+            if (!it->expr)
+                return InputNum::ParseResult(false, it->pos, "unexpected operator");
+        }
 
         gd = 1;
-        while (it != s.end() && *it == '/')
+        while (it != tokens.end() && it->expr && it_next->oper == '/')
         {
-            it++;
-            expr.iterate(s, it);
-
-            if (!expr.evaluate())
-                return InputNum::ParseResult(false, expr.error_pos, expr.error_msg);
+            if (!it->expr->evaluate())
+                return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
             if (gd == 1)
             {
-                gd = std::move(expr.value);
-                custom_d = std::move(expr.str_value);
-                expr.merge_factors(factors, cofactor, -1);
+                gd = std::move(it->expr->value);
+                custom_d = std::move(it->expr->str_value);
+                it->expr->merge_factors(factors, cofactor, -1);
             }
             else
             {
-                if (!custom_d.empty() || !expr.str_value.empty())
+                if (!custom_d.empty() || !it->expr->str_value.empty())
                 {
                     if (custom_d.empty())
                         custom_d = gd.to_string();
-                    if (expr.str_value.empty())
-                        expr.str_value = expr.value.to_string();
+                    if (it->expr->str_value.empty())
+                        it->expr->str_value = it->expr->value.to_string();
                     custom_d += "/";
-                    custom_d += expr.str_value;
+                    custom_d += it->expr->str_value;
                 }
-                gd *= expr.value;
-                expr.merge_factors(factors, cofactor, -1);
+                gd *= it->expr->value;
+                it->expr->merge_factors(factors, cofactor, -1);
             }
+
+            it++;
+            it_next = it;
+            if (it != tokens.end())
+                it++;
         }
         if (gd > 1 && gk*(type == KBNC ? power(gb, n) : gb)%gd != 0)
-            return InputNum::ParseResult(false, (int)(it - s.begin()), "not divisible by D");
+            return InputNum::ParseResult(false, it_next != tokens.end() ? it_next->pos : (int)s.size(), "not divisible");
 
-        if (it != s.end() && (*it == '+' || *it == '-'))
+        if (it_next != tokens.end())
         {
-            bool minus = (*it == '-');
-            it++;
-            expr.iterate(s, it);
-            if (!expr.evaluate(false))
-                return InputNum::ParseResult(false, expr.error_pos, expr.error_msg);
-            if (expr.value.bitlen() > 63)
-                return InputNum::ParseResult(false, expr.pos, "C too big");
-            if (expr.value.size() == 1)
-                c = expr.value.data()[0];
-            if (expr.value.size() == 2)
-                c = *(int64_t*)expr.value.data();
+            if (it_next->expr)
+                return InputNum::ParseResult(false, it_next->pos, "unexpected value");
+            if (it == tokens.end())
+                return InputNum::ParseResult(false, (int)s.size(), "unexpected end");
+            if (!it->expr)
+                return InputNum::ParseResult(false, it->pos, "unexpected operator");
+        }
+
+        if (it != tokens.end() && (it_next->oper == '+' || it_next->oper == '-'))
+        {
+            bool minus = (it_next->oper == '-');
+            if (!it->expr->evaluate(false))
+                return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
+            if (it->expr->value.bitlen() > 63)
+                return InputNum::ParseResult(false, it->pos, "C too big");
+            if (it->expr->value.size() == 1)
+                c = it->expr->value.data()[0];
+            if (it->expr->value.size() == 2)
+                c = *(int64_t*)it->expr->value.data();
             if (minus)
                 c = -c;
-        }
-        else if (type == KBNC && gk == 1 && n == 1)
-        {
-            type = GENERIC;
-            n = 0;
-            if (gd > 1)
-            {
-                gb /= gd;
-                if (!custom_b.empty() && custom_d.empty())
-                    custom_d = gd.to_string();
-                gd = 1;
-            }
+            it++;
+            it_next = it;
         }
         else if (c_required)
-            return InputNum::ParseResult(false, (int)(it - s.begin()), "C expected");
+            return InputNum::ParseResult(false, it_next != tokens.end() ? it_next->pos : (int)s.size(), "C expected");
     }
-    if (it != s.end() && *it == '\"')
-        it++;
-    for (; it != s.end() && std::isspace(*it); it++);
-    if (it != s.end())
-        return InputNum::ParseResult(false, (int)(it - s.begin()), "excess symbols");
+    if (it_next != tokens.end())
+        return InputNum::ParseResult(false, it_next->pos, it_next->expr ? "unexpected value" : "unexpected operator");
+    if (it != tokens.end())
+        return InputNum::ParseResult(false, it->pos, it->expr ? "unexpected value" : "unexpected operator");
 
     _type = type;
     _gk = std::move(gk);
@@ -811,9 +965,11 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
     _n = n;
     _gd = std::move(gd);
     _c = c;
+    _gf = 1;
     _custom_k = std::move(custom_k);
     _custom_b = std::move(custom_b);
     _custom_d = std::move(custom_d);
+    _custom_f.clear();
     _multifactorial = multifactorial;
     _algebraic_type = algebraic_type;
     _algebraic_k = algebraic_k;
@@ -1024,6 +1180,8 @@ std::string InputNum::build_text(int max_len)
 {
     std::string res;
     res.reserve(32);
+    if (_gf != 1)
+        res.append(1, '(');
     if (_gk != 1 || !_custom_k.empty())
     {
         std::string sk = !_custom_k.empty() ? _custom_k : _gk.to_string();
@@ -1089,6 +1247,20 @@ std::string InputNum::build_text(int max_len)
             res.append(1, '-');
         res.append(std::to_string(abs(_c)));
     }
+    if (_gf != 1)
+    {
+        res.append(1, ')');
+        res.append(1, '/');
+        std::string sf = !_custom_f.empty() ? _custom_f : _gf.to_string();
+        if (sf.size() > max_len && max_len > 0)
+        {
+            res.append(sf, 0, max_len/2);
+            res.append(3, '.');
+            res.append(sf, sf.size() - max_len/2, max_len/2);
+        }
+        else
+            res.append(sf);
+    }
 
     return res;
 }
@@ -1101,21 +1273,21 @@ void InputNum::setup(GWState& state)
     }
     else if (_type != KBNC)
     {
-        state.setup(_gk*_gb/_gd + _c);
+        state.setup((_gk*_gb/_gd + _c)/_gf);
     }
     else if (_algebraic_type != ALGEBRAIC_SIMPLE && b() != 0 && !state.force_mod_type)
     {
         if (_algebraic_type == ALGEBRAIC_CYCLOTOMIC)
         {
             uint32_t k = (uint32_t)abs(_algebraic_k);
-            state.known_factors = k*power(_gb, _n) + (_algebraic_k < 0 ? 1 : -1);
+            state.known_factors = (k*power(_gb, _n) + (_algebraic_k < 0 ? 1 : -1))*_gf;
             state.setup(k*k*k, b(), 3*_n, _algebraic_k < 0 ? 1 : -1);
         }
         if (_algebraic_type == ALGEBRAIC_QUAD)
         {
             Giant x = (-_algebraic_k)*power(_gb, _n);
             x <<= 1;
-            state.known_factors = value() + x;
+            state.known_factors = (value() + x)*_gf;
             uint64_t k_squared = (uint64_t)(_algebraic_k*_algebraic_k);
             if (k_squared%2 == 0)
                 state.setup(k_squared*k_squared/4, b(), 4*_n, 1);
@@ -1128,7 +1300,7 @@ void InputNum::setup(GWState& state)
         {
             Giant x = (-_algebraic_k)*power(_gb, _n);
             Giant val = value() + x;
-            state.known_factors = (val + std::move(x))*val;
+            state.known_factors = (val + std::move(x))*val*_gf;
             uint64_t k_squared = (uint64_t)(_algebraic_k*_algebraic_k);
             if (k_squared%3 == 0)
                 state.setup(k_squared*k_squared*k_squared/27, b(), 6*_n, 1);
@@ -1147,13 +1319,29 @@ void InputNum::setup(GWState& state)
         }
         return;
     }
-    else if (k() != 0 && b() != 0 && d() == 1 && abs(_c) < (1ULL << 30))
+    else if (k() != 0 && b() != 0 && d() == 1 && abs(_c) < (1ULL << 30)  && (_gf == 1 || !state.force_mod_type))
     {
+        state.known_factors = _gf;
         state.setup(k(), b(), _n, _c);
+        if (_gf != 1)
+        {
+            if (state.gwdata()->GENERAL_MOD || state.gwdata()->GENERAL_MMGW_MOD)
+            {
+                state.done();
+                state.known_factors = 1;
+                state.setup((_gk*power(_gb, _n)/_gd + _c)/_gf);
+            }
+            else
+            {
+                if (*state.N%3417905339UL != fingerprint())
+                    throw ArithmeticException();
+                return;
+            }
+        }
     }
     else
     {
-        state.setup(_gk*power(_gb, _n)/_gd + _c);
+        state.setup((_gk*power(_gb, _n)/_gd + _c)/_gf);
     }
     if (state.fingerprint != fingerprint())
         throw ArithmeticException();
@@ -1165,11 +1353,11 @@ int InputNum::bitlen()
         return _gb.bitlen();
     int res;
     if (_type != KBNC)
-        res = _gk.bitlen() + _gb.bitlen() - _gd.bitlen();
+        res = _gk.bitlen() + _gb.bitlen() - _gd.bitlen() - _gf.bitlen() + 1;
     else if (b() == 2)
-        res = _gk.bitlen() + _n - _gd.bitlen() + (_c > 0 || _gk != 1 ? 1 : 0);
+        res = _gk.bitlen() + _n - _gd.bitlen() + (_c > 0 || _gk != 1 ? 1 : 0) - _gf.bitlen() + 1;
     else
-        res = (int)std::ceil(log2(_gk) + log2(_gb)*_n - log2(_gd));
+        res = (int)std::ceil(log2(_gk) + log2(_gb)*_n - log2(_gd) - log2(_gf));
     if (res <= 64)
         res = value().bitlen();
     return res;
@@ -1206,6 +1394,14 @@ uint32_t InputNum::mod(uint32_t modulus)
 {
     if (_type == GENERIC)
         return _gb%modulus;
+
+    uint32_t f_inv = 1;
+    if (_gf != 1)
+    {
+        f_inv = inv(_gf%modulus, modulus);
+        if (!f_inv)
+            return value()%modulus;
+    }
 
     uint64_t result = 1;
     if (_type != KBNC)
@@ -1255,12 +1451,18 @@ uint32_t InputNum::mod(uint32_t modulus)
             result += (uint64_t)modulus << 31;
         result -= c;
     }
+
+    if (f_inv != 1)
+    {
+        result %= modulus;
+        result *= f_inv;
+    }
     return (uint32_t)(result%modulus);
 }
 
 bool InputNum::is_half_factored()
 {
-    if (abs(_c) != 1)
+    if (abs(c()) != 1)
         return false;
     if (_cofactor.empty() || _cofactor.bitlen()*2 + 10 < bitlen())
         return true;
@@ -1284,7 +1486,7 @@ std::vector<int> InputNum::factorize_minus1(int depth)
     Giant minus1 = value() - 1;
     std::vector<std::pair<arithmetic::Giant, int>> factors;
     Giant cofactor;
-    factorize(minus1, factors, cofactor, [&](Giant& x, uint32_t p) { return mod(p) == 1; }, s);
+    factorize(minus1, factors, cofactor, [&](Giant& x, uint32_t p) { return _gf%p != 0 ? mod(p) == 1 : x%p == 0; }, s);
 
     std::vector<int> divisors;
     for (auto& factor : factors)
@@ -1408,7 +1610,7 @@ void InputNum::print_info()
 
     std::vector<std::pair<arithmetic::Giant, int>> factors;
     arithmetic::Giant cofactor;
-    factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { return mod_available ? mod(p) == 0 : x%p == 0; });
+    factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { return mod_available && _gf%p != 0 ? mod(p) == 0 : x%p == 0; });
     if (factors.empty())
         std::cout << "No small factors." << std::endl;
     else if (factors[0].first == N)
@@ -1425,7 +1627,7 @@ void InputNum::print_info()
         std::cout << std::endl;
     }
 
-    if (_type == KBNC && abs(_c) == 1 && d() == 1 && (k() == 1 || _cofactor.empty() || (!_b_cofactor.empty() && _cofactor == power(_b_cofactor, _n))))
+    if (type() == KBNC && abs(_c) == 1 && d() == 1 && (k() == 1 || _cofactor.empty() || (!_b_cofactor.empty() && _cofactor == power(_b_cofactor, _n))))
     {
         uint32_t n = _n;
         if (k() != 1)
@@ -1516,7 +1718,7 @@ void InputNum::print_info()
             }
         }
     }
-    if (_type == KBNC && _algebraic_type == ALGEBRAIC_CYCLOTOMIC && abs(_algebraic_k) == 1)
+    if (type() == KBNC && _algebraic_type == ALGEBRAIC_CYCLOTOMIC && abs(_algebraic_k) == 1)
     {
         uint32_t d = _n;
         while (d%3 == 0)
@@ -1547,7 +1749,7 @@ void InputNum::print_info()
     factors.clear();
     if (!cofactor.empty())
         cofactor.arithmetic().free(cofactor);
-    if (_c == 1)
+    if (c() == 1)
     {
         factors = _factors;
         cofactor = _cofactor;
@@ -1555,7 +1757,7 @@ void InputNum::print_info()
     else
     {
         N -= 1;
-        factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { return mod_available ? mod(p) == 1 : x%p == 0; });
+        factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { return mod_available && _gf%p != 0 ? mod(p) == 1 : x%p == 0; });
         N += 1;
     }
     if (factors.empty())
@@ -1623,7 +1825,7 @@ void InputNum::print_info()
     factors.clear();
     if (!cofactor.empty())
         cofactor.arithmetic().free(cofactor);
-    if (_c == -1)
+    if (c() == -1)
     {
         factors = _factors;
         cofactor = _cofactor;
@@ -1631,7 +1833,7 @@ void InputNum::print_info()
     else
     {
         N += 1;
-        factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { return mod_available ? mod(p) == p - 1 : x%p == 0; });
+        factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { return mod_available && _gf%p != 0 ? mod(p) == p - 1 : x%p == 0; });
         N -= 1;
     }
     if (factors.empty())
