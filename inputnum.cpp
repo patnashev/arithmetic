@@ -538,15 +538,15 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
     if (its != s.end())
         return InputNum::ParseResult(false, (int)(its - s.begin()), "excess symbols");
 
-    auto it = tokens.begin();
-    if (it == tokens.end())
+    auto it_expr = tokens.begin();
+    if (it_expr == tokens.end())
         return InputNum::ParseResult(false, 0, "no value");
-    auto it_next = it + 1;
+    auto it_oper = it_expr + 1;
 
-    if (it->expr && it->expr->str_func == "()")
+    if (it_expr->expr && it_expr->expr->str_func == "()")
     {
         bool bf = false;
-        auto itF = it_next;
+        auto itF = it_oper;
         while (itF != tokens.end() && itF->oper == '/')
         {
             itF++;
@@ -563,37 +563,37 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
         if (bf)
         {
             InputNum recursive;
-            InputNum::ParseResult res = recursive.parse(it->expr->str_args(0));
+            InputNum::ParseResult res = recursive.parse(it_expr->expr->str_args(0));
             if (!res)
-                return InputNum::ParseResult(false, it->pos + it->expr->args[0].first + res.pos, res.message);
-            it++;
+                return InputNum::ParseResult(false, it_expr->pos + it_expr->expr->args[0].first + res.pos, res.message);
+            it_expr++;
 
             Giant gf;
             std::string custom_f;
-            while (it != tokens.end())
+            while (it_expr != tokens.end())
             {
-                it++;
-                if (!it->expr->evaluate(false))
-                    return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
+                it_expr++;
+                if (!it_expr->expr->evaluate(false))
+                    return InputNum::ParseResult(false, it_expr->pos + it_expr->expr->error_pos, it_expr->expr->error_msg);
                 if (gf.empty())
                 {
-                    gf = std::move(it->expr->value);
-                    custom_f = std::move(it->expr->str_value);
+                    gf = std::move(it_expr->expr->value);
+                    custom_f = std::move(it_expr->expr->str_value);
                 }
                 else
                 {
-                    if (!custom_f.empty() || !it->expr->str_value.empty())
+                    if (!custom_f.empty() || !it_expr->expr->str_value.empty())
                     {
                         if (custom_f.empty())
                             custom_f = gf.to_string();
-                        if (it->expr->str_value.empty())
-                            it->expr->str_value = it->expr->value.to_string();
+                        if (it_expr->expr->str_value.empty())
+                            it_expr->expr->str_value = it_expr->expr->value.to_string();
                         custom_f += "/";
-                        custom_f += it->expr->str_value;
+                        custom_f += it_expr->expr->str_value;
                     }
-                    gf *= it->expr->value;
+                    gf *= it_expr->expr->value;
                 }
-                it++;
+                it_expr++;
             }
             if (recursive.value()%gf != 0)
                 return InputNum::ParseResult(false, (int)s.size(), "not divisible");
@@ -640,24 +640,24 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
         }
     }
 
-    if (it->expr && !it->expr->str_func.empty() && it->expr->str_func != "p" && (it_next == tokens.end()))
+    if (it_expr->expr && !it_expr->expr->str_func.empty() && it_expr->expr->str_func != "p" && (it_oper == tokens.end()))
     {
-        if (it->expr->str_func == "Phi") // (X +- 1)*X + 1
+        if (it_expr->expr->str_func == "Phi") // (X +- 1)*X + 1
         {
-            if (it->expr->args.size() != 2)
-                return InputNum::ParseResult(false, it->pos, "two arguments expected");
-            int cyclotomic = stoi(it->expr->str_args(0));
+            if (it_expr->expr->args.size() != 2)
+                return InputNum::ParseResult(false, it_expr->pos, "two arguments expected");
+            int cyclotomic = stoi(it_expr->expr->str_args(0));
             if (cyclotomic != 3 && cyclotomic != 6)
-                return InputNum::ParseResult(false, it->pos + it->expr->args[0].first, "only 3 and 6 are supported");
-            if (!it->expr->str_args(1).empty() && it->expr->str_args(1)[0] == '-')
+                return InputNum::ParseResult(false, it_expr->pos + it_expr->expr->args[0].first, "only 3 and 6 are supported");
+            if (!it_expr->expr->str_args(1).empty() && it_expr->expr->str_args(1)[0] == '-')
             {
                 cyclotomic = (cyclotomic == 3 ? 6 : 3);
-                it->expr->str_args(1) = it->expr->str_args(1).substr(1);
+                it_expr->expr->str_args(1) = it_expr->expr->str_args(1).substr(1);
             }
             InputNum recursive;
-            InputNum::ParseResult res = recursive.parse(it->expr->str_args(1) + "+1");
+            InputNum::ParseResult res = recursive.parse(it_expr->expr->str_args(1) + "+1");
             if (!res)
-                return InputNum::ParseResult(false, it->pos + it->expr->args[1].first + res.pos, res.message);
+                return InputNum::ParseResult(false, it_expr->pos + it_expr->expr->args[1].first + res.pos, res.message);
             type = recursive.type();
             gk = recursive.value();
             custom_k = "(" + recursive.input_text() + ")";
@@ -689,27 +689,27 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
                 algebraic_k = (cyclotomic == 6 ? -1 : 1)*(int32_t)recursive.k();
             }
         }
-        else if (it->expr->str_func == "Quad" || // (1/2 X +- 1)*X + 1
-                 it->expr->str_func == "Hex")    // (1/3 X +- 1)*X + 1
+        else if (it_expr->expr->str_func == "Quad" || // (1/2 X +- 1)*X + 1
+                 it_expr->expr->str_func == "Hex")    // (1/3 X +- 1)*X + 1
         {
-            if (it->expr->args.size() != 1)
-                return InputNum::ParseResult(false, it->pos, "one argument expected");
+            if (it_expr->expr->args.size() != 1)
+                return InputNum::ParseResult(false, it_expr->pos, "one argument expected");
             bool neg = false;
-            if (!it->expr->str_args(0).empty() && it->expr->str_args(0)[0] == '-')
+            if (!it_expr->expr->str_args(0).empty() && it_expr->expr->str_args(0)[0] == '-')
             {
                 neg = true;
-                it->expr->str_args(0) = it->expr->str_args(0).substr(1);
+                it_expr->expr->str_args(0) = it_expr->expr->str_args(0).substr(1);
             }
-            int divisor = (it->expr->str_func == "Quad" ? 2 : 3);
+            int divisor = (it_expr->expr->str_func == "Quad" ? 2 : 3);
             InputNum recursive;
-            InputNum::ParseResult res = recursive.parse(it->expr->str_args(0) + "+1");
+            InputNum::ParseResult res = recursive.parse(it_expr->expr->str_args(0) + "+1");
             if (!res)
-                return InputNum::ParseResult(false, it->pos + it->expr->args[0].first + res.pos, res.message);
+                return InputNum::ParseResult(false, it_expr->pos + it_expr->expr->args[0].first + res.pos, res.message);
             type = recursive.type();
             gk = recursive.value();
             gk -= 1;
             if (gk%divisor != 0)
-                return InputNum::ParseResult(false, it->pos + it->expr->args[0].first, "should be divisible by " + std::to_string(divisor));
+                return InputNum::ParseResult(false, it_expr->pos + it_expr->expr->args[0].first, "should be divisible by " + std::to_string(divisor));
             gk /= divisor;
             recursive._c = (neg ? -1 : 1);
             gk += recursive._c;
@@ -730,12 +730,12 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
             gd = recursive.gd();
             custom_d = recursive._custom_d;
             c = 1;
-            if (it->expr->str_func == "Quad" && recursive.k() > 0 && recursive.k() < 100 && recursive.d() == 1)
+            if (it_expr->expr->str_func == "Quad" && recursive.k() > 0 && recursive.k() < 100 && recursive.d() == 1)
             {
                 algebraic_type = ALGEBRAIC_QUAD;
                 algebraic_k = (int32_t)(recursive.k()*recursive._c);
             }
-            if (it->expr->str_func == "Hex" && recursive.k() > 0 && recursive.k() < 32 && recursive.d() == 1)
+            if (it_expr->expr->str_func == "Hex" && recursive.k() > 0 && recursive.k() < 32 && recursive.d() == 1)
             {
                 algebraic_type = ALGEBRAIC_HEX;
                 algebraic_k = (int32_t)(recursive.k()*recursive._c);
@@ -758,108 +758,108 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
             }
         }
         else
-            return InputNum::ParseResult(false, it->pos, "unknown function");
-        it++;
+            return InputNum::ParseResult(false, it_expr->pos, "unknown function");
+        it_expr++;
     }
     else
     {
         gk = 1;
-        while (it_next != tokens.end() && it_next->oper == '*' && it->expr)
+        while (it_oper != tokens.end() && it_oper->oper == '*' && it_expr->expr)
         {
-            if (!it->expr->evaluate())
-                return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
+            if (!it_expr->expr->evaluate())
+                return InputNum::ParseResult(false, it_expr->pos + it_expr->expr->error_pos, it_expr->expr->error_msg);
             if (gk == 1)
             {
-                gk = std::move(it->expr->value);
-                custom_k = std::move(it->expr->str_value);
-                it->expr->merge_factors(factors, cofactor, 1);
+                gk = std::move(it_expr->expr->value);
+                custom_k = std::move(it_expr->expr->str_value);
+                it_expr->expr->merge_factors(factors, cofactor, 1);
             }
             else
             {
-                if (!custom_k.empty() || !it->expr->str_value.empty())
+                if (!custom_k.empty() || !it_expr->expr->str_value.empty())
                 {
                     if (custom_k.empty())
                         custom_k = gk.to_string();
-                    if (it->expr->str_value.empty())
-                        it->expr->str_value = it->expr->value.to_string();
+                    if (it_expr->expr->str_value.empty())
+                        it_expr->expr->str_value = it_expr->expr->value.to_string();
                     custom_k += "*";
-                    custom_k += it->expr->str_value;
+                    custom_k += it_expr->expr->str_value;
                 }
-                gk *= it->expr->value;
-                it->expr->merge_factors(factors, cofactor, 1);
+                gk *= it_expr->expr->value;
+                it_expr->expr->merge_factors(factors, cofactor, 1);
             }
 
-            it_next++;
-            it = it_next;
-            if (it_next != tokens.end())
-                it_next++;
+            it_oper++;
+            it_expr = it_oper;
+            if (it_oper != tokens.end())
+                it_oper++;
         }
 
-        if (it == tokens.end())
+        if (it_expr == tokens.end())
             return InputNum::ParseResult(false, (int)s.size(), "unexpected end");
-        if (!it->expr)
-            return InputNum::ParseResult(false, it->pos, "unexpected operator");
-        if (it_next != tokens.end() && it_next->expr)
-            return InputNum::ParseResult(false, it_next->pos, "unexpected value");
+        if (!it_expr->expr)
+            return InputNum::ParseResult(false, it_expr->pos, "unexpected operator");
+        if (it_oper != tokens.end() && it_oper->expr)
+            return InputNum::ParseResult(false, it_oper->pos, "unexpected value");
 
-        if (it_next == tokens.end() || it_next->oper == '^' || it_next->oper == '+' || it_next->oper == '-' || it_next->oper == '/')
+        if (it_oper == tokens.end() || it_oper->oper == '^' || it_oper->oper == '+' || it_oper->oper == '-' || it_oper->oper == '/')
         {
-            if (!it->expr->evaluate())
-                return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
-            gb = std::move(it->expr->value);
-            custom_b = std::move(it->expr->str_value);
-            it->expr->merge_factors(b_factors, b_cofactor, 1);
-            Expr* b_expr = it->expr.get();
-            it++;
-            if (it != tokens.end())
-                it++;
+            if (!it_expr->expr->evaluate())
+                return InputNum::ParseResult(false, it_expr->pos + it_expr->expr->error_pos, it_expr->expr->error_msg);
+            gb = std::move(it_expr->expr->value);
+            custom_b = std::move(it_expr->expr->str_value);
+            it_expr->expr->merge_factors(b_factors, b_cofactor, 1);
+            Expr* b_expr = it_expr->expr.get();
+            it_expr++;
+            if (it_expr != tokens.end())
+                it_expr++;
 
-            if (it_next != tokens.end() && it_next->oper == '^')
+            if (it_oper != tokens.end() && it_oper->oper == '^')
             {
-                if (it == tokens.end())
+                if (it_expr == tokens.end())
                     return InputNum::ParseResult(false, (int)s.size(), "unexpected end");
-                if (!it->expr)
-                    return InputNum::ParseResult(false, it->pos, "unexpected operator");
-                if (!it->expr->evaluate(false))
-                    return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
-                if (it->expr->value.size() > 1)
-                    return InputNum::ParseResult(false, it->pos, "exponent too big");
-                n = it->expr->value.data()[0];
+                if (!it_expr->expr)
+                    return InputNum::ParseResult(false, it_expr->pos, "unexpected operator");
+                if (!it_expr->expr->evaluate(false))
+                    return InputNum::ParseResult(false, it_expr->pos + it_expr->expr->error_pos, it_expr->expr->error_msg);
+                if (it_expr->expr->value.size() > 1)
+                    return InputNum::ParseResult(false, it_expr->pos, "exponent too big");
+                n = it_expr->expr->value.data()[0];
 
-                it++;
-                it_next = it;
-                if (it != tokens.end())
-                    it++;
+                it_expr++;
+                it_oper = it_expr;
+                if (it_expr != tokens.end())
+                    it_expr++;
             }
             else
                 n = 1;
             b_expr->merge_factors(factors, cofactor, (int)n);
         }
-        else if (it_next->oper == '!')
+        else if (it_oper->oper == '!')
         {
             type = FACTORIAL;
-            if (!it->expr->evaluate(false))
-                return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
-            if (it->expr->value.size() > 1)
-                return InputNum::ParseResult(false, it->pos, "factorial too big");
-            n = it->expr->value.data()[0];
+            if (!it_expr->expr->evaluate(false))
+                return InputNum::ParseResult(false, it_expr->pos + it_expr->expr->error_pos, it_expr->expr->error_msg);
+            if (it_expr->expr->value.size() > 1)
+                return InputNum::ParseResult(false, it_expr->pos, "factorial too big");
+            n = it_expr->expr->value.data()[0];
 
-            it_next++;
-            for (multifactorial = 1; it_next != tokens.end() && it_next->oper == '!'; it_next++, multifactorial++);
-            it = it_next;
-            if (multifactorial == 1 && it != tokens.end() && it->expr)
+            it_oper++;
+            for (multifactorial = 1; it_oper != tokens.end() && it_oper->oper == '!'; it_oper++, multifactorial++);
+            it_expr = it_oper;
+            if (multifactorial == 1 && it_expr != tokens.end() && it_expr->expr)
             {
-                if (!it->expr->evaluate(false))
-                    return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
-                if (it->expr->value > n)
-                    return InputNum::ParseResult(false, it->pos, "multifactorial step too big");
-                multifactorial = it->expr->value.data()[0];
+                if (!it_expr->expr->evaluate(false))
+                    return InputNum::ParseResult(false, it_expr->pos + it_expr->expr->error_pos, it_expr->expr->error_msg);
+                if (it_expr->expr->value > n)
+                    return InputNum::ParseResult(false, it_expr->pos, "multifactorial step too big");
+                multifactorial = it_expr->expr->value.data()[0];
 
-                it++;
-                it_next = it;
+                it_expr++;
+                it_oper = it_expr;
             }
-            if (it != tokens.end())
-                it++;
+            if (it_expr != tokens.end())
+                it_expr++;
 
             Giant factor;
             factor = ((uint64_t)multifactorial << 32) + n;
@@ -867,110 +867,110 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
             gb = factorial(factor);
             ::add_factor(factors, factor, 1);
         }
-        else if (it_next->oper == '#')
+        else if (it_oper->oper == '#')
         {
             type = PRIMORIAL;
-            if (!it->expr->evaluate(false))
-                return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
-            if (it->expr->value.bitlen() > 31)
-                return InputNum::ParseResult(false, it->pos, "primorial too big");
+            if (!it_expr->expr->evaluate(false))
+                return InputNum::ParseResult(false, it_expr->pos + it_expr->expr->error_pos, it_expr->expr->error_msg);
+            if (it_expr->expr->value.bitlen() > 31)
+                return InputNum::ParseResult(false, it_expr->pos, "primorial too big");
 
             Giant factor;
-            factor.arithmetic().neg(it->expr->value, factor);
+            factor.arithmetic().neg(it_expr->expr->value, factor);
             gb = primorial(factor);
             n = factor.data()[0];
             ::add_factor(factors, factor, 1);
 
-            it_next++;
-            it = it_next;
-            if (it != tokens.end())
-                it++;
+            it_oper++;
+            it_expr = it_oper;
+            if (it_expr != tokens.end())
+                it_expr++;
         }
         else
-            return InputNum::ParseResult(false, it_next->pos, "unexpected symbol");
+            return InputNum::ParseResult(false, it_oper->pos, "unexpected symbol");
 
-        if (it_next != tokens.end())
+        if (it_oper != tokens.end())
         {
-            if (it_next->expr)
-                return InputNum::ParseResult(false, it_next->pos, "unexpected value");
-            if (it == tokens.end())
+            if (it_oper->expr)
+                return InputNum::ParseResult(false, it_oper->pos, "unexpected value");
+            if (it_expr == tokens.end())
                 return InputNum::ParseResult(false, (int)s.size(), "unexpected end");
-            if (!it->expr)
-                return InputNum::ParseResult(false, it->pos, "unexpected operator");
+            if (!it_expr->expr)
+                return InputNum::ParseResult(false, it_expr->pos, "unexpected operator");
         }
 
         gd = 1;
-        while (it != tokens.end() && it->expr && it_next->oper == '/')
+        while (it_expr != tokens.end() && it_expr->expr && it_oper->oper == '/')
         {
-            if (!it->expr->evaluate())
-                return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
+            if (!it_expr->expr->evaluate())
+                return InputNum::ParseResult(false, it_expr->pos + it_expr->expr->error_pos, it_expr->expr->error_msg);
             if (gd == 1)
             {
-                gd = std::move(it->expr->value);
-                custom_d = std::move(it->expr->str_value);
-                it->expr->merge_factors(factors, cofactor, -1);
+                gd = std::move(it_expr->expr->value);
+                custom_d = std::move(it_expr->expr->str_value);
+                it_expr->expr->merge_factors(factors, cofactor, -1);
             }
             else
             {
-                if (!custom_d.empty() || !it->expr->str_value.empty())
+                if (!custom_d.empty() || !it_expr->expr->str_value.empty())
                 {
                     if (custom_d.empty())
                         custom_d = gd.to_string();
-                    if (it->expr->str_value.empty())
-                        it->expr->str_value = it->expr->value.to_string();
+                    if (it_expr->expr->str_value.empty())
+                        it_expr->expr->str_value = it_expr->expr->value.to_string();
                     custom_d += "/";
-                    custom_d += it->expr->str_value;
+                    custom_d += it_expr->expr->str_value;
                 }
-                gd *= it->expr->value;
-                it->expr->merge_factors(factors, cofactor, -1);
+                gd *= it_expr->expr->value;
+                it_expr->expr->merge_factors(factors, cofactor, -1);
             }
 
-            it++;
-            it_next = it;
-            if (it != tokens.end())
-                it++;
+            it_expr++;
+            it_oper = it_expr;
+            if (it_expr != tokens.end())
+                it_expr++;
         }
         if (gd > 1 && gk*(type == KBNC ? power(gb, n) : gb)%gd != 0)
-            return InputNum::ParseResult(false, it_next != tokens.end() ? it_next->pos : (int)s.size(), "not divisible");
+            return InputNum::ParseResult(false, it_oper != tokens.end() ? it_oper->pos : (int)s.size(), "not divisible");
 
-        if (it_next != tokens.end())
+        if (it_oper != tokens.end())
         {
-            if (it_next->expr)
-                return InputNum::ParseResult(false, it_next->pos, "unexpected value");
-            if (it == tokens.end())
+            if (it_oper->expr)
+                return InputNum::ParseResult(false, it_oper->pos, "unexpected value");
+            if (it_expr == tokens.end())
                 return InputNum::ParseResult(false, (int)s.size(), "unexpected end");
-            if (!it->expr)
-                return InputNum::ParseResult(false, it->pos, "unexpected operator");
+            if (!it_expr->expr)
+                return InputNum::ParseResult(false, it_expr->pos, "unexpected operator");
         }
 
-        if (it != tokens.end() && (it_next->oper == '+' || it_next->oper == '-'))
+        if (it_expr != tokens.end() && (it_oper->oper == '+' || it_oper->oper == '-'))
         {
-            bool minus = (it_next->oper == '-');
-            if (!it->expr->evaluate(false))
-                return InputNum::ParseResult(false, it->pos + it->expr->error_pos, it->expr->error_msg);
-            if (it->expr->value.bitlen() > 63)
-                return InputNum::ParseResult(false, it->pos, "C too big");
-            if (it->expr->value.size() == 1)
-                c = it->expr->value.data()[0];
-            if (it->expr->value.size() == 2)
-                c = *(int64_t*)it->expr->value.data();
+            bool minus = (it_oper->oper == '-');
+            if (!it_expr->expr->evaluate(false))
+                return InputNum::ParseResult(false, it_expr->pos + it_expr->expr->error_pos, it_expr->expr->error_msg);
+            if (it_expr->expr->value.bitlen() > 63)
+                return InputNum::ParseResult(false, it_expr->pos, "C too big");
+            if (it_expr->expr->value.size() == 1)
+                c = it_expr->expr->value.data()[0];
+            if (it_expr->expr->value.size() == 2)
+                c = *(int64_t*)it_expr->expr->value.data();
             if (minus)
                 c = -c;
-            it++;
-            it_next = it;
+            it_expr++;
+            it_oper = it_expr;
         }
-        else if (it_next == tokens.end() && type == KBNC && gk == 1 && n == 1 && gd == 1)
+        else if (it_oper == tokens.end() && type == KBNC && gk == 1 && n == 1 && gd == 1)
         {
             type = GENERIC;
             n = 0;
         }
         else if (c_required)
-            return InputNum::ParseResult(false, it_next != tokens.end() ? it_next->pos : (int)s.size(), "C expected");
+            return InputNum::ParseResult(false, it_oper != tokens.end() ? it_oper->pos : (int)s.size(), "C expected");
     }
-    if (it_next != tokens.end())
-        return InputNum::ParseResult(false, it_next->pos, it_next->expr ? "unexpected value" : "unexpected operator");
-    if (it != tokens.end())
-        return InputNum::ParseResult(false, it->pos, it->expr ? "unexpected value" : "unexpected operator");
+    if (it_oper != tokens.end())
+        return InputNum::ParseResult(false, it_oper->pos, it_oper->expr ? "unexpected value" : "unexpected operator");
+    if (it_expr != tokens.end())
+        return InputNum::ParseResult(false, it_expr->pos, it_expr->expr ? "unexpected value" : "unexpected operator");
 
     _type = type;
     _gk = std::move(gk);
