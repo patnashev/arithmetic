@@ -624,6 +624,14 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
                     recursive._custom_f = recursive._gf.to_string();
                 custom_f = recursive._custom_f + "/" + custom_f;
             }
+            if (_type == GENERIC)
+            {
+                if (!_custom_b.empty())
+                    _custom_b = "(" + _custom_b + ")/" + (!custom_f.empty() ? custom_f : gf.to_string());
+                custom_f.clear();
+                _gb /= gf;
+                gf = 1;
+            }
             _gf = std::move(gf)*recursive._gf;
             _custom_f = std::move(custom_f);
             _display_text = build_text(30);
@@ -950,6 +958,11 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
                 c = -c;
             it++;
             it_next = it;
+        }
+        else if (it_next == tokens.end() && type == KBNC && gk == 1 && n == 1 && gd == 1)
+        {
+            type = GENERIC;
+            n = 0;
         }
         else if (c_required)
             return InputNum::ParseResult(false, it_next != tokens.end() ? it_next->pos : (int)s.size(), "C expected");
