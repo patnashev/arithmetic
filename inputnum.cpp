@@ -72,7 +72,7 @@ void InputNum::add_factor(Giant& factor)
     if (!_b_cofactor.empty() && _b_cofactor%factor == 0)
     {
         ::add_factor(_b_factors, factor, 1);
-        if (abs(_c) == 1)
+        if (std::abs(_c) == 1)
             ::add_factor(_factors, factor, _n);
         _b_cofactor /= factor;
         if (_b_cofactor == 1)
@@ -1258,7 +1258,7 @@ std::string InputNum::build_text(int max_len)
             res.append(1, '+');
         if (_c < 0)
             res.append(1, '-');
-        res.append(std::to_string(abs(_c)));
+        res.append(std::to_string(std::abs(_c)));
     }
     if (_gf != 1)
     {

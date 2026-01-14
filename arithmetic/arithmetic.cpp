@@ -57,7 +57,7 @@ namespace arithmetic
 
     void GWState::setup(uint64_t k, uint64_t b, uint64_t n, int64_t c)
     {
-        if (k >= (1ULL << 51) || b >= (1ULL << 32) || n >= (1ULL << 32) || abs(c) >= (1ULL << 30))
+        if (k >= (1ULL << 51) || b >= (1ULL << 32) || n >= (1ULL << 32) || std::abs(c) >= (1ULL << 30))
             throw ArithmeticException();
         Giant tmp;
         tmp.arithmetic().init((uint32_t*)&k, 2, tmp);
