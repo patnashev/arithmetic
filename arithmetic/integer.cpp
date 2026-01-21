@@ -191,7 +191,7 @@ namespace arithmetic
         int i, p;
         list.clear();
 #ifndef __clang__
-        list.reserve((int)((std::expint(log(end)) - (start > 2 ? std::expint(log(start)) : 0))*1.1) + 100);
+        list.reserve((int)((std::expint(log((double)end)) - (start > 2 ? std::expint(log((double)start)) : 0))*1.1) + 100);
 #endif
         if (start <= 2 && 2 < end)
             list.push_back(2);
@@ -207,7 +207,7 @@ namespace arithmetic
         for (; it != it_end && (*it)*(T)(*it) < end; it++)
         {
             p = *it;
-            i = start%p;
+            i = (int)(start%(T)p);
             if (i != 0)
                 i = p - i;
             if (i & 1)

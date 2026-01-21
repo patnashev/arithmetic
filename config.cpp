@@ -138,6 +138,55 @@ const char* from_chars(const char* str, T& value)
 }
 #endif
 
+unsigned long long get_order(const char c)
+{
+    switch (c)
+    {
+    case 'k':
+    case 'K':
+        return 1000;
+    case 'M':
+        return 1000000;
+    case 'G':
+        return 1000000000;
+    case 'T':
+        return 1000000000000ULL;
+    case 'P':
+        return 1000000000000000ULL;
+    }
+    return 0;
+}
+
+template<typename T, typename std::enable_if_t<std::is_integral<T>::value && std::is_unsigned<T>::value, bool> = true>
+bool mul_by_order(const char*& ptr, T& value)
+{
+    unsigned long long max = (unsigned long long)std::numeric_limits<T>::max()/value;
+    unsigned long long order = get_order(*ptr);
+    if (max < order)
+        return false;
+    value *= (T)order;
+    ptr++;
+    return true;
+}
+template<class T, typename std::enable_if_t<!std::is_floating_point<T>::value && std::is_signed<T>::value, bool> = true>
+bool mul_by_order(const char*& ptr, T& value)
+{
+    unsigned long long max = (unsigned long long)std::numeric_limits<T>::max()/std::abs(value);
+    unsigned long long order = get_order(*ptr);
+    if (max < order)
+        return false;
+    value *= (T)order;
+    ptr++;
+    return true;
+}
+template<typename T, typename std::enable_if_t<std::is_floating_point<T>::value, bool> = true>
+bool mul_by_order(const char*& ptr, T& value)
+{
+    value *= (T)get_order(*ptr);
+    ptr++;
+    return true;
+}
+
 template<class T>
 bool ConfigObject::parse_number(const char* str, T& value_ref)
 {
@@ -147,41 +196,8 @@ bool ConfigObject::parse_number(const char* str, T& value_ref)
         return false;
     if (*ptr && value != 0)
     {
-        T max = std::numeric_limits<T>::max()/(value < 0 ? -value : value);
-        switch (*ptr)
-        {
-        case 'k':
-        case 'K':
-            if (max < 1000)
-                return false;
-            value = (T)(value*1000);
-            ptr++;
-            break;
-        case 'M':
-            if (max < 1000000)
-                return false;
-            value = (T)(value*1000000);
-            ptr++;
-            break;
-        case 'G':
-            if (max < 1000000000)
-                return false;
-            value = (T)(value*1000000000);
-            ptr++;
-            break;
-        case 'T':
-            if (max < 1000000000000ULL)
-                return false;
-            value = (T)(value*1000000000000ULL);
-            ptr++;
-            break;
-        case 'P':
-            if (max < 1000000000000000ULL)
-                return false;
-            value = (T)(value*1000000000000000ULL);
-            ptr++;
-            break;
-        }
+        if (!mul_by_order(ptr, value))
+            return false;
     }
     while (*ptr && std::isspace(*ptr))
         ptr++;

@@ -111,7 +111,7 @@ bool Reader::read(double& value)
     if (_size < _pos + 4)
         return false;
     value = *(double*)(_data + _pos);
-    _pos += sizeof(double);
+    _pos += (int)sizeof(double);
     return true;
 }
 
@@ -152,7 +152,7 @@ bool Reader::read(arithmetic::SerializedGWNum& value)
     if (_size < _pos + len*sizeof(uint32_t))
         return false;
     value.init((uint32_t*)(_data + _pos), len);
-    _pos += len*sizeof(uint32_t);
+    _pos += len*(int)sizeof(uint32_t);
     return true;
 }
 
@@ -220,7 +220,7 @@ void File::read_buffer()
         return;
     }
     fseek(fd, 0L, SEEK_END);
-    int filelen = ftell(fd);
+    int filelen = (int)ftell(fd);
     _buffer.resize(filelen);
     fseek(fd, 0L, SEEK_SET);
     filelen = (int)fread(_buffer.data(), 1, filelen, fd);
@@ -238,7 +238,8 @@ void File::read_buffer()
         if (fd)
         {
             char md5hash[33];
-            fread(md5hash, 1, 32, fd);
+            if (fread(md5hash, 1, 32, fd) != 32)
+                md5hash[0] = 0;
             fclose(fd);
             md5hash[32] = 0;
             std::string saved_hash(md5hash);

@@ -15,7 +15,7 @@ namespace arithmetic
         if (N)
             throw ArithmeticException(); // call done() first
         gwset_num_threads(gwdata(), thread_count);
-        gwset_larger_fftlen_count(gwdata(), next_fft_count);
+        gwset_larger_fftlen_count(gwdata(), (char)next_fft_count);
         gwset_safety_margin(gwdata(), safety_margin);
         gwset_maxmulbyconst(gwdata(), maxmulbyconst);
         if (will_error_check)
@@ -23,7 +23,7 @@ namespace arithmetic
         if (large_pages)
             gwset_use_large_pages(gwdata());
         if (force_mod_type == 1 || force_mod_type == 2)
-            gwdata()->force_general_mod = force_mod_type;
+            gwdata()->force_general_mod = (char)force_mod_type;
         else
             gwdata()->force_general_mod = 0;
         if (polymult_safety_margin > 0)
@@ -80,7 +80,7 @@ namespace arithmetic
         char buf[200];
         gwfft_description(gwdata(), buf);
         fft_description = buf;
-        fft_length = gwfftlen(gwdata());
+        fft_length = (int)gwfftlen(gwdata());
     }
 
     void GWState::setup(const Giant& g)
@@ -104,7 +104,7 @@ namespace arithmetic
         char buf[200];
         gwfft_description(gwdata(), buf);
         fft_description = buf;
-        fft_length = gwfftlen(gwdata());
+        fft_length = (int)gwfftlen(gwdata());
     }
 
     void GWState::setup(int bitlen)
@@ -119,7 +119,7 @@ namespace arithmetic
         char buf[200];
         gwfft_description(gwdata(), buf);
         fft_description = buf;
-        fft_length = gwfftlen(gwdata());
+        fft_length = (int)gwfftlen(gwdata());
     }
 
     void GWState::clone(GWState& state)
@@ -177,7 +177,7 @@ namespace arithmetic
 
     double GWState::ops()
     {
-        return gw_get_fft_count(gwdata())*(gwdata()->GENERAL_MMGW_MOD ? 1.0/7.5 : gwdata()->GENERAL_MOD ? 1.0/6 : 1.0/2);
+        return (double)gw_get_fft_count(gwdata())*(gwdata()->GENERAL_MMGW_MOD ? 1.0/7.5 : gwdata()->GENERAL_MOD ? 1.0/6 : 1.0/2);
     }
 
     GWArithmetic::GWArithmetic(GWState& state) : _state(state)
@@ -964,7 +964,7 @@ int gwconvert(
         limit_d = gwdata_d->FFTLEN;
         if (gwdata_d->ZERO_PADDED_FFT && limit_d > gwdata_d->FFTLEN / 2 + 4) limit_d = gwdata_d->FFTLEN / 2 + 4;
 
-        bits1 = gwdata_d->NUM_B_PER_SMALL_WORD;
+        bits1 = (int)gwdata_d->NUM_B_PER_SMALL_WORD;
         bits2 = bits1 + 1;
         mask1 = (1L << bits1) - 1;
         mask2 = (1L << bits2) - 1;
@@ -980,7 +980,7 @@ int gwconvert(
         for (i_s = 0; i_s < limit; i_s++) {
             err_code = get_fft_value(gwdata_s, s, i_s, &val);
             if (err_code) return (err_code);
-            bits = gwdata_s->NUM_B_PER_SMALL_WORD;
+            bits = (int)gwdata_s->NUM_B_PER_SMALL_WORD;
             if (is_big_word(gwdata_s, i_s)) bits++;
             value += (int64_t)val << bits_in_value;
             bits_in_value += bits;
@@ -1243,7 +1243,7 @@ void gwdeserialize(
                     val = (int32_t)value;
                 }
                 else {
-                    bs = gwdata->NUM_B_PER_SMALL_WORD;
+                    bs = (int)gwdata->NUM_B_PER_SMALL_WORD;
                     if (gwiter_is_big_word(&iter))
                         bs++;
                     if (more_data && bs > bs_in_value) break;
@@ -1275,7 +1275,7 @@ void gwdeserialize(
 
         if (gwdata->GENERAL_MOD && ((header[0] & GWSERIALIZE_FLAG_GENERALMOD) == 0) && *(uint64_t*)(array + 4) > 1)
         {
-            if (*(uint64_t*)(array + 4) < GWSMALLMUL_MAX)
+            if ((double)*(uint64_t*)(array + 4) < GWSMALLMUL_MAX)
                 gwsmallmul(gwdata, (double)*(uint64_t*)(array + 4), g);
             else
             {
@@ -1296,14 +1296,14 @@ void gwdeserialize(
                 giant N = gwdata->GW_MODULUS;
                 if (N == NULL)
                 {
-                    Nalloc = popg(&gwdata->gdata, ((unsigned long)gwdata->bit_length >> 5) + 2);
+                    Nalloc = popg(&gwdata->gdata, ((int)gwdata->bit_length >> 5) + 2);
                     N = Nalloc;
                     ultog(gwdata->b, N);
-                    power(N, gwdata->n);
+                    power(N, (int)gwdata->n);
                     dblmulg(gwdata->k, N);
                     iaddg(gwdata->c, N);
                 }
-                giant invK = popg(&gwdata->gdata, ((unsigned long)gwdata->bit_length >> 5) + 2);
+                giant invK = popg(&gwdata->gdata, ((int)gwdata->bit_length >> 5) + 2);
                 dbltog(gwdata->k, invK);
                 invg(N, invK);
 
@@ -1324,7 +1324,7 @@ void gwdeserialize(
             gwmul3_carefully(gwdata, g, gwdata->R2_4, g, 0);
             if (*(uint64_t*)(array + 4) > 1)
             {
-                if (*(uint64_t*)(array + 4) < GWSMALLMUL_MAX)
+                if ((double)*(uint64_t*)(array + 4) < GWSMALLMUL_MAX)
                     gwsmallmul(gwdata, (double)*(uint64_t*)(array + 4), g);
                 else
                 {
@@ -1347,10 +1347,10 @@ void gwdeserialize(
                 giant N = gwdata->GW_MODULUS;
                 if (N == NULL)
                 {
-                    Nalloc = popg(&gwdata->gdata, ((unsigned long)gwdata->bit_length >> 5) + 2);
+                    Nalloc = popg(&gwdata->gdata, ((int)gwdata->bit_length >> 5) + 2);
                     N = Nalloc;
-                    ultog(gwdata->b, N);
-                    power(N, gwdata->n);
+                    ultog((uint32_t)gwdata->b, N);
+                    power(N, (int)gwdata->n);
                     dblmulg(gwdata->k, N);
                     iaddg(gwdata->c, N);
                 }
@@ -1370,9 +1370,9 @@ void gwdeserialize(
                 }
                 if (gwdata->GENERAL_MMGW_MOD && gwdata->n != array[3])
                 {
-                    giant R = allocgiant((((array[3] > gwdata->n ? array[3] : gwdata->n) + gwdata->n) >> 5) + 2);
+                    giant R = allocgiant(((int)((array[3] > gwdata->n ? array[3] : gwdata->n) + gwdata->n) >> 5) + 2);
                     itog(1, R);
-                    gshiftleft(gwdata->n, R);
+                    gshiftleft((int)gwdata->n, R);
                     sladdg(-1, R);
                     squareg(R);
                     if (R->n[0] & 1)

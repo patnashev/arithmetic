@@ -30,9 +30,9 @@ namespace arithmetic
                     cur->sign = 2;
                 }
                 gshiftright(bit, cur);
-                res.push_back(cur->n[0] & nafwMask);
+                res.push_back((int16_t)(cur->n[0] & nafwMask));
                 if (res.back() & nafwBit)
-                    res.back() -= nafwMask + 1;
+                    res.back() -= (int16_t)(nafwMask + 1);
                 itog(-res.back(), cur);
                 gshiftleft(bit, cur);
                 addg(cur, exp);

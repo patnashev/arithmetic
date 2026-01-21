@@ -690,11 +690,13 @@ namespace container
                 throw std::runtime_error("File flush failed.");
 #ifdef _WIN32
             int64_t cur = _ftelli64((FILE*)_stream);
-            _chsize_s(_fileno((FILE*)_stream), cur);
+            if (_chsize_s(_fileno((FILE*)_stream), cur) != 0)
+                throw std::runtime_error("File resize failed.");
             _fseeki64((FILE*)_stream, cur, SEEK_SET);
 #else
             int64_t cur = ftello((FILE*)_stream);
-            ftruncate(fileno((FILE*)_stream), cur);
+            if (ftruncate(fileno((FILE*)_stream), cur) != 0)
+                throw std::runtime_error("File resize failed.");
             fseeko((FILE*)_stream, cur, SEEK_SET);
 #endif
         }
@@ -704,10 +706,12 @@ namespace container
                 throw std::runtime_error("File flush failed.");
 #ifdef _WIN32
             int64_t start = _ftelli64((FILE*)_stream) - _pos;
-            _chsize_s(_fileno((FILE*)_stream), start + value);
+            if (_chsize_s(_fileno((FILE*)_stream), start + value) != 0)
+                throw std::runtime_error("File resize failed.");
 #else
             int64_t start = ftello((FILE*)_stream) - _pos;
-            ftruncate(fileno((FILE*)_stream), start + value);
+            if (ftruncate(fileno((FILE*)_stream), start + value) != 0)
+                throw std::runtime_error("File resize failed.");
 #endif
             if (_pos > value)
                 _pos = value;
@@ -864,11 +868,11 @@ namespace container
     char ctobase64(char val)
     {
         if (val < 26)
-            return 'A' + val;
+            return (char)('A' + val);
         if (val < 52)
-            return 'a' - 26 + val;
+            return (char)('a' - 26 + val);
         if (val < 62)
-            return '0' - 52 + val;
+            return (char)('0' - 52 + val);
         if (val == 62)
             return '+';
         if (val == 63)
@@ -879,11 +883,11 @@ namespace container
     char base64toc(char c)
     {
         if (c >= 'A' && c <= 'Z')
-            return c - 'A';
+            return (char)(c - 'A');
         if (c >= 'a' && c <= 'z')
-            return c - 'a' + 26;
+            return (char)(c - 'a' + 26);
         if (c >= '0' && c <= '9')
-            return c - '0' + 52;
+            return (char)(c - '0' + 52);
         if (c == '+')
             return 62;
         if (c == '/')
@@ -908,21 +912,21 @@ namespace container
         for (const char* end = buffer + count; buffer != end; buffer++)
             if ((_state & 3) == 0)
             {
-                _buffer.push_back(ctobase64(((unsigned char)*buffer >> 2)));
+                _buffer.push_back(ctobase64((char)((unsigned char)*buffer >> 2)));
                 _next = ((unsigned char)*buffer & 3) << 4;
                 _state++;
             }
             else if ((_state & 3) == 1)
             {
-                _buffer.push_back(ctobase64(_next + ((unsigned char)*buffer >> 4)));
+                _buffer.push_back(ctobase64((char)(_next + ((unsigned char)*buffer >> 4))));
                 _next = ((unsigned char)*buffer & 15) << 2;
                 _state++;
             }
             else if ((_state & 3) == 2)
             {
-                _buffer.push_back(ctobase64(_next + ((unsigned char)*buffer >> 6)));
+                _buffer.push_back(ctobase64((char)(_next + ((unsigned char)*buffer >> 6))));
                 _buffer.push_back(ctobase64(((unsigned char)*buffer & 63)));
-                _state += 2;
+                _state = (char)(_state + 2);
                 if (_state >= 72)
                 {
                     _buffer.push_back('\r');
@@ -1002,16 +1006,16 @@ namespace container
             if (_state == 0)
             {
                 if (buffer)
-                    _next = c << 2;
+                    _next = (char)(c << 2);
                 _state++;
             }
             else if (_state == 1)
             {
                 if (buffer)
                 {
-                    *buffer = _next + (c >> 4);
+                    *buffer = (char)(_next + (c >> 4));
                     buffer++, total++, count--;
-                    _next = (c & 15) << 4;
+                    _next = (char)((c & 15) << 4);
                 }
                 _state++;
             }
@@ -1021,9 +1025,9 @@ namespace container
             {
                 if (buffer)
                 {
-                    *buffer = _next + (c >> 2);
+                    *buffer = (char)(_next + (c >> 2));
                     buffer++, total++, count--;
-                    _next = (c & 3) << 6;
+                    _next = (char)((c & 3) << 6);
                 }
                 _state++;
             }
@@ -1033,7 +1037,7 @@ namespace container
             {
                 if (buffer)
                 {
-                    *buffer = _next + c;
+                    *buffer = (char)(_next + c);
                     buffer++, total++, count--;
                 }
                 _state = 0;

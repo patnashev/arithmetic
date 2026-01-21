@@ -1332,7 +1332,7 @@ void InputNum::setup(GWState& state)
         }
         return;
     }
-    else if (k() != 0 && b() != 0 && d() == 1 && abs(_c) < (1ULL << 30)  && (_gf == 1 || !state.force_mod_type))
+    else if (k() != 0 && b() != 0 && d() == 1 && std::abs(_c) < (1ULL << 30)  && (_gf == 1 || !state.force_mod_type))
     {
         state.known_factors = _gf;
         state.setup(k(), b(), _n, _c);
@@ -1475,7 +1475,7 @@ uint32_t InputNum::mod(uint32_t modulus)
 
 bool InputNum::is_half_factored()
 {
-    if (abs(c()) != 1)
+    if (std::abs(c()) != 1)
         return false;
     if (_cofactor.empty() || _cofactor.bitlen()*2 + 10 < bitlen())
         return true;
@@ -1640,7 +1640,7 @@ void InputNum::print_info()
         std::cout << std::endl;
     }
 
-    if (type() == KBNC && abs(_c) == 1 && d() == 1 && (k() == 1 || _cofactor.empty() || (!_b_cofactor.empty() && _cofactor == power(_b_cofactor, _n))))
+    if (type() == KBNC && std::abs(_c) == 1 && d() == 1 && (k() == 1 || _cofactor.empty() || (!_b_cofactor.empty() && _cofactor == power(_b_cofactor, _n))))
     {
         uint32_t n = _n;
         if (k() != 1)

@@ -29,8 +29,8 @@ public:
     int num_stages() { return (int)_costs.size(); }
     int cur_stage() { return _cur_stage; }
     std::string& param(const std::string& name) { return _params[name]; }
-    int param_int(const std::string& name) { std::string& val = _params[name]; return std::strtol(val.data(), nullptr, 10); }
-    double param_double(const std::string& name) { std::string& val = _params[name]; return std::strtod(val.data(), nullptr); }
+    int param_int(const std::string& name) { return std::stoi(_params[name], nullptr, 10); }
+    double param_double(const std::string& name) { return std::stod(_params[name], nullptr); }
     std::map<std::string, std::string>& params() { return _params; }
 
 private:

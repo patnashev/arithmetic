@@ -607,7 +607,7 @@ namespace arithmetic
         res.arithmetic().alloc(res, (bits + 31)/32);
         int i;
         for (i = 0; i < (bits + 31)/32; i++)
-            res.data()[i] = genrand_int32(state);
+            res.data()[i] = (uint32_t)genrand_int32(state);
         if ((bits & 31) != 0)
             res.data()[i - 1] &= (1 << (bits & 31)) - 1;
         while (i > 0 && res.data()[i - 1] == 0)
@@ -1050,7 +1050,7 @@ namespace arithmetic
 
     void GMPArithmetic::mod(Giant& a, uint32_t b, uint32_t& res)
     {
-        res = mpz_fdiv_ui(mpz(a), b);
+        res = (uint32_t)mpz_fdiv_ui(mpz(a), b);
     }
 
     void GMPArithmetic::gcd(Giant& a, Giant& b, Giant& res)
