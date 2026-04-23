@@ -498,3 +498,12 @@ void FilePacked::commit_writer(Writer& writer)
     }
     _container.close();
 }
+
+void FilePacked::clear(bool recursive)
+{
+    std::vector<char>().swap(_buffer);
+
+    if (recursive)
+        for (auto it = _children.begin(); it != _children.end(); it++)
+            (*it)->clear(true);
+}

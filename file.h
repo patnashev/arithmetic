@@ -151,6 +151,7 @@ public:
     void read_buffer() override;
     Writer* get_writer() override;
     void commit_writer(Writer& writer) override;
+    void clear(bool recursive = false) override;
 
 private:
     container::FileContainer& _container;
