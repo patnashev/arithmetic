@@ -602,7 +602,6 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
             _gk = std::move(recursive._gk);
             _gb = std::move(recursive._gb);
             _n = recursive._n;
-            _gd = std::move(recursive._gd);
             _c = recursive._c;
             _custom_k = std::move(recursive._custom_k);
             _custom_b = std::move(recursive._custom_b);
@@ -680,10 +679,9 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
             custom_b = recursive._custom_b;
             n = recursive._n;
             multifactorial = recursive._multifactorial;
-            gd = recursive.gd();
             custom_d = recursive._custom_d;
             c = 1;
-            if (recursive.k() > 0 && recursive.k() < 1000 && recursive.d() == 1)
+            if (recursive.k() > 0 && recursive.k() < 1000)
             {
                 algebraic_type = ALGEBRAIC_CYCLOTOMIC;
                 algebraic_k = (cyclotomic == 6 ? -1 : 1)*(int32_t)recursive.k();
@@ -727,15 +725,14 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
             custom_b = recursive._custom_b;
             n = recursive._n;
             multifactorial = recursive._multifactorial;
-            gd = recursive.gd();
             custom_d = recursive._custom_d;
             c = 1;
-            if (it_expr->expr->str_func == "Quad" && recursive.k() > 0 && recursive.k() < 100 && recursive.d() == 1)
+            if (it_expr->expr->str_func == "Quad" && recursive.k() > 0 && recursive.k() < 100)
             {
                 algebraic_type = ALGEBRAIC_QUAD;
                 algebraic_k = (int32_t)(recursive.k()*recursive._c);
             }
-            if (it_expr->expr->str_func == "Hex" && recursive.k() > 0 && recursive.k() < 32 && recursive.d() == 1)
+            if (it_expr->expr->str_func == "Hex" && recursive.k() > 0 && recursive.k() < 32)
             {
                 algebraic_type = ALGEBRAIC_HEX;
                 algebraic_k = (int32_t)(recursive.k()*recursive._c);
@@ -976,7 +973,6 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
     _gk = std::move(gk);
     _gb = std::move(gb);
     _n = n;
-    _gd = std::move(gd);
     _c = c;
     _gf = 1;
     _custom_k = std::move(custom_k);
@@ -992,11 +988,18 @@ InputNum::ParseResult InputNum::parse(const std::string& s, bool c_required)
     _b_cofactor = std::move(b_cofactor);
     std::sort(_factors.begin(), _factors.end(), [](std::pair<arithmetic::Giant, int>& a, std::pair<arithmetic::Giant, int>& b) { return (a.second > 0 && b.second < 0) || a.first < b.first; });
 
-    process(true);
+    process(gd, true);
     return InputNum::ParseResult(true);
 }
 
-void InputNum::process(bool factored)
+void InputNum::process()
+{
+    arithmetic::Giant gd;
+    gd = 1;
+    process(gd, false);
+}
+
+void InputNum::process(arithmetic::Giant& gd, bool factored)
 {
     if (!factored)
     {
@@ -1036,11 +1039,11 @@ void InputNum::process(bool factored)
                 _cofactor *= power(_b_cofactor, _n);
             else if (!_b_cofactor.empty())
                 _cofactor = power(_b_cofactor, _n);
-            if (_gd > 1)
+            if (gd > 1)
             {
                 std::vector<std::pair<arithmetic::Giant, int>> factors;
                 arithmetic::Giant cofactor;
-                factorize(_gd, factors, cofactor);
+                factorize(gd, factors, cofactor);
                 for (auto& factor : factors)
                     ::add_factor(_factors, factor.first, -factor.second);
                 if (!cofactor.empty())
@@ -1053,7 +1056,7 @@ void InputNum::process(bool factored)
         }
     }
 
-    if (_type == KBNC && _c == 1 && _gd == 1 && _algebraic_type == ALGEBRAIC_SIMPLE)
+    if (_type == KBNC && _c == 1 && gd == 1 && _algebraic_type == ALGEBRAIC_SIMPLE)
     {
         if (_gk == 1 && _n > 1 && (_n & (_n - 1)) == 0)
             for (_gfn = 1; (1UL << _gfn) < _n; _gfn++);
@@ -1105,59 +1108,9 @@ void InputNum::process(bool factored)
         }
     }
 
+    if (gd > 1 && _custom_d.empty())
+        _custom_d = gd.to_string();
     _input_text = build_text();
-
-    if (_gd > 1)
-    {
-        Giant tmp = gcd(_gk, _gd);
-        if (tmp > 1)
-        {
-            if (!_custom_k.empty() && _custom_d.empty())
-                _custom_d = _gd.to_string();
-            if (_custom_k.empty() && !_custom_d.empty())
-                _custom_k = _gk.to_string();
-            _gk /= tmp;
-            _gd /= tmp;
-        }
-        if (_gd > 1 && _type == KBNC)
-        {
-            uint32_t n = (uint32_t)((32 + log2(_gd))/log2(_gb));
-            if (n > _n - 1)
-                n = _n - 1;
-            if (n > 0)
-            {
-                tmp = power(_gb, n);
-                if (tmp%_gd == 0)
-                {
-                    tmp /= _gd;
-                    while (tmp%_gb == 0)
-                    {
-                        tmp /= _gb;
-                        n--;
-                    }
-                    if (!_custom_k.empty())
-                    {
-                        if (_custom_d.empty())
-                            _custom_k += "*" + tmp.to_string();
-                        else
-                            _custom_k += "*(" + (!_custom_b.empty() ? _custom_b : _gb.to_string()) + "^" + std::to_string(n) + ")";
-                    }
-                    else if (!_custom_d.empty())
-                        _custom_d.clear();
-                    _gk *= tmp;
-                    _n -= n;
-                    _gd = 1;
-                }
-            }
-        }
-        if (_gd > 1 && _type != KBNC)
-        {
-            _gb /= _gd;
-            if (_custom_d.empty())
-                _custom_d = _gd.to_string();
-            _gd = 1;
-        }
-    }
 
     if (_type == KBNC && _gb != 1)
     {
@@ -1183,6 +1136,80 @@ void InputNum::process(bool factored)
             _gk /= _gb;
             _n++;
             _custom_k.clear();
+        }
+    }
+
+    if (gd > 1)
+    {
+        Giant k_d = gcd(_gk, gd);
+        if (k_d > 1)
+        {
+            _gk /= k_d;
+            gd /= k_d;
+        }
+        uint32_t n = 0;
+        if (gd > 1 && _type == KBNC)
+        {
+            n = (uint32_t)((32 + log2(gd))/log2(_gb));
+            if (n > _n - 1)
+                n = _n - 1;
+            if (n > 0)
+            {
+                Giant tmp = power(_gb, n);
+                if (tmp%gd == 0)
+                {
+                    tmp /= gd;
+                    while (tmp%_gb == 0)
+                    {
+                        tmp /= _gb;
+                        n--;
+                    }
+                    _gk *= tmp;
+                    _n -= n;
+                    gd = 1;
+                    if (_gk.size() <= 2)
+                    {
+                        _custom_k.clear();
+                        _custom_d.clear();
+                    }
+                    else
+                    {
+                        if (!_custom_k.empty() && (tmp != 1 || k_d != 1))
+                        {
+                            if (tmp != 1)
+                                _custom_k += "*(" + (!_custom_b.empty() ? _custom_b : _gb.to_string()) + (n > 1 ? "^" + std::to_string(n) : "") + ")";
+                            else if (k_d != 1)
+                                _custom_d = k_d.to_string();
+                        }
+                        else
+                            _custom_d.clear();
+                    }
+                }
+            }
+        }
+        if (gd > 1)
+        {
+            GWASSERT(_gb%gd == 0);
+            _gb /= gd;
+        }
+        if (n == 0)
+        {
+            if (_custom_k.empty() && _custom_b.empty())
+                _custom_d.clear();
+            if (!_custom_k.empty() && _custom_b.empty())
+            {
+                if (k_d == 1)
+                    _custom_d.clear();
+                if (k_d != 1 && gd != 1)
+                    _custom_d = k_d.to_string();
+            }
+            if (_custom_k.empty() && !_custom_b.empty())
+            {
+                if (gd == 1)
+                    _custom_d.clear();
+                if (k_d != 1 && gd != 1)
+                    _custom_d = gd.to_string();
+            }
         }
     }
 
@@ -1239,10 +1266,10 @@ std::string InputNum::build_text(int max_len)
             res.append(std::to_string(_n));
         }
     }
-    if (_gd > 1 || !_custom_d.empty())
+    if (!_custom_d.empty())
     {
         res.append(1, '/');
-        std::string sd = !_custom_d.empty() ? _custom_d : _gd.to_string();
+        std::string sd = _custom_d;
         if (sd.size() > max_len && max_len > 0)
         {
             res.append(sd, 0, max_len/2);
@@ -1286,7 +1313,7 @@ void InputNum::setup(GWState& state)
     }
     else if (_type != KBNC)
     {
-        state.setup((_gk*_gb/_gd + _c)/_gf);
+        state.setup((_gk*_gb + _c)/_gf);
     }
     else if (_algebraic_type != ALGEBRAIC_SIMPLE && b() != 0 && !state.force_mod_type)
     {
@@ -1332,7 +1359,7 @@ void InputNum::setup(GWState& state)
         }
         return;
     }
-    else if (k() != 0 && b() != 0 && d() == 1 && std::abs(_c) < (1ULL << 30)  && (_gf == 1 || !state.force_mod_type))
+    else if (k() != 0 && b() != 0 && std::abs(_c) < (1ULL << 30)  && (_gf == 1 || !state.force_mod_type))
     {
         state.known_factors = _gf;
         state.setup(k(), b(), _n, _c);
@@ -1342,7 +1369,7 @@ void InputNum::setup(GWState& state)
             {
                 state.done();
                 state.known_factors = 1;
-                state.setup((_gk*power(_gb, _n)/_gd + _c)/_gf);
+                state.setup((_gk*power(_gb, _n) + _c)/_gf);
             }
             else
             {
@@ -1354,7 +1381,7 @@ void InputNum::setup(GWState& state)
     }
     else
     {
-        state.setup((_gk*power(_gb, _n)/_gd + _c)/_gf);
+        state.setup((_gk*power(_gb, _n) + _c)/_gf);
     }
     if (state.fingerprint != fingerprint())
         throw ArithmeticException();
@@ -1366,11 +1393,11 @@ int InputNum::bitlen()
         return _gb.bitlen();
     int res;
     if (_type != KBNC)
-        res = _gk.bitlen() + _gb.bitlen() - _gd.bitlen() - _gf.bitlen() + 1;
+        res = _gk.bitlen() + _gb.bitlen() - _gf.bitlen();
     else if (b() == 2)
-        res = _gk.bitlen() + _n - _gd.bitlen() + (_c > 0 || _gk != 1 ? 1 : 0) - _gf.bitlen() + 1;
+        res = _gk.bitlen() + _n + (_c > 0 || _gk != 1 ? 1 : 0) - _gf.bitlen();
     else
-        res = (int)std::ceil(log2(_gk) + log2(_gb)*_n - log2(_gd) - log2(_gf));
+        res = (int)std::ceil(log2(_gk) + log2(_gb)*_n - log2(_gf));
     if (res <= 64)
         res = value().bitlen();
     return res;
@@ -1640,7 +1667,7 @@ void InputNum::print_info()
         std::cout << std::endl;
     }
 
-    if (type() == KBNC && std::abs(_c) == 1 && d() == 1 && (k() == 1 || _cofactor.empty() || (!_b_cofactor.empty() && _cofactor == power(_b_cofactor, _n))))
+    if (type() == KBNC && std::abs(_c) == 1 && (k() == 1 || _cofactor.empty() || (!_b_cofactor.empty() && _cofactor == power(_b_cofactor, _n))))
     {
         uint32_t n = _n;
         if (k() != 1)
