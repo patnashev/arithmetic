@@ -17,6 +17,7 @@ public:
     void skip_stage() { _cur_stage++; }
     void update(double progress, int op_count);
     void time_init(double elapsed);
+    void add_time(double seconds) { _time_total += seconds; }
     void set_parent(Progress* parent) { _parent = parent; }
 
     std::vector<double>& costs() { return _costs; }
