@@ -131,7 +131,7 @@ const char* from_chars(const char* str, T& value)
         return nullptr;
     if (res < std::numeric_limits<T>::lowest() || res > std::numeric_limits<T>::max())
         return nullptr;
-    if (!std::isnormal(res))
+    if (!std::isnormal(res) && res != 0.0)
         return nullptr;
     value = (T)res;
     return str_end;

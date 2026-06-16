@@ -1150,12 +1150,14 @@ void InputNum::process(arithmetic::Giant& gd, bool factored)
         uint32_t n = 0;
         if (gd > 1 && _type == KBNC)
         {
-            n = (uint32_t)((32 + log2(gd))/log2(_gb));
+            Giant tmp = gcd(gd, _gb);
+            if (tmp > 1)
+                n = (uint32_t)(log2(gd)/log2(tmp)) + 10;
             if (n > _n - 1)
                 n = _n - 1;
             if (n > 0)
             {
-                Giant tmp = power(_gb, n);
+                tmp = power(_gb, n);
                 if (tmp%gd == 0)
                 {
                     tmp /= gd;

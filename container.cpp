@@ -401,7 +401,7 @@ namespace container
             buffer++, count -= 2;
         char* str_end;
         double res = std::strtod(buffer, &str_end);
-        if (errno == ERANGE || !std::isnormal(res) || (str_end - buffer) != count)
+        if (errno == ERANGE || (!std::isnormal(res) && res != 0.0) || (str_end - buffer) != count)
             throw std::out_of_range(std::string(buffer, count));
         return res;
     }
