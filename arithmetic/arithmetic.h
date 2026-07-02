@@ -174,6 +174,7 @@ namespace arithmetic
         virtual void mulmulsub(GWNum& a, GWNum& b, GWNum& c, GWNum& d, GWNum& res, int options) override;
     };
 
+    // Used by Task class
     class ReliableGWArithmetic : public GWArithmetic
     {
     public:
@@ -225,7 +226,6 @@ namespace arithmetic
     class GWNum : public FieldElement<GWArithmetic, GWNum>
     {
         friend class GWArithmetic;
-        friend class ThreadSafeGWArithmetic;
         friend class PolyMult;
         friend class GWNumWrapper;
     public:

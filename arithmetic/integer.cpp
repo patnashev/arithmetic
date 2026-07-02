@@ -44,6 +44,21 @@ namespace arithmetic
         return true;
     }
 
+    int perfect_power(uint32_t a)
+    {
+        int p;
+        int power = 0;
+        for (auto it = PrimeIterator::get(); (uint32_t)*it*(uint32_t)(*it) <= a; it++)
+            if (a%(uint32_t)(*it) == 0)
+            {
+                for (p = 0; a%(uint32_t)(*it) == 0; p++, a /= (uint32_t)(*it));
+                power = gcd(power, p);
+            }
+        if (a != 1)
+            return 1;
+        return power;
+    }
+
     uint32_t phi(uint32_t N)
     {
         uint32_t res = 1;

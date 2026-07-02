@@ -15,6 +15,9 @@ namespace arithmetic
     bool is_prime(uint32_t a);
     inline bool is_prime(int a) { return is_prime((uint32_t)a); }
 
+    int perfect_power(uint32_t a);
+    inline int perfect_power(int a) { return perfect_power((uint32_t)a); }
+
     uint32_t phi(uint32_t N);
     inline int phi(int N) { return (int)phi((uint32_t)N); }
 

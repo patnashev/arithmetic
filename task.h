@@ -74,6 +74,7 @@ public:
     static bool abort_flag() { return _abort_flag; }
 
     virtual void run();
+    virtual void write_state();
 
     arithmetic::GWArithmetic& gw() { return *_gw; }
     TaskState* state() { return _state.get(); }
@@ -117,7 +118,6 @@ protected:
         on_state();
     }
     void on_state();
-    virtual void write_state();
 
 protected:
     bool _error_check = false;
