@@ -271,7 +271,7 @@ Easy to do because the syntax is the same. `_logging->progress().update(...)` on
 
 ### Pitfall E: re-ordering `add_stage` calls between runs
 
-`.param` doesn't store stage layout — and it doesn't store `progress_total()` either. The percentage is an *estimate*, rebuilt each run from the code's `add_stage` calls plus the checkpoint/other params; there is no reason to persist an estimate. What *is* persisted is `_time_total`, and only it, precisely because it's the one quantity invariant of everything else — CLI input, FFT parameters, stage layout, checkpoints, even rollbacks to recovery points. It's plain wall-clock, so it can be stored independently of how the work is structured.
+`.param` doesn't store stage layout — and it doesn't store `progress_total()` either. The percentage is an *estimate*, rebuilt each run from the code's `add_stage` calls plus the checkpoint/other params; there is no reason to persist an estimate. The one progress quantity that *is* persisted is the elapsed time: `progress_save()` writes `time_total()` as evaluated at save time (`logging.cpp:203` — so it includes any in-flight `_time_stage` contribution, see §12), alongside whatever other named params the tests have stored. Wall-clock earns that persistence precisely because it's the one quantity invariant of everything else — CLI input, FFT parameters, stage layout, checkpoints, even rollbacks to recovery points — so it can be stored independently of how the work is structured.
 
 The code is the schema for stages. Add new stages at the end of an existing layout, and ideally only when you need them — re-ordering changes the meaning of `progress_total()` for in-flight checkpoints (the percentage self-corrects as the run proceeds; the stored wall-clock is unaffected).
 
