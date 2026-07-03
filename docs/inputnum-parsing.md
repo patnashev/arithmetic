@@ -128,7 +128,7 @@ The accessors are where the non-obvious overrides live. Every public method (`in
 | `is_half_factored()` | the BLS gate `Run::create` uses (§5). |
 | `add_factor(g)` | move a factor from a cofactor into the factored list (used when an external sieve supplies a factor). |
 | `b_factors()`, `b_cofactor()`, `factors()`, `cofactor()` | the factorization views. `factors()`/`cofactor()` are what `Run::create` and the deterministic tests read. |
-| `factorize_minus1(depth)`, `factorize_small()` | trial-division helpers returning small divisor lists. `factorize_small` feeds trial division (`prst/src/prst.cpp:295,312`) and `-batch` (`prst/src/batch.cpp:261,278`); `factorize_minus1` feeds the proof security seed (`prst/src/proof.cpp:104`). |
+| `factorize_minus1(depth)`, `factorize_small()` | trial-division helpers returning small divisor lists. `factorize_small` feeds trial division (`prst/src/prst.cpp:295,312`) and `-batch` (`prst/src/batch.cpp:261,278`); `factorize_minus1` feeds the proof's roots-of-unity check (`prst/src/proof.cpp:104`). |
 | `expand_factors()` | expand factorial/primorial pseudo-factors into primes (§6). |
 | `input_text()`, `display_text()` | the echoed forms; `display_text()` is elided to ~30 chars. |
 
@@ -141,7 +141,7 @@ The pipeline a candidate flows through:
    - (if not already factored) factorizes `_gk` and, for `KBNC`, `_gb`, seeding `_factors` from `_b_factors × _n` (`:1013-1056`); folds the divisor `gd` in with negative powers.
    - sorts `_factors` and rolls `_b_cofactor^n` into `_cofactor` (`:1037-1041`).
    - **detects algebraic structure** for `KBNC, c=1, gd=1, ALGEBRAIC_SIMPLE` (`:1059-1108`): a Fermat-number exponent `_gfn` when `k=1` and `n` is a power of two (`:1061-1062`); then, when `\|bitlen(k) − log2(b)·n\|` is small, it computes `b^n − k` and tags `ALGEBRAIC_CYCLOTOMIC` (`±1`), or `b^n/2 − k` → `ALGEBRAIC_QUAD`, or `b^n/3 − k` → `ALGEBRAIC_HEX`.
-   - normalizes the representation: reduces a common GCD of `b`'s exponents into `n` (`:1115-1132`), absorbs a `k` divisible by `b` into `n` (`:1134-1139`), and works the divisor `gd` back through `k`/`b` (`:1142-1214`).
+   - normalizes the representation: reduces a common GCD of `b`'s exponents into `n` (`:1115-1132`), absorbs a `k` divisible by `b` into `n` (`:1134-1139`), and works the divisor `gd` back through `k`/`b` (`:1142-1214`). For a `K*B^N/D+C` form, **`D` is not stored — it is divided out**: the number is rewritten as `(K*B^t/D)*B^(N−t)+C` with the smallest `t` that makes the division exact, so the divisor disappears into a new `k` and the stored shape is plain `k*b^n+c` again. (This mid-expression `/D` is a different thing from the `( … )/F` cofactor form, whose `F` *is* kept in `_gf` and forces `GENERIC` — §2b.)
    - rebuilds `_input_text` and `_display_text` via `build_text` (`:1219-1306`).
 3. **`setup(GWState&)`** (`inputnum.cpp:1308-1388`) — hands the number to GWnum. For an algebraic form it sets `state.known_factors` to the algebraic cofactor and configures GWnum modulo a *fast-form multiple* of the candidate (e.g. cyclotomic uses `k³·b^(3n) ± 1`, `:1320-1325`). GWnum then divides the known factor out (`arithmetic/arithmetic.cpp:76-79`: `*N /= known_factors`), leaving the candidate as the working modulus. The payoff is **FFT speed**, not size: GWnum's irrational-base transform is fastest on the special `k·b^n±c` shape, and the fast-form multiple is actually *larger* than the candidate (§6). After setup it verifies `state.fingerprint == fingerprint()` (or `*state.N % 3417905339 == fingerprint()`), throwing `ArithmeticException` on mismatch.
 
@@ -211,25 +211,35 @@ n = factor.data()[0];
 
 So a factor-list entry with `factor.first < 0` is a *pseudo-factor*: a one-limb negated value is `n#` (primorial), a two-limb negated value is `n!m` (factorial, `data()[0]=n`, `data()[1]=m`). The `factorial()` / `primorial()` free functions (`:459-502`) decode and compute the actual product. **`expand_factors()`** (`:1545-1606`) is what turns these into real primes — it sieves every prime up to `n` (or every multifactorial term), accumulates exponents into a `map`, and rebuilds `_factors`. `Run::create` calls it right before the half-factored test, which is why the deterministic-test path sees expanded primes while the raw parse result still carries the compact pseudo-factor.
 
-**The `factorize` sieve** (`inputnum.cpp:96-269`) is the workhorse behind both `process` and the `factorize_*` helpers. It pulls out the power of two, then runs a segmented bit-sieve of small primes up to roughly `2^(2s)` (default `s=10`), trial-dividing `N` and moving the unfactored remainder to `cofactor`. An optional `is_factor` predicate lets callers substitute a cheaper test — e.g. `factorize_minus1` passes `mod(p) == 1` so it can find factors of `N−1` without computing `N−1` (`:1529`).
+**The `factorize` sieve** (`inputnum.cpp:96-269`) is the workhorse behind both `process` and the `factorize_*` helpers. It pulls out the power of two, then runs a segmented bit-sieve of small primes up to roughly `2^(2s)` (default `s=10`), trial-dividing `N` and moving the unfactored remainder to `cofactor`. An optional `is_factor` predicate lets callers substitute a cheaper test — e.g. `factorize_minus1` passes `mod(p) == 1` so it can find factors of `N−1` without computing `N−1` (`:1529`). Implementation note: the sieve's bit array is a large `std::vector<bool>`, which can be unexpectedly slow in DEBUG builds of some compilers — a "why is parsing slow in my debug build" report likely lands here, not in the bignum layer.
 
-## 7. Pitfalls
+## 7. `print_info` — the `-info` report
 
-- **A `(<expr>)/F` form is always `GENERIC`.** `type()` returns `GENERIC` whenever `_gf ≠ 1` (`inputnum.h:57`), so `Run::create` routes every cofactor-divisor candidate to a probabilistic Fermat test — never Proth, Pocklington, or Morrison — no matter how nicely the inner expression factors. If a user expects a deterministic test on `(b^n−1)/F`, this is why they don't get one.
+`print_info()` (`inputnum.cpp:1637-1943`) is the diagnostic dump behind `-info`. It's reporting, not parsing — but it surfaces exactly the structure the rest of this doc describes, so it's the fastest way to *see* what `parse`/`process` concluded about a candidate. What it prints, in order:
+
+1. **Identity**: `display_text()`, bit length, decimal digit count.
+2. **Small factors of `N`** — a `factorize` sieve pass (§6) over `N` itself. When the factor list has no pseudo-factors and `p ∤ F`, the predicate is `mod(p) == 0` — the residue is computed from the factor *structure* (§5), never materializing a trial quotient. Reports `No small factors.`, or `<N> is prime.` when `N` itself survives as the sole factor (`factors[0].first == N`, `:1658` — i.e. trial division proved a small `N` prime), or the `Small factors: …` list. A small factor here means the candidate is composite before any test starts.
+3. **Algebraic factors of the searched form** — the most important lines for anyone *choosing* a form to search. For `KBNC` with `|c| = 1` it detects when the exponent structure forces a proper algebraic factor of the same `k·b^n±1` shape (via the GCD of `n` and the factor exponents, plus the Aurifeuillian-style `2^(4m+2)+1` and `3^(6m+3)+1` patterns), and for a detected cyclotomic form (`_algebraic_type`, §6) it prints the `b^2d ± b^d + 1` cofactor. **If your form has an algebraic factor, every candidate in it is composite by construction** — `-info` telling you `Algebraic factor: …` means the search itself is misconceived, not that this one candidate is unlucky.
+4. **Factors of `N−1` and of `N+1`** — for the side matching `c` it reuses the parsed `_factors`/`_cofactor`; the other side gets a fresh sieve pass with the `mod(p) == 1` / `mod(p) == p−1` predicates (the same trick as `factorize_minus1`). Each line reports the factored fraction: `(fully factored)`, `more than a half (x%)`, `more than a third (x%)`, or the plain percentage. The *half* threshold is the same gate as `is_half_factored` (§5), so that line tells you whether the candidate can qualify for a deterministic Pocklington/Morrison test; the "more than a third" line is informational — no code gate keys off it.
+5. **Kronecker symbols** `(2/N) … (11/N)` — the quadratic characters relevant to base/discriminant selection in the tests.
+
+## 8. Pitfalls
+
+- **A `(<expr>)/F` form is always `GENERIC`.** `type()` returns `GENERIC` whenever `_gf ≠ 1` (`inputnum.h:57`), so `Run::create` routes every cofactor-divisor candidate to a probabilistic Fermat test — never Proth, Pocklington, or Morrison — no matter how nicely the inner expression factors. This is the intended behavior, not a gap: for `N = (b^n−1)/F`, the factorization of `b^n−1` says nothing usable about `N∓1`, which is what the deterministic tests need.
 - **`k()` / `b()` / `f()` silently return `0` for multi-limb values.** They're convenience narrowings (`inputnum.h:58-62`). `Run::create`'s `input.b() == 2` and `log2(input.gk()) < input.n()` mix the narrow and wide accessors deliberately; new dispatch code must not assume `k()`/`b()` reflect the true magnitude.
 - **Negative entries in `factors()` are pseudo-factors, not real factors.** Anything iterating `_factors` (a GCD product, a residue computation) must either run after `expand_factors()` or guard `factor.first < 0`. `mod`, `is_half_factored`, and `print_info` all assume expansion has happened on the deterministic path.
 - **`type()` is post-`process`, not what the tokens said.** `parse` collapses the trivial `KBNC` shape to `GENERIC` (`inputnum.cpp:959-963`); `process` then can absorb `k` divisible by `b` into `n`, reduce a common exponent GCD, or tag an algebraic form (`process` itself never touches `_type`). Reason about the *reported* type, not the literal input.
 - **`fingerprint()` is a 32-bit non-cryptographic checksum.** It guards against a GWnum mis-setup (wrong FFT, wrong modulus) and namespaces files; it is not collision-resistant. Don't treat a fingerprint match as proof two inputs are equal, and don't widen its role without revisiting every `File::unique_fingerprint` caller (a checkpoint-format concern — see `state-serialization.md`).
 - **The algebraic `setup` trick mutates state and can self-disable.** On a GWnum general-modulus fallback, `setup` resets `_algebraic_type`/`_algebraic_k` to simple and recurses (`:1352-1359`). Code reading `algebraic_type()` after `setup` may see a different value than before it.
 
-## 8. Quick reference
+## 9. Quick reference
 
 | Input syntax | Parsed `type()` | Notes |
 |---|---|---|
 | `123456789` | `GENERIC` | bare number; `value() == _gb` |
 | `5*2^100+1` | `KBNC` | `k=5, b=2, n=100, c=1` (Proth-eligible) |
 | `2^257-1` | `KBNC` | `k=1, b=2, n=257, c=-1` |
-| `100!-1` / `100!2-1` | `FACTORIAL` | `_gb = 100!` (or `100!!`); negative pseudo-factor in `_factors` |
+| `100!-1`, `100!2-1` | `FACTORIAL` | `_gb = 100!` (or `100!!`); negative pseudo-factor in `_factors` |
 | `100#+1` | `PRIMORIAL` | `_gb = 100#`; negative pseudo-factor |
 | `(2^257-1)/535006…` | `GENERIC` | divisor form; `_gf ≠ 1` ⇒ always `GENERIC` ⇒ probabilistic Fermat test |
 | `Phi(3,10^20)` | `KBNC` | cyclotomic; `_algebraic_type = CYCLOTOMIC` |
@@ -245,10 +255,10 @@ So a factor-list entry with `factor.first < 0` is a *pseudo-factor*: a one-limb 
 | Expand `n!`/`n#` factors to primes | `expand_factors()` |
 | Echo the user's input / a short form | `input_text()` / `display_text()` |
 
-## 9. Open questions / non-coverage
+## 10. Open questions / non-coverage
 
 - **The commented-out ECM/Fermat-probe block** in `factorize` (`inputnum.cpp:157-268`) sketches an Edwards-curve ECM stage and a base-3 Fermat probe on the cofactor. It's dead today; if a future version wants deeper automatic factoring of `b`'s cofactor, this is the seam. Not covered here beyond noting it exists.
 - **`build_text` display logic** (`:1219-1306`) — the elision, the `_custom_*` overrides, the factorial/primorial/divisor formatting — is faithfully reproduced output formatting, not algorithm. Treated as a black box; read it directly if a display bug is reported.
 - **The exact `factorize` sieve schedule** (segment sizing, the `s`/`j` growth at `:130-147`) is a performance-tuned trial-division bound. The contract is "small factors out, remainder in `cofactor`"; the schedule itself is a tuning parameter not audited here.
 - **The GWnum `setup` math** (FFT selection, `known_factors`, `force_mod_type`) belongs to the GWnum/`GWState` layer; this doc covers only how `InputNum` *chooses* the modulus and verifies it via the fingerprint. See the GWnum notes referenced in lay-of-the-land (in the patnashev/prst repo)'s open questions.
-- **`print_info`** (`:1635-1942`) is the `-info` diagnostic dump (small factors, algebraic factor display, N∓1 factor fractions, Kronecker symbols). It's reporting, not parsing; covered only in passing.
+- **`print_info`'s exact algebraic-detection conditions** (§7) — the GCD/`l` selection and the Aurifeuillian patterns are summarized, not derived; the precise branch conditions live at `inputnum.cpp:1672-1789`.
