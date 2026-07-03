@@ -34,8 +34,8 @@ So the format interleaves data chunks with periodic index chunks. **It's append-
 
 Two more properties follow from the layout:
 
-- **Streaming reads are possible (a design property).** The format is written so that a file's index entry appears *before* the first chunk of its stream, so a reader can unpack every file on the fly in a single sequential pass over the container data — no second pass, no seeking back. (Stated as design intent per upstream; the in-tree `FileContainer` reader is the lazy/seeking one in §2, and the `Packer` index-emission path is only partially traced here — §7.)
-- **Append is also the repair strategy.** If PRST on restart refuses a file from the container (e.g. its MD5 check fails), it does **not** delete the old data or rebuild the container — that would be a costly operation with many failure modes. It simply appends a corrected copy, whose index entry overrides the bad one. The upstream rationale: PRST reads back what it wrote when it restarts, so a bad entry is detected and superseded rather than silently trusted.
+- **Streaming reads are possible (a design property).** The format is written so that a file's index entry appears *before* the first chunk of its stream, so a reader can unpack every file on the fly in a single sequential pass over the container data — no second pass, no seeking back. (Stated as design intent; the in-tree `FileContainer` reader is the lazy/seeking one in §2, and the `Packer` index-emission path is only partially traced here — §7.)
+- **Append is also the repair strategy.** If PRST on restart refuses a file from the container (e.g. its MD5 check fails), it does **not** delete the old data or rebuild the container — that would be a costly operation with many failure modes. It simply appends a corrected copy, whose index entry overrides the bad one. The rationale: PRST reads back what it wrote when it restarts, so a bad entry is detected and superseded rather than silently trusted.
 
 ## 2. `FileContainer::open` — the central method
 
