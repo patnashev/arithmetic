@@ -14,68 +14,14 @@ Cross-references: `logging-and-progress.md` for how Task drives Progress; `lay-o
 ## 1. Class hierarchy at a glance
 
 ```
-TaskState                                 (base for any serializable iteration state)
-├── BaseExp::State
-│   ├── BaseExp::StateSerialized          TYPE=8   (mid-task: SerializedGWNum)
-│   └── BaseExp::StateValue               TYPE=1   (final iteration: Giant)
-├── StrongCheckMultipointExp::StrongCheckState   TYPE=2   (Gerbicz/Li check intermediates: _recovery, X, D)
-├── LucasVMulFast::State                  TYPE=9   (single V plus index + parity)
-├── LucasUVMul::State                     TYPE=10  (V_n, V_{n+1}, parity)
-├── LucasUVMul::StrongCheckState          TYPE=11  (UV-form Gerbicz check intermediates)
-├── Proof::Product                        TYPE=3   (proof-product checkpoint)
-├── Proof::Certificate                    TYPE=4   (final certificate written by ProofBuild)
-└── Proof::State                          TYPE=6   (proof checkpoint state)
-
-Task                                       (abstract; restart loop, progress hook, abort)
-└── InputTask                              (adds InputNum*, _timer, error-check toggles)
-    ├── BaseExp                            (abstract; X_n exponentiation primitives)
-    │   ├── CarefulExp                     (single careful exponentiation)
-    │   ├── MultipointExp                  (multi-point exponentiation; proof-friendly)
-    │   │   ├── SmoothExp                  (smooth-exponent variant: factors into small primes)
-    │   │   ├── FastExp                    (binary-method exponentiation, no proof points)
-    │   │   ├── SlidingWindowExp           (sliding-window exponentiation; precomputed table)
-    │   │   └── StrongCheckMultipointExp   (adds Gerbicz / Gerbicz-Li check)
-    │   │       ├── GerbiczCheckExp        (classic Gerbicz error check)
-    │   │       ├── LiCheckExp             (Gerbicz-Li check, paper eprint 2023/195)
-    │   │       └── FastLiCheckExp         (LiCheck on top of fast/sliding-window math)
-    │   └── Product                        (accumulates a product of giants)
-    ├── LucasVMul                          (abstract Lucas V multiplier)
-    │   ├── LucasVMulFast                  (precomputed Lucas chains over a factor list)
-    │   ├── LucasUVMul                     (UV form; supports strong-check)
-    │   └── LucasUVMulFast                 (UV-form variant for fast paths)
-    ├── ProofSave                          (-proof save: writes proof points during a Fermat run)
-    └── ProofBuild                         (-proof build: consumes points, emits certificate)
+TaskState        (base for any serializable iteration state)
+Task             (abstract; restart loop, progress hook, abort)
+└── InputTask    (adds InputNum*, _timer, error-check toggles)
 ```
 
-The `TYPE` constants are on-disk discriminators in `TaskState` subclasses — they're the file format version, do not reuse or renumber.
+That's the whole framework layer. `TaskState` — the serializable iteration anchor and its on-disk record — is documented in `state-serialization.md` §4. Every concrete state and task class lives with the consumer application: PRST's `TaskState` subclasses and their TYPE constants are cataloged in `checkpoints.md` (in the patnashev/prst repo); its concrete task classes (the `BaseExp` exponentiation family, the Lucas-sequence multipliers, the proof tasks) are documented in `exponentiation-algorithms.md` and `proof-system.md` there, with a one-paragraph tour in §9 below.
 
-## 2. `TaskState` — the serializable iteration anchor
-
-```cpp
-class TaskState {
-    char _type;           // TYPE constant, sets the on-disk version
-    bool _written;        // whether this state has been flushed to _file already
-    int  _iteration;      // current iteration count (the only field the base class persists)
-
-    void set(int iteration);      // resets _written to false and stores _iteration
-    virtual bool read(Reader&);   // base reads _iteration only
-    virtual void write(Writer&);  // base writes _iteration only
-    void set_written();           // mark state as flushed; Task::write_state skips re-writing
-    char type();                  // returns _type (the on-disk discriminator)
-    char version() { return 0; }  // unused on-disk version field; reserved for future schema bumps
-    bool is_written();             // returns _written
-    int  iteration();              // returns _iteration
-};
-
-template<class State>
-State* read_state(File* file);   // null-safe deserializer
-```
-
-Subclasses override `read()` / `write()` and add their own fields (`_giant_value`, `_serialized_value`, `_V` / `_Vn` / `_Vn1`, etc.). `read_state<T>(file)` is the canonical way to load a checkpoint: returns a fresh `T` if the file decodes, or `nullptr`. The `_written` flag prevents re-writing a state that's already on disk in `Task::write_state()` (`task.cpp:192`).
-
-Subclasses' `set(...)` methods take the same `int iteration` first arg plus any state-specific payload. `BaseExp::StateValue::set(iteration, GWNum&)` for example writes a `Giant`; `BaseExp::StateSerialized::set(iteration, GWNum&)` writes a `SerializedGWNum` (cheaper to checkpoint mid-task).
-
-## 3. `Task` fields — annotated
+## 2. `Task` fields — annotated
 
 ```cpp
 class Task {
@@ -130,7 +76,7 @@ class InputTask : public Task {
 
 Most concrete tasks derive from `InputTask`. The `_timer` field is the wall-clock measurement of how long this single task ran.
 
-## 4. The cadence knobs
+## 3. The cadence knobs
 
 Three static knobs on `Task` control pacing (`task.cpp:27-29`):
 
@@ -142,7 +88,7 @@ Three static knobs on `Task` control pacing (`task.cpp:27-29`):
 
 `MULS_PER_STATE_UPDATE` is iteration-based; the others are time-based. They run independently. Both `DISK_WRITE_TIME` and `PROGRESS_TIME` use `std::chrono::system_clock` (not `getHighResTimer`).
 
-## 5. Annotated `Task::run()`
+## 4. Annotated `Task::run()`
 
 The retry-loop is the hardest part to read at a glance. From `task.cpp:45-151`, with annotations:
 
@@ -245,7 +191,7 @@ Mental model:
 - **Three escape routes.** (a) Both passes succeed → break the outer loop. (b) Reliable detected a suspect op → re-restart from `_restart_op` without bumping FFT. (c) Restart budget exceeded → bump `next_fft_count`, call `reinit_gwstate()`, retry. After 5 FFT increments or 5 same-pass restarts → `TaskAbortException`.
 - **Promotion to reliable.** First `TaskRestartException` upgrades the task: `_error_check = true`, drop both arithmetic slots, the next iteration constructs `ReliableGWArithmetic`. After that the suspect-op restart path is available.
 
-## 6. Annotated `Task::on_state()`
+## 5. Annotated `Task::on_state()`
 
 The periodic callback every concrete task hits via `commit_execute<TState>`. From `task.cpp:163-190`:
 
@@ -287,7 +233,7 @@ void Task::on_state() {
 
 Cross-ref: this is the place inside the framework that drives the **recurring/periodic** `Progress::update()` ticks from a Task's perspective. It is not the only call site, though: `Task::init` calls `progress().update(0, ops())` to anchor the timer at task start (`task.cpp:40`), and `InputTask::done` calls `progress().update(1, ops())` to mark the stage 100% complete at task end (`task.cpp:235`). Every long task automatically generates the periodic ticks that populate `_time_total` on its `Logging`'s `Progress` (see `logging-and-progress.md` §7).
 
-## 7. State machinery
+## 6. State machinery
 
 The pattern is:
 
@@ -318,7 +264,7 @@ What `set_state<T>` does (`task.h:105`):
 
 `commit_setup()` (`task.cpp:203`) is a different call, made from inside `setup()`: it runs `check()` and resets reliable state if needed. Subclasses that perform work in `setup()` should call it at the end of that work.
 
-## 8. The error-correction subsystem
+## 7. The error-correction subsystem
 
 Two exception types drive recovery:
 - `TaskRestartException` — "this pass needs to redo from a known-good op." Caught in `run()`'s inner loop.
@@ -336,7 +282,7 @@ Two exception types drive recovery:
 
 `InputTask::reinit_gwstate()` (`task.cpp:221`) is what `Task::run` calls when bumping FFT size: tears down `_gwstate`, calls `_input->setup(*_gwstate)` again, warns the user (preserving any prefix), recomputes `_error_check_near` against the new FFT.
 
-## 9. `InputTask::init` and `done`
+## 8. `InputTask::init` and `done`
 
 ```cpp
 void InputTask::init(InputNum* input, GWState* gwstate, File* file, TaskState* state, Logging* logging, int iterations) {
@@ -360,7 +306,7 @@ Key consequence: `task->timer()` is **the start anchor** during `run()`, and **t
 
 `_error_check` is decided at init based on whether the FFT is close to its safety limit (`_error_check_near` mode) OR forced on (`_error_check_forced`). Subclasses can change this with `set_error_check(near, check)` before running.
 
-## 10. Concrete subclasses — one-paragraph tour
+## 9. Concrete subclasses — one-paragraph tour
 
 - **`BaseExp`** (`prst/src/exp.h:11`). Abstract base for X^k mod N exponentiation. Owns `_exp` (the exponent), `_tail`, `_X0` / `_x0` (starting value), `_smooth` flag. Provides three nested state classes: `State` (abstract), `StateSerialized` (cheap mid-task representation), `StateValue` (final-iteration `Giant`). The override of `commit_execute` at `prst/src/exp.h:67-74` switches automatically between the two state types based on whether `iteration == iterations()`.
 
@@ -378,7 +324,7 @@ Key consequence: `task->timer()` is **the start anchor** during `run()`, and **t
 
 - **`ProofSave` / `ProofBuild`** (`prst/src/proof.h:140, 159`). Proof-system tasks: `ProofSave` writes proof points during a Fermat run; `ProofBuild` consumes them on the verifier side. Both layer their own state types over `InputTask`.
 
-## 11. Common patterns
+## 10. Common patterns
 
 ### Pattern: a Run-class running a single task
 
@@ -418,13 +364,13 @@ See `logging-and-progress.md` §9 for the full pattern. Briefly: register an out
 
 `Fermat::run` runs the main exponentiation, then `Pocklington::run` (or its loop) creates per-factor `CarefulExp` tasks one at a time, each fed by the running result of the previous. Each sub-task has its own `init` / `run` / `result` lifecycle; checkpoints are scoped via `file.add_child(...)`.
 
-## 12. Pitfalls
+## 11. Pitfalls
 
 ### A. Subclass `setup()` without `commit_setup()` at the end
 `commit_setup()` runs `check()` and resets reliable state. If your `setup()` does GW operations and skips `commit_setup`, a suspicious-op detection during setup never escalates into a `TaskRestartException`, and `_restart_op` semantics get confused. Rule: any `setup()` that touches `_gw` must end with `commit_setup()`. See `MultipointExp::setup` at `prst/src/exp.cpp:171-172` for the canonical pattern.
 
 ### B. Mutating `_state` directly
-`_state` is a `unique_ptr<TaskState>`. Don't reassign it from a subclass — go through `set_state<T>` / `commit_execute<T>` (or `reset_state<T>`, which routes through `on_state()` correctly but has no live callers — see §7). Direct assignment bypasses `on_state()`, so no progress tick, no checkpoint, no abort handling, and the `_tmp_state` swap protocol breaks.
+`_state` is a `unique_ptr<TaskState>`. Don't reassign it from a subclass — go through `set_state<T>` / `commit_execute<T>` (or `reset_state<T>`, which routes through `on_state()` correctly — see §6). Direct assignment bypasses `on_state()`, so no progress tick, no checkpoint, no abort handling, and the `_tmp_state` swap protocol breaks.
 
 ### C. Reading `task->result()` before completion
 `BaseExp::result()` returns `nullptr` if `state()->iteration() != iterations()` or if the state isn't a `StateValue` (`prst/src/exp.h:66`). `LucasVMulFast::result()` and `LucasVMul::result()` similarly guard. Don't dereference before `run()` returns.
@@ -444,7 +390,7 @@ During `run()`, `_timer` holds the start `getHighResTimer()` reading. Only after
 ### H. Forgetting `add_child` for sub-task files
 A sub-task that shares the parent's checkpoint file will overwrite the parent's state. Always allocate a child file via `file.add_child(name, fingerprint)` for any sub-task. See `prst/src/morrison.cpp:224` for the canonical uniqueness pattern (`checkpoint = file_checkpoint.add_child(sP, File::unique_fingerprint(file_checkpoint.fingerprint(), sP));`), with the recovery-point analogue at `:229`; `File::unique_fingerprint` is also used at `:363` and `:516`.
 
-## 13. Quick reference
+## 12. Quick reference
 
 | You want to…                                                        | Call                                                                                  |
 |---------------------------------------------------------------------|---------------------------------------------------------------------------------------|
@@ -461,10 +407,9 @@ A sub-task that shares the parent's checkpoint file will overwrite the parent's 
 | Force error-check on for the whole run                              | `task->set_error_check(/*near*/false, /*check*/true)` before `task->init`             |
 | Bump checkpoint frequency for a single task                         | Set `_state_update_period` after calling base `init`                                  |
 
-## 14. Open questions / non-coverage
+## 13. Open questions / non-coverage
 
 - **The math.** Gerbicz-Li's algorithm, Lucas chain construction, sliding-window exponentiation, Proth/Pocklington/Morrison theorem details. See `docs/mult_en_20230925.pdf` for the multiplication theory; the test theorems themselves are in the upstream README and the original papers.
 - **GWnum internals.** FFT selection, thread-pool layout, instruction-set dispatch. Owned by the gwnum prebuilt (third-party).
 - **`ReliableGWArithmetic` internals.** How GWnum decides an op is suspect, what `failure_flag` means concretely. Treat it as a black box for now — its public flags are the contract.
-- **State serialization format.** `Giant`/`SerializedGWNum`/etc. all have custom `read`/`write` that go through `Reader`/`Writer` in `file.cpp`. Worth its own short doc if we ever need to bump a `TaskState::TYPE` constant or extend the on-disk schema.
-- **The `_smooth` exponentiation path.** `BaseExp::_smooth` toggles a different math path (used when the exponent factors smoothly into small primes). Worth a footnote in any future "exponentiation algorithms" doc.
+- **The `_smooth` exponentiation path.** `BaseExp::_smooth` toggles a different math path (used when the exponent factors smoothly into small primes). Covered from the algorithm side in `exponentiation-algorithms.md` (in the patnashev/prst repo).
