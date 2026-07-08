@@ -31,7 +31,7 @@ class Task {
     std::unique_ptr<TaskState> _state;                          // current durable state
     std::unique_ptr<TaskState> _tmp_state;                      // scratch slot, swapped into _state to amortize allocation
     int _iterations = 0;                                        // total iteration count for this task instance
-    int _state_update_period = MULS_PER_STATE_UPDATE;           // how often commit_execute checkpoints
+    int _state_update_period = MULS_PER_STATE_UPDATE;           // how often commit_execute checkpoints (iterations, not muls — §3)
     File* _file;                                                // checkpoint File (may be null for transient tasks)
     Logging* _logging;                                          // Logging or SubLogging instance for progress + reports
     std::chrono::system_clock::time_point _last_write;          // for DISK_WRITE_TIME pacing
@@ -51,6 +51,7 @@ static void abort();              // signal handler calls this from prst/src/prs
 static void abort_reset();        // clear the static _abort_flag (used by tests / batch mode)
 static bool abort_flag();         // read the static _abort_flag
 virtual void run();               // the main entry point
+virtual void write_state();       // persist _state to _file now (task.h:77); callable after run() to persist the result
 arithmetic::GWArithmetic& gw();   // active arithmetic (after init); used by setup()/execute() to issue ops
 TaskState* state();               // current durable state; null before first commit
 int iterations();                 // total iteration count for this task instance (set by init)
@@ -76,6 +77,8 @@ class InputTask : public Task {
 
 Most concrete tasks derive from `InputTask`. The `_timer` field is the wall-clock measurement of how long this single task ran.
 
+`write_state()` is part of the public surface: checkpoints are usually erased on completion, so a caller that wants the final state on disk calls `task->write_state()` after `run()` returns (the `_written` flag makes it a no-op if the state is already flushed).
+
 ## 3. The cadence knobs
 
 Three static knobs on `Task` control pacing (`task.cpp:27-29`):
@@ -88,7 +91,11 @@ Three static knobs on `Task` control pacing (`task.cpp:27-29`):
 
 `MULS_PER_STATE_UPDATE` is iteration-based; the others are time-based. They run independently. Both `DISK_WRITE_TIME` and `PROGRESS_TIME` use `std::chrono::system_clock` (not `getHighResTimer`).
 
+A state update is not free. It requires converting the GWNum from its floating-point FFT representation to integer data, which is possible only when the GWNum is in a suboptimal state — so it is not merely a memcopy. On the other hand, it's nowhere near as costly as saving to disk. In-memory snapshots are therefore amortized: `MULS_PER_STATE_UPDATE` is measured in GWNum muls, while `_state_update_period` is measured in iterations — and one iteration can cost many muls, which is why subclasses shrink `_state_update_period` (`prst/src/exp.cpp:75`, `:133-135`, `:431-433`). The knob also bounds responsiveness to Ctrl-C and the amount of work redone after a suspicious op — both are handled at snapshot boundaries.
+
 ## 4. Annotated `Task::run()`
+
+`Task::run()` is the reason using this class beats using GWNum directly: it gathers all the dirty work of roundoff errors and restarting and hides it from the user. The public model is just `run()` = `setup()` / `execute()` / `release()`.
 
 The retry-loop is the hardest part to read at a glance. From `task.cpp:45-151`, with annotations:
 
@@ -151,6 +158,7 @@ void Task::run() {
                 continue;
             }
             if ((!reliable || !reliable->failure_flag()) && *restart_count[i] < 2) {
+                // an arithmetic error reliable did NOT detect — e.g. a Gerbicz check error
                 if (reliable) reliable->restart(i == 1 ? _restart_op : 0);
                 (*restart_count[i])++;
                 i = 0;
@@ -174,7 +182,9 @@ void Task::run() {
         }
         (*restart_count[i])++;
         _gwstate->next_fft_count++;
-        _logging->report_param("next_fft", _gwstate->next_fft_count);
+        _logging->report_param("next_fft", _gwstate->next_fft_count);  // persists the FFT increase —
+                                                        // a reason Progress() should not be shared
+                                                        // between different inputs
         reinit_gwstate();                                        // virtual; InputTask reconfigures FFT
         _restart_op = 0;
         arithmetics[0].reset(); arithmetics[1].reset();
@@ -188,8 +198,9 @@ void Task::run() {
 Mental model:
 
 - **Two passes.** `setup()` runs once before `execute()`. They use separate `GWArithmetic` instances (slot 0 vs slot 1). Some subclasses do non-trivial work in `setup()` (e.g. `MultipointExp::setup` builds sliding-window tables); others leave it nearly empty.
-- **Three escape routes.** (a) Both passes succeed → break the outer loop. (b) Reliable detected a suspect op → re-restart from `_restart_op` without bumping FFT. (c) Restart budget exceeded → bump `next_fft_count`, call `reinit_gwstate()`, retry. After 5 FFT increments or 5 same-pass restarts → `TaskAbortException`.
+- **Four escape routes.** (a) Both passes succeed → break the outer loop. (b) Reliable detected a suspect op → restart from `_restart_op` without increasing the restart count or bumping FFT. (c) An arithmetic error was reported that reliable did *not* detect — e.g. a Gerbicz check error — → restart from `_restart_op` with a restart-count increase, no FFT bump (up to 2 tries per pass). (d) Restart budget exceeded, or reliable confirmed the failure (`failure_flag`) → bump `next_fft_count`, call `reinit_gwstate()`, retry. After 5 FFT increments or 5 same-pass restarts → `TaskAbortException`.
 - **Promotion to reliable.** First `TaskRestartException` upgrades the task: `_error_check = true`, drop both arithmetic slots, the next iteration constructs `ReliableGWArithmetic`. After that the suspect-op restart path is available.
+- **`release()` invalidates all GWNums stored as members.** A restart can happen with or without `release()` having run, so both `setup()` and `execute()` must check what still exists (the `if (!_X)` / `if (_A.empty())` guards) rather than assume a fresh or an intact object.
 
 ## 5. Annotated `Task::on_state()`
 
@@ -197,7 +208,10 @@ The periodic callback every concrete task hits via `commit_execute<TState>`. Fro
 
 ```cpp
 void Task::on_state() {
-    bool state_save_flag = _logging->state_save_flag();
+    bool state_save_flag = _logging->state_save_flag();  // BOINC's Logging overrides state_save_flag();
+                                                         // the call has side effects there, so it must be
+                                                         // called regardless of how the if below evaluates
+                                                         // — hence hoisted into a local
 
     // 1. Disk-save tick: every DISK_WRITE_TIME seconds, on abort, or on logging request.
     if (now - _last_write >= DISK_WRITE_TIME || abort_flag() || state_save_flag) {
@@ -245,36 +259,68 @@ for (i = state ? state->iteration() : 0; i < iterations(); i++) {
 }
 ```
 
-What `commit_execute<T>` does (`task.h:96`):
+What `commit_execute<T>` does (`task.h:97`):
 
 1. Checks the cadence condition: `iteration - last_state_iter >= state_update_period || iteration == iterations() || abort_flag() || state_save_flag()`.
 2. If true: call `check()` (which throws `TaskRestartException` if reliable detected a problem), then `set_state<T>(iteration, args...)`.
 3. If false: skip — let the math loop continue without snapshotting.
 
-What `set_state<T>` does (`task.h:105`):
+**Most of the time it does nothing.** The call is cheap, so call it after every iteration; what it really signals is that the code has reached the end of an iteration — a point where the state can be preserved and recreated. The iteration need not be one multiplication: raising to a small power other than 2 can be treated as an atomic operation comprising a single iteration, so `commit_execute()` is called only when it finishes.
+
+What `set_state<T>` does (`task.h:106`):
 
 1. If `_tmp_state` is null or wrong type, allocate a fresh `T` into `_tmp_state`.
 2. Call `_tmp_state->set(iteration, args...)`.
 3. **Swap** `_tmp_state` and `_state`. Now the new state is durable, the old one is the scratch slot for next iteration. This is why two slots exist — to amortize allocation across iterations.
 4. Call `on_state()` — which might checkpoint to disk, report progress, throw on abort, or do nothing.
 
-`reset_state<T>()` (`task.h:113-118`) would drop any existing state, install a fresh `T()`, and call `on_state()` — but it has **no live callers** anywhere in the tree, so treat it as effectively dead code rather than a recommended pattern. When a subclass wants to start clean (e.g., `MultipointExp::execute` at `prst/src/exp.cpp:202-206` when there's no checkpoint and no `_smooth`), the real pattern is to construct the state directly and hand it to `init_state` — `tmp_state = new StateSerialized()` followed by `init_state(tmp_state)` — not `reset_state`.
+`reset_state<T>()` (`task.h:114-119`) drops any existing state, installs a fresh `T()`, and calls `on_state()`. It has no callers in this repo or in PRST — but Prefactor, another consumer of this framework, uses it; it is part of the supported surface. PRST's own start-clean pattern (e.g., `MultipointExp::execute` at `prst/src/exp.cpp:202-206` when there's no checkpoint and no `_smooth`) is to construct the state directly and hand it to `init_state` — `tmp_state = new StateSerialized()` followed by `init_state(tmp_state)`.
 
-`is_last(iteration)` (`task.h:82`) is the same predicate as `commit_execute`'s gate. Subclasses use it to decide whether the next iteration is a snapshotting boundary — useful when the math has work that should only happen at boundaries (e.g. switching from `SerializedGWNum` to a final `Giant`).
+`is_last(iteration)` (`task.h:83`) is the same predicate as `commit_execute`'s gate. Subclasses use it to decide whether the next iteration is a snapshotting boundary — useful when the math has work that should only happen at boundaries (e.g. switching from `SerializedGWNum` to a final `Giant`).
 
 `commit_setup()` (`task.cpp:203`) is a different call, made from inside `setup()`: it runs `check()` and resets reliable state if needed. Subclasses that perform work in `setup()` should call it at the end of that work.
 
 ## 7. The error-correction subsystem
 
 Two exception types drive recovery:
-- `TaskRestartException` — "this pass needs to redo from a known-good op." Caught in `run()`'s inner loop.
+- `TaskRestartException` — "this pass needs to redo from a known-good state snapshot." Caught in `run()`'s inner loop.
 - `TaskAbortException` — "abandon this task entirely." Caught by callers (e.g., `prst/src/prst.cpp:423`).
 
 `ReliableGWArithmetic` is GWnum's verifier-wrapping arithmetic. It exposes:
 - `restart_flag()` — "I detected something suspicious; please restart."
-- `failure_flag()` — "the suspicious op was confirmed bad; restart from a backup."
+- `failure_flag()` — "the suspicious op was confirmed bad; increment fft_count and restart." In `run()`, `failure_flag` skips both restart branches and falls through to the FFT bump — escape route (d).
 - `suspect_ops()` — the op indices that look wrong.
 - `restart(op)` — rewind internal state to operation `op`.
+
+**The driving mechanism behind `ReliableGWArithmetic` is counting of ops.** That has a hard consequence: all operations in `execute()` must be deterministic. After restarting to a given state, `execute()` must perform exactly the same operations on that state as it did the first time, or the op indices in `suspect_ops()` point at the wrong operations. If any initialization is necessary, it has to be moved to `setup()` — this is why `setup()` exists in the first place.
+
+`MultipointExp::setup()` (`prst/src/exp.cpp:160-174`) shows the subtlety of storing results computed during setup:
+
+```cpp
+if (_U.empty()) // if not empty -> release() was not called
+{
+    // ... ops that populate a precomputed table ...
+    std::vector<arithmetic::GWNum> U;   // placeholder
+    U.swap(_U);                         // _U is empty now — its contents aren't verified yet
+    commit_setup();                     // checks suspect ops; can throw TaskRestartException
+    U.swap(_U);                         // only now is it safe to store _U
+}
+```
+
+A template for `setup()` and `release()`:
+
+```cpp
+setup()
+{
+    if (_A.empty()) { TA A = init_A(); commit_setup(); _A = A; }
+    if (_B.empty()) { TB B = init_B(); commit_setup(); _B = B; }
+}
+release()
+{
+    _B.clear();
+    _A.clear();
+}
+```
 
 `Task::check()` (`task.cpp:153`) is called from inside `commit_execute` and `commit_setup`. If reliable's `restart_flag` or `failure_flag` is set, it throws `TaskRestartException`. The exception is then caught in `run()`, which decides whether to (a) re-run from `_restart_op` (still inside the same FFT size) or (b) bump FFT.
 
@@ -316,7 +362,7 @@ Key consequence: `task->timer()` is **the start anchor** during `run()`, and **t
 
 - **`StrongCheckMultipointExp` / `GerbiczCheckExp` / `LiCheckExp` / `FastLiCheckExp`** (`prst/src/exp.h:302+`). Layer Gerbicz / Gerbicz-Li strong error checks on top of MultipointExp. They use `StrongCheckState` to persist the check-side intermediate. The math is documented in this framework's `docs/mult_*.pdf`.
 
-- **`Product`** (`prst/src/exp.h:545`). Accumulates a product of giants. Used in `MorrisonGeneric` / `PocklingtonGeneric` to compute the product of cofactor pieces (`prst/src/morrison.cpp:531`, `prst/src/pocklington.cpp:377`).
+- **`Product`** (`prst/src/exp.h:544`). Multiplies giants under checkpointed, error-checked arithmetic. Constructed once per run scope, then each call — `mul(first, last)` over a range, or `mul(a, b)` for two giants in one call — is its own checkpointed `run()`. Used in `MorrisonGeneric` / `PocklingtonGeneric` for cofactor products (`prst/src/morrison.cpp:318`, `prst/src/pocklington.cpp:109`) and by `FermatDivisor` to assemble composite bases. Documented in `exponentiation-algorithms.md` (in the patnashev/prst repo).
 
 - **`LucasVMul` / `LucasVMulFast`** (`prst/src/lucasmul.h:9, 29`). Lucas V-sequence multiplier. State holds a single `Giant V` plus a parity flag and an index. `LucasVMulFast` exposes `mul_giant` / `mul_prime` to register the factor list before running.
 
@@ -355,6 +401,22 @@ void Foo::init(...) {
 ```
 
 If the file is fresh, `read_state` returns null and the task starts at iteration 0. If it has saved data, the task picks up at `state->iteration()`.
+
+### Pattern: running a smooth exponentiation
+
+```cpp
+_task_smooth->init(&input, &gwstate, checkpoint, &logging);
+if (_task_smooth->state() == nullptr) // no checkpoint
+{
+    value = compute_starting_value();
+    BaseExp::StateValue* state = new BaseExp::StateValue();
+    state->set(0, value);
+    _task_smooth->init_state(state);
+}
+_task_smooth->run();
+```
+
+There's no point in computing the starting value if the task has already progressed past it — hence the `state() == nullptr` guard. This also demonstrates why `init()` and `run()` are different calls: `init()` picks up the checkpoint, giving the caller a window to seed iteration 0 only when needed. (`BaseExp::StateValue` is PRST code; real instances at `prst/src/order.cpp:170-181`, `prst/src/fermat.cpp:371-401`, `prst/src/proof.cpp:376-414`.)
 
 ### Pattern: sub-task under a `SubLogging`
 
@@ -398,7 +460,8 @@ A sub-task that shares the parent's checkpoint file will overwrite the parent's 
 | Define a new task                                                   | Subclass `InputTask`, override `setup` + `execute` + `release` (+ `reinit_gwstate` if non-trivial) |
 | Advance state inside an iteration loop                              | `commit_execute<MyState>(iter, args...)` after each math step                         |
 | Force a checkpoint to disk                                          | `commit_execute<MyState>(iterations(), args...)` (the `iter == iterations()` path)    |
-| Start state clean (no checkpoint)                                   | `new MyState()` + `init_state(state)` (see `prst/src/exp.cpp:202-206`); `reset_state<MyState>()` exists at `task.h:113-118` but has no live callers |
+| Start state clean (no checkpoint)                                   | `new MyState()` + `init_state(state)` (see `prst/src/exp.cpp:202-206`), or `reset_state<MyState>()` (`task.h:114-119`) |
+| Persist the final state after `run()`                               | `task->write_state()` (public; no-op if already flushed)                              |
 | Read state from a checkpoint file                                   | `read_state<MyState>(_file)` in `init`, then `init_state(state)`                      |
 | Signal a restart from a known-good op (reliable mode)               | Throw `TaskRestartException` (or rely on `check()` to throw via reliable's flags)     |
 | Cooperatively cancel from outside                                   | `Task::abort()` (sets the static bool; tasks honor it at next `on_state`)             |
@@ -411,5 +474,5 @@ A sub-task that shares the parent's checkpoint file will overwrite the parent's 
 
 - **The math.** Gerbicz-Li's algorithm, Lucas chain construction, sliding-window exponentiation, Proth/Pocklington/Morrison theorem details. See `docs/mult_en_20230925.pdf` for the multiplication theory; the test theorems themselves are in the upstream README and the original papers.
 - **GWnum internals.** FFT selection, thread-pool layout, instruction-set dispatch. Owned by the gwnum prebuilt (third-party).
-- **`ReliableGWArithmetic` internals.** How GWnum decides an op is suspect, what `failure_flag` means concretely. Treat it as a black box for now — its public flags are the contract.
+- **`ReliableGWArithmetic` internals.** How the roundoff thresholds and the careful-retry escalation decide an op is suspect vs. confirmed bad. The flag contract is in §7; the escalation details live in `arithmetic-foundation.md` §5.
 - **The `_smooth` exponentiation path.** `BaseExp::_smooth` toggles a different math path (used when the exponent factors smoothly into small primes). Covered from the algorithm side in `exponentiation-algorithms.md` (in the patnashev/prst repo).
