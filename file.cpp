@@ -108,7 +108,7 @@ bool Reader::read(uint64_t& value)
 
 bool Reader::read(double& value)
 {
-    if (_size < _pos + 4)
+    if (_size < _pos + (int)sizeof(double))
         return false;
     value = *(double*)(_data + _pos);
     _pos += (int)sizeof(double);

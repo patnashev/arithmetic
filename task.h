@@ -73,7 +73,7 @@ public:
     static void abort_reset() { _abort_flag = false; }
     static bool abort_flag() { return _abort_flag; }
 
-    virtual void run();
+    virtual void run(); // run() = setup() + execute() + release()
     virtual void write_state();
 
     arithmetic::GWArithmetic& gw() { return *_gw; }
