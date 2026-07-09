@@ -1,21 +1,19 @@
 # State serialization — deep dive
 
-Every checkpoint, recovery point, proof point, certificate, and progress file PRST writes goes through one small layer: `Writer`/`Reader`/`File` in `file.{h,cpp}`. A test's `TaskState` subclass describes *what* to serialize (its fields); `File` wraps that in a fixed binary header, hashes it, and writes it atomically. This is the **on-disk contract**: any change to the header layout, the `TYPE` discriminators, or a `TaskState`'s field order breaks resumability for in-flight work and for files written by older builds.
+Every checkpoint, recovery point, proof point, certificate, and progress file a consumer application writes goes through one small layer: `Writer`/`Reader`/`File` in `file.{h,cpp}`. A task's `TaskState` subclass describes *what* to serialize (its fields); `File` wraps that in a fixed binary header, hashes it, and writes it atomically. This is the **on-disk contract**: any change to the header layout, the `TYPE` discriminators, or a `TaskState`'s field order breaks resumability for in-flight work and for files written by older builds.
 
 Three facts to anchor on before reading the code:
 
 1. **Files are typed and fingerprinted.** Every file starts with a magic number, an `appid`, a one-byte `TYPE`, a version byte, and (usually) a 32-bit fingerprint. `File::read(TaskState&)` refuses to load a buffer whose `TYPE` doesn't match the state being read into — so a `.ckpt` from one test class can't be misread as another's.
-2. **`TYPE` is a global, hand-assigned namespace.** The values `{1,2,3,4,6,8,9,10,11}` are spread across `prst/src/exp.h`/`prst/src/lucasmul.h`/`prst/src/proof.h` as `static const` constants (5 and 7 are unused/retired). Reusing or renumbering one silently aliases two on-disk formats.
+2. **`TYPE` is a per-application, hand-assigned namespace.** The registry of values is owned by the consumer: each application keeps its own set of `static const` TYPE constants on its `TaskState` subclasses. PRST's registry is documented in `checkpoints.md` (in the patnashev/prst repo); Prefactor uses its own checkpoints — they're completely different. Reusing or renumbering a value within an application silently aliases two on-disk formats.
 3. **Writes are crash-safe; reads are hash-checked.** `File::commit_writer` writes to `<name>.new` (on Windows via `FILE_FLAG_WRITE_THROUGH` so the data is flushed to disk; on POSIX via plain `fopen`+`fwrite`+`fclose` with **no** `fsync`, so durability isn't guaranteed before the rename), then removes the old file and renames `.new` over the original, and drops a `<name>.md5` sidecar. `read_buffer` verifies that sidecar and discards a corrupt buffer (treated as "no checkpoint" → restart from scratch).
 
 Source files:
 - `file.h`, `file.cpp` (`Writer`, `Reader`, `TextReader`, `File` + `FileEmpty`/`FilePacked`)
 - `md5.{h,c}` (the MD5 used for the sidecar and `unique_fingerprint`)
-- `prst/src/support.{h,cpp}` (`LLR2File`, the LLR2-compatibility variant)
-- The `TaskState` subclasses that own the `TYPE` constants: `prst/src/exp.h` (1, 2, 8), `prst/src/lucasmul.h` (9, 10, 11), `prst/src/proof.h` (3, 4, 6)
-- `task.{h,cpp}` (`TaskState` base — the per-record `iteration` prefix)
+- `task.{h,cpp}` (the `TaskState` base class — §4)
 
-Prereqs / companions: `task-lifecycle.md` (`TaskState`/`Task`; the `on_state` cadence that decides *when* a checkpoint is written), `proof-system.md` (in the patnashev/prst repo) (the `Proof::State`/`Product`/`Certificate` records, TYPEs 3/4/6, and the `.pack` `FilePacked` container), `boinc-and-net.md` (in the patnashev/prst repo) (`NetFile`/`LLR2NetFile` ship these exact buffers over HTTP).
+Prereqs / companions: `task-lifecycle.md` (the `Task` runtime; the `on_state` cadence that decides *when* a checkpoint is written), `checkpoints.md` (in the patnashev/prst repo) (PRST's TYPE registry, its `.ckpt`/`.rcpt` strong-check files, and the LLR2 compatibility layer), `proof-system.md` (in the patnashev/prst repo) (the proof records and the `.pack` `FilePacked` container), `boinc-and-net.md` (in the patnashev/prst repo) (`NetFile` ships these exact buffers over HTTP).
 
 ## 1. The on-disk layout
 
@@ -125,34 +123,44 @@ Every gate that fails returns `nullptr`/`false`, which the caller treats as "no 
 - `File` — local disk (`read_buffer` = `fopen`+read+verify-md5; `commit_writer` = atomic write).
 - `FileEmpty` (`file.h:128-136`) — a `/dev/null`: reads nothing, writes nothing. Used where a `File&` is required but no persistence is wanted.
 - `FilePacked` (`file.h:143-158`, `file.cpp:385-509`) — backed by a `container::FileContainer` (the proof `.pack`); `get_writer` returns a streaming `FilePackedWriter`. See `proof-system.md`.
-- `LLR2File` (`prst/src/support.{h,cpp}`) — local disk + LLR2 on-disk compatibility munging (§5).
+- Consumers can subclass `File` for foreign-format interop — PRST's `LLR2File` is the worked example (`checkpoints.md` in the patnashev/prst repo).
 
-## 4. The TYPE registry & the TaskState record
+## 4. The `TaskState` record & the checkpoint lifecycle
 
-`File::read` keys off `TYPE`, so the constant is the format's identity. Every `TaskState` subclass that overrides `read`/`write` serializes `iteration (uint32)` then its own fields, in declaration order (TYPE 6 is the lone exception — see notes):
+`File::read` keys off `TYPE`, so the constant is the format's identity. The base class (`task.h:23-43`):
 
-| TYPE | Owner class | File | Body after `iteration` |
-|---|---|---|---|
-| 1 | `BaseExp::StateValue` | `prst/src/exp.h:42` | `Giant` value |
-| 2 | `StrongCheckMultipointExp::StrongCheckState` | `prst/src/exp.h:308` | `int recovery` + `SerializedGWNum X` + `SerializedGWNum D` |
-| 3 | `Proof::Product` | `prst/src/proof.h:26` | `Giant X` (here `iteration` = tree depth) |
-| 4 | `Proof::Certificate` | `prst/src/proof.h:40` | `Giant X` + optional `Giant a_power` + `Giant a_base` |
-| 6 | `Proof::State` | `prst/src/proof.h:59` | **no standard `read`/`write` override** — fields `SerializedGWNum X`, `Giant Y`, `Giant exp`, `vector<Giant> h` are held in memory, not laid out by the generic path (see notes) |
-| 8 | `BaseExp::StateSerialized` | `prst/src/exp.h:29` | `SerializedGWNum` value |
-| 9 | `LucasVMulFast::State` | `prst/src/lucasmul.h:35` | `int index` + `Giant V` + `int parity` |
-| 10 | `LucasUVMul::State` | `prst/src/lucasmul.h:110` | `Giant Vn` + `Giant Vn1` + `int parity` |
-| 11 | `LucasUVMul::StrongCheckState` | `prst/src/lucasmul.h:130` | `int recovery` + `SerializedGWNum Vn` + `Vn1` + `int Vparity` + `U` + `V` + `int parity` |
+```cpp
+class TaskState {
+    char _type;           // TYPE constant, sets the on-disk record identity
+    bool _written;        // whether this state has been flushed to _file already
+    int  _iteration;      // current iteration count (the only field the base class persists)
 
-Notes:
-- **TYPE 6 (`Proof::State`) is the one record without a `read`/`write` override** (`prst/src/proof.h:56-77` — constructors, setters, accessors, fields, but no serialization methods, inline or out-of-line). Through `File::read/write` it would persist only the base `iteration`; its `X`/`Y`/`exp`/`h` payload is managed by the proof code (`ProofSave`/`ProofBuild`), not the generic `TaskState` mechanism described here. Don't assume the standard "iteration + fields" layout applies to it — see `proof-system.md`.
-- **5 and 7 are absent** — either retired or never assigned. Don't backfill them assuming they're free; treat the whole range as a contract and only ever *append*.
-- `version()` is `0` for every state today (`task.h:35`), so byte 7 is always 0. The version byte exists precisely so a future field change can be made readable old-and-new without a TYPE bump — bump `version()` and branch in `read`.
-- `bool`s are written as `int` `1`/`0` (e.g. `parity`, `LucasVMulFast::State::write`, `prst/src/lucasmul.h:45`), not a single byte.
-- `Proof::Certificate::read` is **forward/backward tolerant**: it reads `X`, then *optionally* `a_power`+`a_base` via `((reader.read(_a_power) && _a_power != 0 && reader.read(_a_base)) || true)` (`prst/src/proof.h:48`) — an older 1-field certificate still loads. This is the one record that deliberately tolerates a shorter body; the rest fail closed on truncation.
+    void set(int iteration);      // resets _written to false and stores _iteration
+    virtual bool read(Reader&);   // base reads _iteration only
+    virtual void write(Writer&);  // base writes _iteration only
+    void set_written();           // mark state as flushed; Task::write_state skips re-writing
+    char type();                  // returns _type (the on-disk discriminator)
+    char version() { return 0; }  // per-TYPE version byte; reserved for future schema bumps
+    bool is_written();             // returns _written
+    int  iteration();              // returns _iteration
+};
 
-A checkpoint's lifecycle (see `task-lifecycle.md` for the cadence): `Task` calls `File::write(state)` on the `DISK_WRITE_TIME` interval and at completion; on restart `File::read(state)` repopulates `state` and the test resumes from `state.iteration()`. The recovery point (`.rcpt`) and checkpoint (`.ckpt`) are two such files used in the Gerbicz/strong-check handshake.
+template<class State>
+State* read_state(File* file);   // null-safe deserializer
+```
 
-## 5. Integrity, atomicity, fingerprints, and LLR2
+Subclasses override `read()`/`write()` and add their own fields; the record is always the base class's `iteration (uint32)` followed by the subclass's fields in declaration order. Conventions:
+
+- `read_state<T>(file)` is the canonical way to load a checkpoint: it returns a fresh `T` if the file decodes, or `nullptr` — which callers treat as "no checkpoint".
+- The `_written` flag prevents `Task::write_state()` (`task.cpp:192`) from re-writing a state that's already on disk; `TaskState::set(...)` clears it.
+- Subclasses' `set(...)` methods take the same `int iteration` first argument plus the state-specific payload (a `Giant`, a `SerializedGWNum`, …).
+- `bool`s are written as `int` `1`/`0`, not a single byte.
+- `version()` is `0` for every state today (`task.h:35`), so header byte 7 is always 0. The version byte exists precisely so a future field change can be made readable old-and-new without a TYPE bump — bump `version()` and branch in `read`.
+- **A state need not have a subclass at all.** A bare `TaskState(TYPE)` persists only the iteration — a placeholder record whose presence and iteration number carry all the meaning. PRST's TYPE 5 works this way (see `checkpoints.md` in the patnashev/prst repo).
+
+A checkpoint's lifecycle (see `task-lifecycle.md` for the cadence): `Task` calls `File::write(state)` on the `DISK_WRITE_TIME` interval and when `Task::write_state()` is called. `write_state()` is public (`task.h:77`) and can be called after `run()` to persist the result — there is no automatic write at completion; checkpoints are usually erased on completion (`File::clear`). On restart `File::read(state)` repopulates `state` and the test resumes from `state.iteration()`.
+
+## 5. Integrity, atomicity, and fingerprints
 
 **Atomic write** (`file.cpp:283-323`): `commit_writer` writes the buffer to `<name>.new` via `writeThrough` (Windows `FILE_FLAG_WRITE_THROUGH`, else `fopen`+`fwrite`), `remove`s the old file, then `rename`s `.new` over it. A crash mid-write leaves an intact original plus a stray `.new`; it never leaves a half-written checkpoint. The `.md5` sidecar is written after.
 
@@ -160,22 +168,16 @@ A checkpoint's lifecycle (see `task-lifecycle.md` for the cadence): `Task` calls
 
 **`unique_fingerprint`** (`file.cpp:182-192`): `MD5(fingerprint-bytes ‖ unique_id)[0:4]` as a `uint32`. This is how per-base / per-point child files get distinct fingerprints (e.g. `Pocklington` opens `.ckpt.<a>` children, the proof system salts by point position) so two sub-runs can't read each other's checkpoints even under the same parent filename.
 
-**`LLR2File`** (`prst/src/support.cpp:13-52`) — bidirectional compatibility with LLR2's on-disk format, so a PRST worker can resume an LLR2 checkpoint and vice-versa. The munging is purely in the header/trailer bytes:
-- **On read** (`:20-31`): if the buffer looks like an LLR2 file (`MAGIC_NUM`, **`_buffer[4] == 2`** — i.e. LLR2's `appid`), rewrite `_buffer[4] = 4` (PRST's appid) and `_buffer[6] = _type` (set the TYPE byte), and for a `StateValue` (TYPE 1) **decrement** the iteration word at offset 12.
-- **On write** (`:33-52`): the inverse — `buffer[4] = 2`, `buffer[6] = 0`, **increment** the `StateValue` iteration at offset 12, then append an LLR2 trailer: a zero `uint32`, a 32-bit additive checksum (sum of `uint32`s from offset 8 to end), and 20 zero `uint32`s.
-
-> Byte 4 is the **appid**, not a format version — LLR2 stamps `2`, PRST stamps `4`. (The companion `boinc-and-net.md` originally described this as a "v2/v4 header"; that's corrected to "appid" there.) The off-by-one on the `StateValue` iteration reflects that LLR2 counts the iteration one differently from PRST.
-
-`LLR2NetFile` in `prst/src/net.cpp` is the same munging over an HTTP-backed `NetFile` (see `boinc-and-net.md` §5).
+**Foreign-format interop** is done by subclassing `File` and munging the header bytes in `read_buffer`/`commit_writer` overrides. PRST's `LLR2File`/`LLR2NetFile` (bidirectional compatibility with LLR2's on-disk format) is the worked example — documented in `checkpoints.md` (in the patnashev/prst repo). Byte 4 is the **appid**, not a format version; that's what such a subclass rewrites.
 
 ## 6. Pitfalls
 
-- **`TYPE` is a permanent on-disk contract.** Renumbering or reusing a value silently makes two record formats collide; `File::read`'s type-match (`file.cpp:347`) would accept the wrong body and mis-deserialize. Only ever *append* new TYPEs (and remember 5 and 7 are holes, not free slots). Bumping a TYPE without a backward-compat read path orphans every in-flight checkpoint.
+- **`TYPE` is a permanent on-disk contract.** Renumbering or reusing a value silently makes two record formats collide; `File::read`'s type-match (`file.cpp:347`) would accept the wrong body and mis-deserialize. Consult your application's registry before assigning (PRST's is in `checkpoints.md` in the patnashev/prst repo) and only ever *append* new TYPEs. Bumping a TYPE without a backward-compat read path orphans every in-flight checkpoint.
 - **Field order is the format.** `Writer`/`Reader` are positional with no field tags. Inserting a field in the middle of a `TaskState::write`, or reordering, breaks every existing checkpoint for that TYPE. Append at the end and gate on `version()` if you must extend.
-- **`Reader::read(double)` under-checks bounds.** It verifies only 4 bytes remain but reads and advances 8 (`file.cpp:109-116`) — a latent over-read if a double sits in the last 4–7 bytes. No current `TaskState` serializes a `double`, so it's dormant, but don't add one without fixing the check.
+- **`Reader::read(double)` under-checks bounds.** It verifies only 4 bytes remain but reads and advances 8 (`file.cpp:109-116`) — a latent over-read if a double sits in the last 4–7 bytes. No current `TaskState` serializes a `double`, so it's dormant. A fix is planned; verify against the current `file.cpp` before relying on this note.
 - **appid is part of the identity.** A file written with the default `appid 1` or by LLR2 (`2`) won't load under PRST (`appid 4`) without the `LLR2File` path — `get_reader` rejects on `_buffer[4] != appid` (`file.cpp:267`). If checkpoints "aren't resuming" across tools, check the appid byte first.
 - **`hash = false` files skip integrity *and* the sidecar.** Progress `.param` files set `hash = false` (they're frequently rewritten); they get no `.md5` and no corruption check. Don't assume every PRST file is hash-protected.
-- **A fingerprint-0 file has no fingerprint word.** The body offset shifts from 12 to 8. Code that pokes a fixed offset (like the LLR2 munging's offset-12 iteration) implicitly assumes a fingerprinted file — it guards on size `> 16` but not on whether a fingerprint is present.
+- **A fingerprint-0 file has no fingerprint word.** The body offset shifts from 12 to 8. Code that pokes a fixed offset (like the offset-12 iteration in PRST's LLR2 munging — `checkpoints.md` in the patnashev/prst repo) implicitly assumes a fingerprinted file.
 
 ## 7. Quick reference
 
@@ -183,13 +185,14 @@ Header bytes: `[0:4]` magic `0x9f2b3cd4` · `[4]` appid (PRST 4) · `[5]` format
 
 | You want to… | Where / how |
 |---|---|
-| Add a new checkpointable state | new `TaskState` subclass, **append** an unused `TYPE` (≥ 12), implement `read`/`write` calling `TaskState::` first |
+| Add a new checkpointable state | new `TaskState` subclass, **append** an unused `TYPE` from your application's registry (PRST: `checkpoints.md`), implement `read`/`write` calling `TaskState::` first |
 | Extend an existing record | append fields at the end + bump `version()` + branch in `read` (don't reorder) |
 | Make a file skip hashing | set `File::hash = false` before writing |
 | Give a child file a distinct id | `File::unique_fingerprint(parent_fp, "<salt>")` |
 | Persist nothing (but satisfy a `File&`) | `FileEmpty` |
 | Pack many files into one blob | `FilePacked` + `container::FileContainer` (proof `.pack`) |
-| Interop with LLR2 checkpoints | `LLR2File` (local) / `LLR2NetFile` (HTTP) |
+| Interop with a foreign checkpoint format | subclass `File`, munge the header in `read_buffer`/`commit_writer` (PRST's LLR2 layer: `checkpoints.md`) |
+| Persist a bare "I was here" marker | `TaskState(TYPE)` with no subclass — iteration-only record (§4) |
 | Encode a signed bignum | `Writer::write(Giant)` — sign rides the length field |
 
 ## 8. Open questions / non-coverage

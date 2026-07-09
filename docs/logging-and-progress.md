@@ -149,6 +149,8 @@ LEVEL_RESULT  = 5     ← result() emits at this level
 
 `progress_save()` writes `_progress._params` (including the `time_total` parameter) to the `.param` file. `Task::on_state()` triggers this every `Task::DISK_WRITE_TIME` seconds (default 300) and also on abort. Empty values are skipped.
 
+`_params` can carry per-input state beyond time accounting — e.g. `Task::run()` stores `next_fft` there to persist an FFT increase across restarts (`task.cpp:141`). That is a reason a `Progress` (and its `.param` file) should not be shared between different inputs: one input's FFT bump would leak into another's run.
+
 `file_progress()` reads the `.param` file at startup, repopulates `_params`, and calls `_progress.time_init(_params["time_total"])`. This is how time accounting survives restarts.
 
 ## 6. SubLogging: what it overrides
