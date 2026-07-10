@@ -7,7 +7,7 @@ This is the layer everything else rests on. Two data types carry every number in
 
 The bridge between them — and the thing checkpoints persist — is **`SerializedGWNum`** (a `GWNum` flattened to portable words). And the layer that makes long FFT computations trustworthy — *inside the `Task` loop that polls it* — is **`ReliableGWArithmetic`**, which detects round-off error and escalates. Every other doc in this folder has been quietly leaning on these: `Giant` is the type threaded through `inputnum-parsing.md`, the residues in `run-hierarchy.md` (in the patnashev/prst repo), and the records in `state-serialization.md`; `GWState` is the "math runtime" `main()` hands to every test.
 
-This doc covers this repo's arithmetic source (the `patnashev/arithmetic` library). The actual FFT bignum — **GWnum** (Woltman's `gwnum/`) and **GMP** — are prebuilt third-party libraries: PRST calls their C APIs (`gwsetup`, `gwmul3`, `mpz_*`) but owns no source, so they're understood at the interface here, not dissected. The wire (de)serialization, by contrast — `gwserialize`/`gwdeserialize`/`gwconvert` — is in-tree, defined in `arithmetic/arithmetic.cpp` (§5).
+This doc covers this repo's arithmetic source (the `patnashev/arithmetic` library). The actual FFT bignum — **GWnum** (Woltman's `gwnum/`) and **GMP** — are prebuilt third-party libraries: PRST calls their C APIs (`gwsetup`, `gwmul3`, `mpz_*`) but owns no source, so they're understood at the interface here, not dissected. The wire (de)serialization, by contrast — `gwserialize`/`gwdeserialize`/`gwconvert` — is in-tree, defined in `arithmetic/arithmetic.cpp` (§6).
 
 Source files:
 - `arithmetic/giant.{h,cpp}` (`Giant`, `GiantsArithmetic` + the `GW`/`GMP` backends, including the `GMPArithmetic` GMP binding)
@@ -29,7 +29,7 @@ struct giant_struct {
 class Giant : public FieldElement<GiantsArithmetic, Giant>, protected giant_struct { … };
 ```
 
-The field order is not incidental. `arithmetic/giant.cpp:53` defines `#define giant(x) ((::giant)&(x)._capacity)` — it reinterprets the address of `_capacity` as a `::giant` (gwnum's C bignum pointer) and hands it to the native ops (`itog`, `gianttogw`, `mulg`, …), which then read/write the struct in place. The *same* prefix is reinterpret-cast a second way for GMP — `#define mpz(x) ((mpz_ptr)&(x)._capacity)` (through the `get_mpz` helper, `arithmetic/giant.cpp:724-735`) — through which every `GMPArithmetic` op (`mpz_set_*`, `mpz_import`, `mpz_add`, …) reads and writes it. So a single `giant_struct` is the shared representation for the native, gwnum, **and** GMP backends: the field triple maps straight onto GMP's `__mpz_struct` — `_capacity`↔`_mp_alloc`, `_size`↔`_mp_size` (signed in both), `_data`↔`_mp_d`. That alignment is deliberate, not luck. For either cast to be valid, `giant_struct`'s layout from `_capacity` onward must match what `::giant`/`mpz_ptr` point to — so the field order is load-bearing; reordering or inserting a field before them silently corrupts every native *and* GMP call. (Both the C `giant` (gwnum's `giants.h`) and `__mpz_struct` (GMP's headers) are external/prebuilt, so each match is enforced by the cast, not visible here.) (`size()`/`capacity()` translate to 32-bit-word counts; under GMP the stored limbs are `GMP_NUMB_BITS` wide and `size()` converts + trims leading zeros — `arithmetic/giant.cpp:207-228`, §3/§6.)
+The field order is not incidental. `arithmetic/giant.cpp:53` defines `#define giant(x) ((::giant)&(x)._capacity)` — it reinterprets the address of `_capacity` as a `::giant` (gwnum's C bignum pointer) and hands it to the native ops (`itog`, `gianttogw`, `mulg`, …), which then read/write the struct in place. The *same* prefix is reinterpret-cast a second way for GMP — `#define mpz(x) ((mpz_ptr)&(x)._capacity)` (through the `get_mpz` helper, `arithmetic/giant.cpp:724-735`) — through which every `GMPArithmetic` op (`mpz_set_*`, `mpz_import`, `mpz_add`, …) reads and writes it. So a single `giant_struct` is the shared representation for the native, gwnum, **and** GMP backends: the field triple maps straight onto GMP's `__mpz_struct` — `_capacity`↔`_mp_alloc`, `_size`↔`_mp_size` (signed in both), `_data`↔`_mp_d`. That alignment is deliberate, not luck. For either cast to be valid, `giant_struct`'s layout from `_capacity` onward must match what `::giant`/`mpz_ptr` point to — so the field order is load-bearing; reordering or inserting a field before them silently corrupts every native *and* GMP call. (Both the C `giant` (gwnum's `giants.h`) and `__mpz_struct` (GMP's headers) are external/prebuilt, so each match is enforced by the cast, not visible here.) (`size()`/`capacity()` translate to 32-bit-word counts; under GMP the stored limbs are `GMP_NUMB_BITS` wide and `size()` converts + trims leading zeros — `arithmetic/giant.cpp:207-228`, §3/§7.)
 
 **The arithmetic strategy.** `Giant` carries no logic; every operation delegates to its `GiantsArithmetic& arithmetic()`. There are four backends (`arithmetic/giant.h`):
 
@@ -121,13 +121,49 @@ Three things to read out of this:
 
 Methods: `setup(k,b,n,c)` / `setup(Giant)` / `setup(bitlen)` (the three FFT configs), `copy(state)` (config only — **not** the live handle/N; you must `setup` after), `clone(state)` (deep-copies the live handle via `gwclone`, reached through the `GWState(GWState&)` copy-constructor; it yields a thread-safe independent `GWState` used by `patnashev/prefactor`'s multithreaded code — multithreading is its sole use case, and PRST proper never calls it directly), `done()` (`gwdone`+`gwinit`, the teardown), `need_mod()`/`mod()` (known-factor reduction), `ops()` (FFT-count → normalized op count).
 
-**`GWArithmetic`** (`arithmetic/arithmetic.h:87-152`) — the FFT math over a `GWState`: `add`/`sub`/`mul`/`square`/`div`/`inv` plus fused `addmul`/`muladd`/`mulsub`/`mulmuladd`/… each taking GWnum `options` (`GWMUL_*` flags: which operands to preserve, whether to normalize). `setmulbyconst`/`setaddin`/`setpostaddin` tune the next multiply (asserting `|a| ≤ maxmulbyconst`). `popg()` mints a `Giant` from the state's allocator; `N()` is the modulus; `carefully()` returns the careful variant. Subclasses:
+**`GWArithmetic`** (`arithmetic/arithmetic.h:87-152`) — the FFT math over a `GWState`: `add`/`sub`/`mul`/`square`/`div`/`inv` plus fused `addmul`/`muladd`/`mulsub`/`mulmuladd`/… each taking GWnum `options` (`GWMUL_*`/`GWADD_*` flags: which operands to transform or preserve, whether to normalize — the state machine behind them is §4). `setmulbyconst`/`setaddin`/`setpostaddin` tune the next multiply (asserting `|a| ≤ maxmulbyconst`). `popg()` mints a `Giant` from the state's allocator; `N()` is the modulus; `carefully()` returns the careful variant. Subclasses:
 - **`CarefulGWArithmetic`** — `gwmul3_carefully` etc.: exact, slower, round-off-free. The `CarefulExp` tasks use it for short/exact legs.
-- **`ReliableGWArithmetic`** — round-off-checked with escalation; meaningful only when driven by the `Task` loop (§5/§6).
+- **`ReliableGWArithmetic`** — round-off-checked with escalation; meaningful only when driven by the `Task` loop (§6/§7).
 
 **`GWNum`** (`arithmetic/arithmetic.h:225-343`) — `= Giant` (`gianttogw`), `= SerializedGWNum` (`gwdeserialize`), `to_string`. Division is `a * b.inv()` (GWnum has no native divide). `*num` yields the raw `gwnum`.
 
-## 4. Lifecycle: how a test uses the layer
+## 4. The internal states of a `GWNum`
+
+A `GWNum` is not always "an integer you can read." GWnum tracks two orthogonal pieces of per-number state in header words in front of the FFT data (`gwnum/gwnum.h:626-637`), and the `GWMUL_*`/`GWADD_*` option vocabulary of §3 exists to manage them. Getting this right is worth double-digit percentages of total runtime; getting it wrong is (mostly) not a correctness bug, just silently wasted transforms.
+
+**Axis 1 — the FFT state** (`FFT_state(x)`, `gwnum.h:632-636`; test macros `gwnum_is_*`, `:619-625`):
+
+| State | The data is… | How a number gets there |
+|---|---|---|
+| `NOT_FFTed` | plain integer words — the only state that can be read out | fresh allocation, `= Giant`, a normal multiply result, `unfft()` |
+| `FULLY_FFTed` | fully forward-transformed, ready to be a multiplication *input* | `fft()` (`gwfft`), or `GWMUL_FFT_S1…S4` transforming a source in place |
+| `PARTIALLY_FFTed` | a multiply result with the *first pass* of its next forward FFT already applied | `GWMUL_STARTNEXTFFT` on the op that produced it |
+| `FFTed_FOR_FMA` | transformed + extra precomputation for repeated use as the third source of `muladd`/`mulsub` | `gwfft_for_fma` (`gwnum.h:396-400`) |
+
+Multiplication *inputs* may be in any state — `gwmul3` transforms whatever it needs (and `GWMUL_FFT_S*` makes the in-place transform of a source explicit, so a value used in several multiplies is transformed once, e.g. the sliding-window table build at `prst/src/exp.cpp:289`). The state game is played on *results* and *read-out*.
+
+**`GWMUL_STARTNEXTFFT` — the ~10% flag.** When the result of a multiplication will itself be the input of another multiplication, `GWMUL_STARTNEXTFFT` (`gwnum.h:413` — "Start the forward FFT of the multiplication result") tells GWnum to leave it `PARTIALLY_FFTed`: the start of the next forward transform is done as part of this multiply instead of being paid as separate work later. Over a long squaring chain that is worth at least 10% of the whole test. It is the assumed common case: the framework's own default 3-arg multiply is `mul(a, b, res, GWMUL_FFT_S1 | GWMUL_FFT_S2 | GWMUL_STARTNEXTFFT)` (`arithmetic/arithmetic.cpp:297-300`), so chained operator-style code gets the optimization for free.
+
+The catch: a `PARTIALLY_FFTed` (or `FULLY_FFTed`) number is **not readable**. Converting one to binary is an error at the raw layer (`GWERROR_PARTIAL_FFT`/`GWERROR_FFT`, `gwnum.h:80-82`); the in-tree serializer rescues itself silently — `gwserialize` opens with `if (FFT_state(gg) != NOT_FFTed) gwunfft(gwdata, gg, gg)` (`arithmetic/arithmetic.cpp:1048-1050`) — but `gwunfft` is the routine GWnum's own header flags as "may be inefficient!!" (`gwnum.h:551-556`): you pay back the pass you skipped, and then some. So `GWMUL_STARTNEXTFFT` on a value that is about to be *observed* is never wrong, only wasted — twice.
+
+Hence the conditional form `GWMUL_STARTNEXTFFT_IF(b)` (`gwnum.h:651`) and the idiom that pervades the iteration loops:
+
+```cpp
+// prst/src/exp.cpp:224 — the main squaring loop
+(… ? gw() : gw().carefully()).square(X(), X(), …
+    | GWMUL_STARTNEXTFFT_IF(!is_last(i) && i + 1 != _points[next_point].pos));
+
+// prst/src/lucasmul.cpp:353 — the Lucas chain
+lucas.add(Vn1, Vn, *V1, Vn, GWMUL_STARTNEXTFFT_IF(!is_last(i)));
+```
+
+`is_last(i)` (`task.h:83`) is true exactly when this iteration's result is about to be observed — a state-save boundary, the final iteration, or an abort/save request — and the extra conjuncts exclude proof points and Gerbicz block boundaries, whose results are also read. Every other iteration hands the next one a partially transformed value. The same discipline covers *sources* about to be saved: the strong-check `D`-update switches to `is_last(i) ? GWMUL_PRESERVE_S1 : GWMUL_FFT_S1 | …` (`prst/src/exp.cpp:599`) so `X` is not left `FULLY_FFTed` on a checkpoint iteration. The densest example of conditional chaining is the Edwards-curve formulas, where the `_IF` conditions encode which coordinates the caller will read (`arithmetic/edwards.cpp:156-269`).
+
+**Careful arithmetic opts out of the whole game.** `CarefulGWArithmetic::mul` masks the caller's options down to `GWMUL_ADDINCONST | GWMUL_MULBYCONST` (`arithmetic/arithmetic.cpp:434-437`) — no source-FFTing, no `STARTNEXTFFT` — so careful legs always produce fully normalized integers. (`ReliableGWArithmetic`'s escalation makes narrower, per-op adjustments: its FMA retries drop `GWMUL_STARTNEXTFFT` before `gwmul3_carefully` (`:718`), its `addmul` retry `gwunfft`s and force-normalizes the addends first (`:624-626`), while the plain `mul` retry clears only the `PRESERVE` bits — §6.) In the exp loops, the last 30 iterations route through `carefully()` (`prst/src/exp.cpp:224`), guaranteeing an exact chain tail; the first 30 reach careful multiplication through GWnum's own `gwset_carefully_count` redirect (`prst/src/exp.cpp:214-215`).
+
+**Axis 2 — normalization debt** (`unnorms(x)`, `gwnum.h:626-631, 637`). Add/sub don't always propagate carries: the framework's default 3-arg `add`/`sub` pass `GWADD_DELAY_NORMALIZE` (`arithmetic/arithmetic.cpp:257-260`, `:274-277`), which increments the number's unnormalized-add counter instead of normalizing (add/sub of FFTed or partially FFTed inputs *never* normalizes). The debt comes due at the next multiplication, and whether it's affordable is a function of the FFT's spare precision: the `EXTRA_BITS` budget macros — `square_safe`/`mul_safe`/`addmul_safe`/… (`gwnum.h:656-660`) — answer "is this op safe given this many unnormalized adds on each input," with `GWADD_FORCE_NORMALIZE` / `GWADD_NORMALIZE_IF` (`gwnum.h:491-493, 649`) as the manual override. Overdrawing the budget doesn't corrupt values outright — it eats round-off headroom, exactly the margin the `ReliableGWArithmetic` machinery (§6) polices, and GWnum can be built with `ASSERT`s that flag excessive unnormalized adds (`gwnum.h:631`).
+
+## 5. Lifecycle: how a test uses the layer
 
 A test's path through this layer (drives the cadence in `task-lifecycle.md`):
 
@@ -140,7 +176,7 @@ A test's path through this layer (drives the cadence in `task-lifecycle.md`):
 
 `copy()` vs `clone()` is a real distinction: `copy()` brings only the config fields (not the live handle/N), so one has to call  `setup()` to build a fresh FFT. `clone()` is the deeper `gwclone`-the-handle path, reached only via the `GWState` copy-constructor — the thread-safe deep copy for multithreaded consumers such as `patnashev/prefactor`; PRST proper does not use it.
 
-## 5. SerializedGWNum and ReliableGWArithmetic
+## 6. SerializedGWNum and ReliableGWArithmetic
 
 **`SerializedGWNum`** (`arithmetic/arithmetic.cpp:878-895`) is the checkpoint bridge. Assigning from a `GWNum` calls `gwserialize` twice — once with a null buffer to learn the length (it returns `GWERROR_MALLOC` with `-len`), then again to fill a resized `vector<uint32_t>`:
 
@@ -155,7 +191,7 @@ SerializedGWNum& SerializedGWNum::operator = (const GWNum& a)
 }
 ```
 
-`to_GWNum` is `gwdeserialize` (or `0` if empty). Both calls take the `gwhandle`, so a value is serialized/deserialized *through* a configured FFT. Unlike `gwsetup`/`gwmul3`, the serializer is **in-tree**: `gwserialize`/`gwdeserialize`/`gwconvert` are all defined right here in `arithmetic/arithmetic.cpp` (the ~470-line block at `arithmetic/arithmetic.cpp:898-1405`). The wire format is a 6-word header (`GWSERIALIZE_HEADER_SIZE`, `arithmetic/arithmetic.cpp:1033`) carrying flags (`GWSERIALIZE_FLAG_IRRATIONAL`/`GENERALMOD`/`MMGW_MOD`, `:1034-1036`) plus the stored `b`/`FFTLEN`/`k` and `NUM_B_PER_SMALL_WORD` (written at `arithmetic/arithmetic.cpp:1128-1132`), followed by the FFT words. Because the format records the source FFT's length and base, `gwdeserialize` handles the cross-FFT-length question itself — see §8.
+`to_GWNum` is `gwdeserialize` (or `0` if empty). Both calls take the `gwhandle`, so a value is serialized/deserialized *through* a configured FFT. Unlike `gwsetup`/`gwmul3`, the serializer is **in-tree**: `gwserialize`/`gwdeserialize`/`gwconvert` are all defined right here in `arithmetic/arithmetic.cpp` (the ~470-line block at `arithmetic/arithmetic.cpp:898-1405`). The wire format is a 6-word header (`GWSERIALIZE_HEADER_SIZE`, `arithmetic/arithmetic.cpp:1033`) carrying flags (`GWSERIALIZE_FLAG_IRRATIONAL`/`GENERALMOD`/`MMGW_MOD`, `:1034-1036`) plus the stored `b`/`FFTLEN`/`k` and `NUM_B_PER_SMALL_WORD` (written at `arithmetic/arithmetic.cpp:1128-1132`), followed by the FFT words. Because the format records the source FFT's length and base, `gwdeserialize` handles the cross-FFT-length question itself — see §9.
 
 **`ReliableGWArithmetic`** (`arithmetic/arithmetic.cpp:528-592`) is the answer to "FFT multiplication is approximate — how do we trust a billion-squaring result?" — it's built to run *inside* the `Task` loop, which polls its verdict; driven standalone it's meaningless (see the contract below). Its `mul` escalates in three tiers, tracking an op counter:
 
@@ -194,17 +230,18 @@ The contract (the surface `task-lifecycle.md` §7 builds its escape routes on) �
 - **`failure_flag()`** — even careful arithmetic overflowed ⇒ the FFT is too small; bump `next_fft_count` and re-setup.
 - **`reset()`** clears everything; **`restart(op)`** rewinds `_op` to a checkpoint position but keeps `_suspect_ops`. `_max_roundoff = 0.4`.
 
-## 6. Pitfalls
+## 7. Pitfalls
 
 - **`Giant`'s field order is an ABI contract with *both* gwnum's C `giant` and GMP's `__mpz_struct`.** The `giant(x)` cast (`arithmetic/giant.cpp:53`) reinterprets `&_capacity` as a `::giant*`, and the `mpz(x)` cast (`arithmetic/giant.cpp:724-735`) reinterprets the same address as an `mpz_ptr`. Reordering `_capacity`/`_size`/`_data`, or adding a field before them, silently corrupts every native giants call *and* every GMP call. They live where they do *because* both external structs do.
 - **`_size` is signed; `size()` is not.** The sign of `_size` is the number's sign; `size()` returns the magnitude word count. Reading `data()` without consulting the sign mishandles negatives — and `to_GWNum` adds `N` to a negative `Giant` first (mod-`N` form). The on-disk encoding (`state-serialization.md`) carries the sign in the length field for the same reason.
-- **`SerializedGWNum` is tied to its modulus, but cross-FFT-length loading is defined in-tree.** It's the `gwserialize`/`gwdeserialize` wire form (both in `arithmetic/arithmetic.cpp`), always handled through a `gwhandle`, and meaningful only for the *number* it was serialized for. Loading into a *different-length* FFT is handled explicitly by `gwdeserialize` (§8): same length is the fast path, a **smaller** target transform throws (`"Can't deserialize to smaller transform."`), and a **larger** one re-radix-converts. So a checkpoint survives a reliable-mode FFT *bump* (larger), which is exactly the direction the bump goes.
+- **`SerializedGWNum` is tied to its modulus, but cross-FFT-length loading is defined in-tree.** It's the `gwserialize`/`gwdeserialize` wire form (both in `arithmetic/arithmetic.cpp`), always handled through a `gwhandle`, and meaningful only for the *number* it was serialized for. Loading into a *different-length* FFT is handled explicitly by `gwdeserialize` (§9): same length is the fast path, a **smaller** target transform throws (`"Can't deserialize to smaller transform."`), and a **larger** one re-radix-converts. So a checkpoint survives a reliable-mode FFT *bump* (larger), which is exactly the direction the bump goes.
 - **`restart_flag` / `failure_flag` are not optional.** They're the only signal that an FFT result is untrustworthy; the `Task` loop polls them and restarts / enlarges the FFT. `ReliableGWArithmetic` isn't meant to be driven standalone at all — it only makes sense inside the `Task` machinery that polls these flags; without that polling, the escalation does nothing and corrupt residues get committed.
-- **`GWState::copy` is config-only.** It copies thread count, FFT hints, `known_factors`, etc., but **not** `handle`/`N`/`giants`. A copied state is unusable until `setup()`. (`clone()` brings the live FFT across via `gwclone`, but it's the multithreading-only path — see §4.)
+- **`GWState::copy` is config-only.** It copies thread count, FFT hints, `known_factors`, etc., but **not** `handle`/`N`/`giants`. A copied state is unusable until `setup()`. (`clone()` brings the live FFT across via `gwclone`, but it's the multithreading-only path — see §5.)
 - **GMP vs native changes the *internal* limb storage, not the `data()`/`size()` view.** The abstraction is uniform — `data()` is a `uint32_t` array of `size()` words with leading zeros trimmed, the same regardless of backend. What differs is the storage underneath: under GMP the limbs are `GMP_NUMB_BITS` wide, so `size()`/`capacity()` translate to 32-bit words on the fly (`arithmetic/giant.cpp:207-228`). Code that indexes raw limbs by GMP's *native* limb count instead of going through `size()` will break — and GMP is the default once `libgmp` loads.
+- **A `GWNum` is not always a readable integer.** The default `mul` leaves its result `PARTIALLY_FFTed` and its sources `FULLY_FFTed` (§4). Anything that needs integer words — `Giant g = x`, `SerializedGWNum`, `to_res64` — requires `NOT_FFTed`; `gwserialize` silently `gwunfft`s first (`arithmetic/arithmetic.cpp:1048-1050`), so correctness holds, but the skipped transform is paid back with interest. In hot loops, gate the flag on observation points with `GWMUL_STARTNEXTFFT_IF` and protect to-be-saved sources with `GWMUL_PRESERVE_S*` (§4).
 - **`maxmulbyconst` gates `setmulbyconst`.** `setmulbyconst(a)` asserts `|a| ≤ state.maxmulbyconst` (`arithmetic/arithmetic.h:136`). `Run::create` sets `options.maxmulbyconst` to the base; setting a base above it trips a `GWASSERT`.
 
-## 7. Quick reference
+## 8. Quick reference
 
 | You want to… | Call |
 |---|---|
@@ -215,24 +252,25 @@ The contract (the surface `task-lifecycle.md` §7 builds its escape routes on) �
 | Per-candidate FFT in a batch | `dst.copy(src)` then `input.setup(dst)` |
 | Multiply in the FFT domain | `gw.mul(a, b, res, options)` (or `gw.square`) |
 | Exact / round-off-free op | `gw.carefully().mul(...)` |
+| Chain a result into the next multiply at full speed | `GWMUL_STARTNEXTFFT` (the 3-arg `mul` default); gate with `GWMUL_STARTNEXTFFT_IF(!observed)` in loops (§4) |
 | Round-off-checked op + retry (inside a `Task`) | `ReliableGWArithmetic`; **check `restart_flag()`/`failure_flag()`** |
 | `GWNum` → exact integer | `Giant g = gwnum;` (adds `N` if negative) |
-| Persist a `GWNum` | assign to a `SerializedGWNum` (loadable into a same-or-larger FFT; §8) |
+| Persist a `GWNum` | assign to a `SerializedGWNum` (loadable into a same-or-larger FFT; §9) |
 | Low 64 bits as hex (RES64) | `g.to_res64()` |
 | Identity / FFT facts | `gwstate.fingerprint`, `.fft_description`, `.fft_length` |
 
-Unlike the other rows (standalone calls you can make directly), `ReliableGWArithmetic` is only useful inside the `Task` machinery that polls its flags (§5/§6).
+Unlike the other rows (standalone calls you can make directly), `ReliableGWArithmetic` is only useful inside the `Task` machinery that polls its flags (§6/§7).
 
-## 8. Open questions / non-coverage
+## 9. Open questions / non-coverage
 
-- **GWnum itself.** `gwsetup`/`gwmul3`/`gwmul3_carefully`/`gwfft_description` and the FFT-size/instruction-set selection are Woltman's prebuilt library (`gwnum/`); PRST uses the API and the `gwhandle` fields (`GENERAL_MOD`, `bit_length`, `mulbyconst`) but doesn't own the source. Treated as the interface contract, not dissected. Likewise GMP via `arithmetic/giant.cpp`'s `GMPArithmetic` — the *binding* is in scope (and partly shown), the GMP internals aren't. (Note: the (de)serialization path — `gwserialize`/`gwdeserialize`/`gwconvert` — is *not* external; it's defined in this repo's `arithmetic/arithmetic.cpp`, see §5/§8.)
+- **GWnum itself.** `gwsetup`/`gwmul3`/`gwmul3_carefully`/`gwfft_description` and the FFT-size/instruction-set selection are Woltman's prebuilt library (`gwnum/`); PRST uses the API and the `gwhandle` fields (`GENERAL_MOD`, `bit_length`, `mulbyconst`) but doesn't own the source. Treated as the interface contract, not dissected. Likewise GMP via `arithmetic/giant.cpp`'s `GMPArithmetic` — the *binding* is in scope (and partly shown), the GMP internals aren't. (Note: the (de)serialization path — `gwserialize`/`gwdeserialize`/`gwconvert` — is *not* external; it's defined in this repo's `arithmetic/arithmetic.cpp`, see §6/§9.)
 - **The `arithmetic/giant.cpp` GMP binding in full.** This doc covers `GMPArithmetic`'s *role* (default backend) and the `size()`/`capacity()` translation; the per-op GMP glue (`mpz_*` calls for `mul`/`gcd`/`powermod`/`kronecker`/…) is the bulk of `arithmetic/giant.cpp`'s mechanical binding, summarized not enumerated.
 - **The wider arithmetic library.** Elliptic-curve (`edwards`/`montgomery`/`group`), polynomial (`poly`), and Lucas-sequence (`lucas`) arithmetic build *on* `Giant`/`GWNum` but are their own subsystem → `curves-and-polynomials.md`.
 - **`SerializedGWNum` cross-FFT portability — resolved.** Can a value serialized under FFT length L be `gwdeserialize`d into a length-L′ FFT for the same modulus? `gwdeserialize` (`arithmetic/arithmetic.cpp:1141-1405`) answers it in-tree by comparing the header's stored `FFTLEN`/`b`/flags against the live `gwdata`: an **identical**-length match is the fast path that copies the FFT words directly (`arithmetic/arithmetic.cpp:1156-1181`); deserializing into a **smaller** transform throws `"Can't deserialize to smaller transform."` (`arithmetic/arithmetic.cpp:1183-1186`); a **larger** transform re-radix-converts word-by-word into the wider layout (`arithmetic/arithmetic.cpp:1188-1395`), with extra carefully-multiplied correction factors for the `GENERAL_MOD`/`MMGW_MOD` mode changes. So a checkpoint resumes cleanly across a reliable-mode FFT *bump* (which only grows the transform); the `task.cpp:140-146` continue-from-`_state` path relies on exactly the larger-transform branch.
 - **Why the round-off threshold is 0.4, and the IBDWT error theory.** `_max_roundoff = 0.4` is a tuning constant; the numerical-analysis justification (why that bounds a correct convolution) is GWnum/multiplication-theory territory → `math-and-theorems.md` (in the patnashev/prst repo) and the `mult_*.pdf`s.
 - **`PolyMult`.** Friend class named in `arithmetic/arithmetic.h` (`GWNum`'s friends). `PolyMult` is the polynomial-multiply path → `curves-and-polynomials.md`, not the single-`Task` main path.
 
-## 9. `arithmetic/integer.cpp` — number theory & the prime sieve
+## 10. `arithmetic/integer.cpp` — number theory & the prime sieve
 
 `arithmetic/integer.{h,cpp}` is the small-integer companion to the big-`Giant` layer: 32/64-bit number theory plus a process-wide prime generator. Nothing here is GMP glue (that lives in `arithmetic/giant.cpp`, §1) — it's plain `uint32_t`/`uint64_t` math that the candidate-parsing and factor-walk code leans on.
 
