@@ -474,5 +474,5 @@ A sub-task that shares the parent's checkpoint file will overwrite the parent's 
 
 - **The math.** Gerbicz-Li's algorithm, Lucas chain construction, sliding-window exponentiation, Proth/Pocklington/Morrison theorem details. See `docs/mult_en_20230925.pdf` for the multiplication theory; the test theorems themselves are in the upstream README and the original papers.
 - **GWnum internals.** FFT selection, thread-pool layout, instruction-set dispatch. Owned by the gwnum prebuilt (third-party).
-- **`ReliableGWArithmetic` internals.** How the roundoff thresholds and the careful-retry escalation decide an op is suspect vs. confirmed bad. The flag contract is in §7; the escalation details live in `arithmetic-foundation.md` §5.
+- **`ReliableGWArithmetic` internals.** How the roundoff thresholds and the careful-retry escalation decide an op is suspect vs. confirmed bad. The flag contract is in §7; the escalation details live in `arithmetic-foundation.md` §6.
 - **The `_smooth` exponentiation path.** `BaseExp::_smooth` toggles a different math path (used when the exponent factors smoothly into small primes). Covered from the algorithm side in `exponentiation-algorithms.md` (in the patnashev/prst repo).
