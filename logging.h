@@ -32,6 +32,13 @@ public:
     int param_int(const std::string& name) { std::string& val = _params[name]; return (int)std::strtol(val.data(), nullptr, 10); }
     double param_double(const std::string& name) { std::string& val = _params[name]; return std::strtod(val.data(), nullptr); }
     std::map<std::string, std::string>& params() { return _params; }
+    void configure(arithmetic::GWState& state)
+    {
+        if (state.next_fft_count < param_int("next_fft"))
+            state.next_fft_count = param_int("next_fft");
+        if (param_int("maxmulbyconst") > 0)
+            state.maxmulbyconst = param_int("maxmulbyconst");
+    }
 
 private:
     std::vector<double> _costs;
