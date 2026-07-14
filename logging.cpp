@@ -148,8 +148,8 @@ void Logging::report_factor(InputNum& input, const arithmetic::Giant& f)
     if (_file_factor.empty())
         return;
     std::string str = f.to_string();
-    result(true, "found factor %s\n", str.data());
-    result_save(input.input_text() + " found factor " + str + ", time: " + std::to_string((int)progress().time_total()) + " s.\n");
+    //result(true, "found factor %s\n", str.data());
+    //result_save(input.input_text() + " found factor " + str + ", time: " + std::to_string((int)progress().time_total()) + " s.\n");
     FILE *fp = fopen(_file_factor.data(), "a");
     if (fp)
     {

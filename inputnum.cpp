@@ -1621,7 +1621,11 @@ std::vector<int> InputNum::factorize_small()
     if (trial_test)
         factorize(N, factors, cofactor);
     else
+    {
+        if (mod(2) == 0)
+            ::add_factor(factors, 2, 1);
         factorize(N, factors, cofactor, [&](Giant& x, uint32_t p) { bool res = (mod(p) == 0); if (res) x *= p; return res; });
+    }
 
     std::vector<int> res;
     for (auto& factor : factors)
