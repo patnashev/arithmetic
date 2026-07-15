@@ -81,8 +81,9 @@ public:
     virtual void report_param(const std::string& name, const std::string& value) { progress().param(name) = value; }
     virtual void report_param(const std::string& name, int value) { progress().param(name) = std::to_string(value); }
     virtual void report_param(const std::string& name, double value);
-    virtual void report_factor(InputNum& input, const arithmetic::Giant& f);
 
+    virtual void report_prime(InputNum& input);
+    virtual void report_factor(InputNum& input, const arithmetic::Giant& f);
     virtual void result_save(const std::string& message);
 
     virtual bool state_save_flag() { return false; }
@@ -92,6 +93,7 @@ public:
 
     virtual void file_progress(File* file_progress);
     void file_result(const std::string& filename) { _file_result = filename; }
+    void file_prime(const std::string& filename) { _file_prime = filename; }
     void file_factor(const std::string& filename) { _file_factor = filename; }
     void file_log(const std::string& filename) { _file_log = filename; }
 
@@ -101,10 +103,14 @@ public:
     void set_prefix(const std::string& prefix) { _prefix = prefix; }
 
 protected:
+    bool append_to_file_locking(const std::string& filename, const std::string& message);
+
+protected:
     int _level;
     Progress _progress;
     File* _file_progress = nullptr;
     std::string _file_result = "result.txt";
+    std::string _file_prime = "prime.txt";
     std::string _file_factor = "factors.txt";
     std::string _file_log;
     std::string _prefix;
@@ -121,6 +127,7 @@ public:
     virtual void report_param(const std::string& name, const std::string& value) override { Logging::report_param(name, value); _parent.report_param(name, value); }
     virtual void report_param(const std::string& name, int value) override { Logging::report_param(name, value); _parent.report_param(name, value); }
     virtual void report_param(const std::string& name, double value) override { Logging::report_param(name, value); _parent.report_param(name, value); }
+    virtual void report_prime(InputNum& input) override { _parent.report_prime(input); }
     virtual void report_factor(InputNum& input, const arithmetic::Giant& f) override { _parent.report_factor(input, f); }
     virtual void progress_save() override { Logging::progress_save(); _parent.progress_save(); }
     virtual void heartbeat() override { _parent.heartbeat(); }

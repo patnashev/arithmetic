@@ -6,6 +6,9 @@
 #include "gwnum.h"
 #include "cpuid.h"
 #include "logging.h"
+#ifdef _WIN32
+#include "windows.h"
+#endif
 
 void Progress::update(double progress, int op_count)
 {
@@ -143,32 +146,48 @@ void Logging::report_progress()
     }
 }
 
+void Logging::report_prime(InputNum& input)
+{
+    if (_file_prime.empty())
+        return;
+    std::string message = input.input_text() + "\n";
+    while (!append_to_file_locking(_file_prime, message))
+        printf("Trying to write to the prime file...\n");
+}
+
 void Logging::report_factor(InputNum& input, const arithmetic::Giant& f)
 {
     if (_file_factor.empty())
         return;
-    std::string str = f.to_string();
+    //std::string str = f.to_string();
     //result(true, "found factor %s\n", str.data());
     //result_save(input.input_text() + " found factor " + str + ", time: " + std::to_string((int)progress().time_total()) + " s.\n");
-    FILE *fp = fopen(_file_factor.data(), "a");
-    if (fp)
-    {
-        fprintf(fp, "%s | %s\n", str.data(), input.input_text().data());
-        fclose(fp);
-    }
+    std::string message = f.to_string() + " | " + input.input_text() + "\n";
+    while (!append_to_file_locking(_file_factor, message))
+        printf("Trying to write to the factor file...\n");
 }
 
 void Logging::result_save(const std::string& message)
 {
     if (_file_result.empty())
         return;
-    FILE *fp = fopen(_file_result.data(), "a");
-    if (fp)
-    {
-        fwrite(_prefix.data(), 1, _prefix.length(), fp);
-        fwrite(message.data(), 1, message.length(), fp);
-        fclose(fp);
-    }
+    append_to_file_locking(_file_result, message);
+}
+
+bool Logging::append_to_file_locking(const std::string& filename, const std::string& message)
+{
+    FILE* fp;
+#ifdef _WIN32
+    for (int tries = 0; tries < 100 && !(fp = _fsopen(filename.data(), "a", _SH_DENYWR)); tries++)
+        Sleep(50);
+#else
+    fp = fopen(filename.data(), "a");
+#endif
+    if (!fp)
+        return false;
+    fwrite(message.data(), 1, message.length(), fp);
+    fclose(fp);
+    return true;
 }
 
 void Logging::report_param(const std::string& name, double value)
