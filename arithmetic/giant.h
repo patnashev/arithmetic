@@ -87,6 +87,7 @@ namespace arithmetic
         virtual void alloc(Giant& a) override;
         virtual void alloc(Giant& a, int capacity) override;
         virtual void free(Giant& a) override;
+        using GiantsArithmetic::init;
         virtual void init(const GWNum& a, Giant& res) override;
         virtual void to_GWNum(const Giant& a, GWNum& res) override;
         virtual void inv(Giant& a, Giant& n, Giant& res) override;
@@ -123,9 +124,11 @@ namespace arithmetic
         virtual int bitlen(const Giant& a) override;
         virtual bool bit(const Giant& a, int b) override;
         virtual void substr(const Giant& a, int offset, int count, Giant& res) override;
+        using GiantsArithmetic::add;
         virtual void add(Giant& a, Giant& b, Giant& res) override;
         virtual void add(Giant& a, int32_t b, Giant& res) override;
         virtual void add(Giant& a, uint32_t b, Giant& res) override;
+        using GiantsArithmetic::sub;
         virtual void sub(Giant& a, Giant& b, Giant& res) override;
         virtual void sub(Giant& a, int32_t b, Giant& res) override;
         virtual void sub(Giant& a, uint32_t b, Giant& res) override;
@@ -158,6 +161,7 @@ namespace arithmetic
         virtual void alloc(Giant& a) override;
         virtual void alloc(Giant& a, int capacity) override;
         virtual void free(Giant& a) override;
+        using GMPArithmetic::init;
         virtual void init(const GWNum& a, Giant& res) override;
         virtual void to_GWNum(const Giant& a, GWNum& res) override;
 

@@ -149,6 +149,7 @@ public:
 
     File* add_child(const std::string& name, uint32_t fingerprint) override;
     void read_buffer() override;
+    using File::get_writer;
     Writer* get_writer() override;
     void commit_writer(Writer& writer) override;
     void clear(bool recursive = false) override;

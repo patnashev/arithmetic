@@ -73,7 +73,7 @@ public:
     static void abort_reset() { _abort_flag = false; }
     static bool abort_flag() { return _abort_flag; }
 
-    virtual void run(); // run() = setup() + execute() + release()
+    void run(); // run() = setup() + execute() + release()
     virtual void write_state();
 
     arithmetic::GWArithmetic& gw() { return *_gw; }
@@ -85,7 +85,7 @@ public:
     int ops() { return (int)(_op_count + (_gw != nullptr ? _gwstate->ops() - _op_base : 0)); }
 
 protected:
-    virtual void init(arithmetic::GWState* gwstate, File* file, TaskState* state, Logging* logging, int iterations);
+    void init(arithmetic::GWState* gwstate, File* file, TaskState* state, Logging* logging, int iterations);
     virtual void setup() = 0;
     virtual void execute() = 0;
     virtual void reinit_gwstate() = 0;
@@ -148,8 +148,6 @@ public:
     void set_error_check(bool near, bool check);
     double timer() { return _timer; }
 
-private:
-    using Task::init;
 protected:
     void init(InputNum* input, arithmetic::GWState* gwstate, File* file, TaskState* state, Logging* logging, int iterations);
     void reinit_gwstate() override;
