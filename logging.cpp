@@ -9,6 +9,9 @@
 #ifdef _WIN32
 #include "windows.h"
 #endif
+#ifdef __MINGW32__
+#include <share.h>
+#endif
 
 void Progress::update(double progress, int op_count)
 {
