@@ -7,7 +7,8 @@
 #include "cpuid.h"
 #include "logging.h"
 #ifdef _WIN32
-#include "windows.h"
+#include <windows.h>
+#include <share.h>
 #endif
 
 void Progress::update(double progress, int op_count)
