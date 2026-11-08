@@ -7,9 +7,7 @@
 #include "cpuid.h"
 #include "logging.h"
 #ifdef _WIN32
-#include "windows.h"
-#endif
-#ifdef __MINGW32__
+#include <windows.h>
 #include <share.h>
 #endif
 
